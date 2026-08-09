@@ -1,0 +1,1238 @@
+
+# PROJECT: UltraBot Web — Algorithmic Trading Terminal for NSE
+
+## BUILD: Phase 1 — Backend Foundation (Complete Implementation)
+
+You are building the backend foundation of UltraBot Web, a semi-automated algorithmic trading terminal for Indian NSE markets. Build everything described below. Generate complete, working, production-quality Python code. No placeholders. No stubs. No TODOs. Every function must have full implementation.
+
+---
+
+## 1. PROJECT STRUCTURE
+
+Create this exact directory structure with all files:
+
+```
+ultrabot-web/
+├── backend/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── config/
+│   │   ├── __init__.py
+│   │   ├── settings.py
+│   │   └── defaults.yaml
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── dependencies.py
+│   │   ├── routes/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── dashboard.py
+│   │   │   ├── engine.py
+│   │   │   ├── trades.py
+│   │   │   ├── strategies.py
+│   │   │   ├── watchlist.py
+│   │   │   ├── risk.py
+│   │   │   ├── backtest.py
+│   │   │   ├── brokers.py
+│   │   │   ├── opportunities.py
+│   │   │   ├── notifications.py
+│   │   │   ├── errors.py
+│   │   │   └── settings_api.py
+│   │   └── websocket.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── engine.py
+│   │   ├── engine_state.py
+│   │   ├── market_hours.py
+│   │   └── session_manager.py
+│   ├── risk/
+│   │   ├── __init__.py
+│   │   ├── risk_engine.py
+│   │   ├── gates/
+│   │   │   ├── __init__.py
+│   │   │   ├── g1_max_positions.py
+│   │   │   ├── g2_sector_concentration.py
+│   │   │   ├── g3_max_position_size.py
+│   │   │   ├── g4_max_daily_trades.py
+│   │   │   ├── g5_max_daily_loss.py
+│   │   │   ├── g6_correlation_check.py
+│   │   │   ├── g7_vix_filter.py
+│   │   │   ├── g8_time_of_day.py
+│   │   │   ├── g9_price_mismatch.py
+│   │   │   ├── g10_min_confidence.py
+│   │   │   ├── g11_max_drawdown.py
+│   │   │   ├── g12_margin_check.py
+│   │   │   └── g13_duplicate_signal.py
+│   │   ├── daily_risk_manager.py
+│   │   ├── position_sizer.py
+│   │   └── partial_booker.py
+│   ├── strategies/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── registry.py
+│   │   ├── regime_detector.py
+│   │   ├── adaptive_manager.py
+│   │   ├── performance_tracker.py
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── breakout.py
+│   │   │   ├── mean_reversion.py
+│   │   │   ├── momentum.py
+│   │   │   ├── orb.py
+│   │   │   ├── rsi_divergence.py
+│   │   │   ├── supertrend.py
+│   │   │   └── vwap_reversion.py
+│   │   └── advanced/
+│   │       ├── __init__.py
+│   │       ├── gap_fill.py
+│   │       ├── sector_rotation.py
+│   │       ├── multi_timeframe.py
+│   │       ├── orb_volume.py
+│   │       ├── trend_exhaustion.py
+│   │       ├── news_momentum.py
+│   │       └── adaptive_supertrend.py
+│   ├── scanner/
+│   │   ├── __init__.py
+│   │   ├── scanner_engine.py
+│   │   ├── kronos/
+│   │   │   ├── __init__.py
+│   │   │   ├── kronos_scanner.py
+│   │   │   ├── signal_scorer.py
+│   │   │   └── model_manager.py
+│   │   ├── technical_scanner.py
+│   │   └── watchlist_builder.py
+│   ├── news/
+│   │   ├── __init__.py
+│   │   ├── news_engine.py
+│   │   ├── sources/
+│   │   │   ├── __init__.py
+│   │   │   ├── nse_corporate.py
+│   │   │   ├── moneycontrol.py
+│   │   │   ├── economic_times.py
+│   │   │   ├── google_finance.py
+│   │   │   └── result_calendar.py
+│   │   ├── news_analyzer.py
+│   │   └── news_to_watchlist.py
+│   ├── brokers/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── factory.py
+│   │   ├── paper_broker.py
+│   │   ├── angel_one.py
+│   │   ├── shoonya.py
+│   │   └── token_manager.py
+│   ├── feeds/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── angel_websocket.py
+│   │   ├── shoonya_websocket.py
+│   │   ├── yahoo_historical.py
+│   │   └── feed_manager.py
+│   ├── options/
+│   │   ├── __init__.py
+│   │   ├── option_chain.py
+│   │   ├── strike_selector.py
+│   │   ├── greeks.py
+│   │   ├── liquidity_filter.py
+│   │   └── options_risk.py
+│   ├── notifications/
+│   │   ├── __init__.py
+│   │   ├── telegram_bot.py
+│   │   ├── alert_manager.py
+│   │   └── eod_report.py
+│   ├── fees/
+│   │   ├── __init__.py
+│   │   ├── nse_fee_calculator.py
+│   │   └── broker_brokerage.py
+│   ├── errors/
+│   │   ├── __init__.py
+│   │   ├── error_engine.py
+│   │   ├── error_types.py
+│   │   ├── error_context.py
+│   │   └── auto_recovery.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── trade.py
+│   │   ├── position.py
+│   │   ├── signal.py
+│   │   ├── opportunity.py
+│   │   ├── candle.py
+│   │   ├── watchlist_item.py
+│   │   ├── strategy_config.py
+│   │   ├── risk_state.py
+│   │   ├── error_log.py
+│   │   └── backtest_result.py
+│   ├── db/
+│   │   ├── __init__.py
+│   │   ├── database.py
+│   │   ├── repository.py
+│   │   └── migrations.py
+│   └── utils/
+│       ├── __init__.py
+│       ├── indicators.py
+│       ├── candle_utils.py
+│       ├── market_utils.py
+│       ├── encryption.py
+│       └── formatters.py
+└── data/
+    └── ultrabot.db
+```
+
+---
+
+## 2. REQUIREMENTS (requirements.txt)
+
+```
+fastapi==0.104.1
+uvicorn==0.24.0
+websockets==12.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+sqlalchemy==2.0.23
+aiosqlite==0.19.0
+httpx==0.25.2
+yfinance==0.3.2
+pandas==2.1.4
+numpy==1.26.2
+ta==0.10.2
+python-jose==3.3.0
+passlib==1.7.4
+bcrypt==4.1.2
+cryptography==41.0.7
+python-dotenv==1.0.0
+pyyaml==6.0.1
+aiohttp==3.9.1
+feedparser==6.0.11
+beautifulsoup4==4.12.2
+apscheduler==3.10.4
+```
+
+---
+
+## 3. CONFIGURATION (config/settings.py + config/defaults.yaml)
+
+### defaults.yaml:
+```yaml
+app:
+  name: UltraBot Web
+  version: "1.0.0"
+  secret_key: "change-me-in-production"
+  host: "0.0.0.0"
+  port: 8000
+
+auth:
+  username: "admin"
+  password_hash: "$2b$12$LJ3m4ys3Hzg5Kg5HbXNOAeYr1J5Z3X8K9P0Q1R2S3T4U5V6W7X8Y9Z0"
+
+engine:
+  scan_interval_seconds: 180
+  max_scan_retries: 3
+
+market:
+  nse_open: "09:15"
+  nse_close: "15:30"
+  pre_market_start: "09:00"
+  post_market_end: "16:00"
+  timezone: "Asia/Kolkata"
+
+capital:
+  virtual_capital: 100000
+  max_capital_usage_pct: 90
+  min_position_size: 5000
+  max_per_position_pct: 25
+
+risk:
+  max_open_positions: 5
+  max_per_sector: 2
+  max_daily_trades: 10
+  max_daily_loss_pct: 3
+  max_consecutive_losses: 5
+  consec_loss_cooloff_minutes: 30
+  vix_threshold: 20
+  new_trade_window_start: "09:30"
+  new_trade_window_end: "14:30"
+  price_mismatch_threshold_pct: 0.5
+  min_signal_confidence: 0.6
+  max_drawdown_pct: 5
+
+partial_booking:
+  enabled: true
+  level1_rr: 1.0
+  level1_book_pct: 50
+  level2_rr: 1.5
+  level2_book_pct: 50
+  level3_rr: 2.0
+  level3_book_pct: 100
+  trailing_sl_method: "step"
+  trailing_step_pct: 0.5
+
+position_sizing:
+  method: "dynamic_kelly"
+  kelly_min_fraction: 0.02
+  kelly_max_fraction: 0.25
+  confidence_tiers:
+    high: { min: 0.8, multiplier: 1.0 }
+    medium: { min: 0.6, multiplier: 0.8 }
+    low: { min: 0.4, multiplier: 0.5 }
+  volatility_tiers:
+    calm: { max_vix: 14, multiplier: 1.0 }
+    normal: { max_vix: 18, multiplier: 0.85 }
+    nervous: { max_vix: 22, multiplier: 0.65 }
+    fearful: { max_vix: 999, multiplier: 0.4 }
+  drawdown_tiers:
+    profit: { min_pct: 0, multiplier: 1.0 }
+    small_loss: { min_pct: -1, multiplier: 0.9 }
+    mod_loss: { min_pct: -2, multiplier: 0.7 }
+    big_loss: { min_pct: -3, multiplier: 0.4 }
+
+fees:
+  brokerage_per_order: 20
+  stt_intraday_sell_pct: 0.025
+  stt_delivery_pct: 0.1
+  exchange_txn_pct: 0.00345
+  gst_pct: 18
+  sebi_fee_pct: 0.0001
+  stamp_duty_pct: 0.003
+
+notifications:
+  telegram_enabled: false
+  telegram_bot_token: ""
+  telegram_chat_id: ""
+  morning_briefing_time: "08:30"
+  eod_report_time: "15:45"
+
+brokers:
+  angel_one:
+    enabled: false
+    api_key: ""
+    client_code: ""
+    pin: ""
+    jwt_token: ""
+    refresh_token: ""
+    feed_token: ""
+  shoonya:
+    enabled: false
+    user_id: ""
+    password: ""
+    vendor_code: ""
+    app_key: ""
+
+watchlist:
+  fno_universe_file: null
+  max_watchlist_size: 40
+  news_scan_interval_minutes: 15
+  technical_scan_interval_minutes: 5
+  kronos_scan_interval_minutes: 5
+
+regime:
+  classification_interval_minutes: 15
+  bull_nifty_day_change_pct: 0.3
+  bull_nifty_5day_change_pct: 1.0
+  bull_ad_ratio: 1.5
+  bear_nifty_day_change_pct: -0.3
+  bear_ad_ratio: 0.67
+  high_vix_threshold: 22
+
+strategy_activation:
+  Bull:
+    active: [Breakout, Momentum, ORB, Supertrend, GapFill, SectorRotation, AdaptiveSupertrend, ORBVolume]
+    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
+  Bear:
+    active: [Breakout, Momentum, ORB, Supertrend, RSIDivergence, TrendExhaustion, AdaptiveSupertrend]
+    paused: [MeanReversion, VWAPReversion, NewsMomentum]
+    note: "Breakout and Momentum in SHORT direction only"
+  Sideways:
+    active: [MeanReversion, VWAPReversion, RSIDivergence, ORB, AdaptiveSupertrend, MultiTimeframe]
+    paused: [Breakout, Momentum, GapFill, SectorRotation]
+  Volatile:
+    active: [ORB, GapFill, AdaptiveSupertrend, ORBVolume]
+    reduced_size: [Breakout, Momentum, Supertrend, SectorRotation, MultiTimeframe, NewsMomentum]
+    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
+```
+
+### config/settings.py:
+Create a Pydantic Settings class that loads from defaults.yaml and overrides from .env file. Must support nested YAML config. All values accessible as attributes. Include methods: `get_risk_config()`, `get_capital_config()`, `get_broker_config(name)`, `get_strategy_activation(regime)`.
+
+---
+
+## 4. DATABASE (db/database.py + db/repository.py + db/migrations.py)
+
+### database.py:
+- Use SQLAlchemy async engine with aiosqlite
+- SQLite file at `data/ultrabot.db`
+- Create `data/` directory if not exists
+- Async session maker
+- `get_db()` dependency for FastAPI
+- `init_db()` function that creates all tables on startup
+
+### migrations.py:
+- Define all SQLAlchemy ORM models for these tables:
+
+**sessions table:**
+- id (TEXT PK), start_time (DATETIME), end_time (DATETIME), mode (TEXT: paper/live), broker (TEXT), initial_capital (REAL), final_capital (REAL), status (TEXT: active/closed/crashed), state_snapshot (TEXT/JSON)
+
+**trades table:**
+- id (TEXT PK), session_id (FK→sessions), symbol (TEXT), segment (TEXT: EQ/OPT), direction (TEXT: BUY/SELL), strategy (TEXT), entry_price (REAL), exit_price (REAL), sl_price (REAL), target_price (REAL), quantity (INTEGER), entry_time (DATETIME), exit_time (DATETIME), status (TEXT: open/partial_closed/closed/sl_hit/target_hit), gross_pnl (REAL), fees (REAL), net_pnl (REAL), kronos_score (REAL), market_regime (TEXT), partial_bookings (TEXT/JSON), error_log (TEXT/JSON)
+
+**signals table:**
+- id (TEXT PK), session_id (FK), symbol (TEXT), strategy (TEXT), direction (TEXT), entry_price (REAL), sl_price (REAL), target_price (REAL), confidence (REAL), risk_reward (REAL), signal_time (DATETIME), status (TEXT: pending/confirmed/skipped/expired/rejected), rejection_reason (TEXT), confirmation_time (DATETIME), expiry_time (DATETIME)
+
+**positions table:**
+- id (TEXT PK), trade_id (FK→trades), symbol (TEXT), direction (TEXT), entry_price (REAL), current_price (REAL), sl_price (REAL), target_price (REAL), total_quantity (INTEGER), remaining_qty (INTEGER), booked_levels (TEXT/JSON), unrealized_pnl (REAL), market_regime (TEXT), last_updated (DATETIME)
+
+**watchlist table:**
+- id (TEXT PK), symbol (TEXT), source (TEXT: news/technical/kronos/manual), reason (TEXT), score (REAL), added_at (DATETIME), expires_at (DATETIME), is_active (BOOLEAN)
+
+**strategy_performance table:**
+- id (TEXT PK), strategy_name (TEXT), market_regime (TEXT), total_signals (INT), total_trades (INT), wins (INT), losses (INT), win_rate (REAL), avg_pnl (REAL), total_pnl (REAL), avg_hold_time (TEXT), period_start (DATE), period_end (DATE)
+
+**risk_events table:**
+- id (TEXT PK), event_type (TEXT), gate_number (INT nullable), details (TEXT/JSON), signal_id (FK nullable), timestamp (DATETIME)
+
+**broker_credentials table:**
+- id (TEXT PK), broker_name (TEXT), encrypted_data (BLOB), is_connected (BOOLEAN), last_auth_time (DATETIME), token_expires (DATETIME), last_error (TEXT), updated_at (DATETIME)
+
+**error_logs table:**
+- id (TEXT PK), error_code (TEXT), error_type (TEXT), severity (TEXT: critical/warning/info), what_happened (TEXT), why_happened (TEXT), how_to_fix (TEXT), context (TEXT/JSON), stack_trace (TEXT), auto_recovery (TEXT/JSON), is_resolved (BOOLEAN), resolved_at (DATETIME nullable), resolved_how (TEXT nullable), timestamp (DATETIME)
+
+**backtest_runs table:**
+- id (TEXT PK), strategy_name (TEXT), symbols (TEXT/JSON), start_date (DATE), end_date (DATE), timeframe (TEXT), initial_capital (REAL), total_return (REAL), annualized_return (REAL), max_drawdown (REAL), sharpe_ratio (REAL), sortino_ratio (REAL), win_rate (REAL), profit_factor (REAL), total_trades (INT), total_fees (REAL), equity_curve (TEXT/JSON), monthly_returns (TEXT/JSON), trades_detail (TEXT/JSON), risk_gate_stats (TEXT/JSON), run_at (DATETIME)
+
+**daily_summary table:**
+- id (TEXT PK), date (DATE), mode (TEXT), starting_capital (REAL), ending_capital (REAL), day_pnl (REAL), day_pnl_pct (REAL), total_trades (INT), wins (INT), losses (INT), win_rate (REAL), total_fees (REAL), max_drawdown (REAL), regime (TEXT), telegram_sent (BOOLEAN)
+
+### repository.py:
+Create a `Repository` class with complete async CRUD operations for every table. Methods must include:
+- `create_*()` / `get_*()` / `update_*()` / `delete_*()` for each model
+- `get_open_positions()` — returns all positions where remaining_qty > 0
+- `get_trades_by_date(date)` — trades for a specific date
+- `get_signals_by_status(status)` — signals filtered by status
+- `get_active_watchlist()` — watchlist items where is_active=True
+- `get_todays_trades()` — trades from today
+- `get_todays_pnl()` — sum of net_pnl for today's closed trades + sum of unrealized_pnl for open positions
+- `get_strategy_performance(strategy, regime)` — performance for strategy in regime
+- `get_unresolved_errors()` — errors where is_resolved=False
+- `get_daily_summary(date)` — summary for date
+- `save_session_state(session_id, state_json)` — update state_snapshot
+- `get_latest_session()` — most recent session for recovery
+
+All methods must be async. Use proper SQLAlchemy queries. Handle exceptions and log errors.
+
+---
+
+## 5. ERROR ENGINE (errors/)
+
+### error_types.py:
+Define custom exception hierarchy:
+- `UltraBotError` (base)
+  - `BrokerError` → `TokenExpiredError`, `OrderRejectedError`, `ConnectionLostError`
+  - `FeedError` → `WebSocketDisconnectedError`, `StaleDataError`, `PriceMismatchError`
+  - `StrategyError` → `InsufficientDataError`, `CalculationError`
+  - `RiskError` → `DailyLimitError`, `RiskGateRejectionError`
+  - `EngineError` → `EngineCrashError`, `SessionRecoveryError`
+
+Each exception must have attributes: `error_type`, `severity`, `what_happened`, `why_happened`, `how_to_fix`, `context` (dict)
+
+### error_context.py:
+- `capture_context()` function that captures: current engine state, open positions count, active broker, active feed, current VIX, market regime, timestamp, and any additional kwargs
+- Returns a dict ready for error log storage
+
+### auto_recovery.py:
+- `AutoRecovery` class with methods for each recoverable error type:
+  - `recover_token_expired(broker)` → re-authenticate, return success/failure
+  - `recover_websocket_disconnected(feed)` → reconnect with exponential backoff (5s, 10s, 20s, 40s, 80s), max 5 attempts, return success/failure
+  - `recover_stale_data(feed)` → disconnect and reconnect feed, return success/failure
+  - `recover_price_mismatch(signal, feed)` → refresh LTP from broker, recalculate signal prices, return updated signal or failure
+  - Each method logs every attempt and result
+
+### error_engine.py:
+- `ErrorEngine` class (singleton) that:
+  - `handle_error(exception, context_override=None)` → main entry point
+    - Captures context via `capture_context()`
+    - Generates unique error_code (format: ERR-YYYY-MMDD-NNNN)
+    - Determines severity from exception
+    - Attempts auto-recovery if applicable
+    - Saves to error_logs table via repository
+    - Sends to WebSocket subscribers (critical + warning only)
+    - Sends to Telegram if critical
+    - Returns error_log record
+  - `resolve_error(error_id, resolution_note)` → mark as resolved
+  - `get_errors(severity=None, resolved=None, limit=50)` → query error logs
+  - `get_error_stats()` → aggregate stats by type and severity
+
+---
+
+## 6. PYDANTIC MODELS (models/)
+
+Each file defines Pydantic V2 models for API request/response validation:
+
+### trade.py:
+- `TradeCreate`, `TradeResponse`, `TradeDetailResponse` (includes partial_bookings and error_log parsed from JSON)
+- `PositionResponse`, `PositionModifySL`, `PositionModifyTarget`, `PositionClose`
+
+### signal.py:
+- `SignalCreate`, `SignalResponse`
+- `SignalWithOpportunity` (includes risk gate results, probability data)
+
+### opportunity.py:
+- `OpportunityResponse` — full opportunity with all details for confirmation UI:
+  - signal data, strategy name, kronos score, win_rate (from performance tracker), equity trade details, options trade details, all 13 risk gate results, market context (vix, nifty_trend, sector), capital_required, available_capital, expiry_time, time_remaining_seconds
+
+### position.py, candle.py, watchlist_item.py, strategy_config.py, risk_state.py, error_log.py, backtest_result.py:
+- All with Create/Response models as appropriate
+
+---
+
+## 7. FEES (fees/)
+
+### nse_fee_calculator.py:
+```python
+class NSEFeeCalculator:
+    """Calculate all NSE charges for equity and options trades"""
+    
+    def calculate_equity_intraday(self, buy_price, sell_price, quantity, brokerage_per_order=20):
+        """
+        Calculate fees for intraday equity trade.
+        Returns dict with: brokerage, stt, exchange_txn, gst, sebi, stamp_duty, total
+        """
+        # Buy side:
+        #   Brokerage: flat per order
+        #   STT: 0 (only on sell for intraday)
+        #   Exchange: buy_price * qty * 0.0000345
+        #   GST: 18% * (brokerage + exchange)
+        #   SEBI: buy_price * qty * 0.000001
+        #   Stamp: buy_price * qty * 0.00003
+        #
+        # Sell side:
+        #   Brokerage: flat per order
+        #   STT: sell_price * qty * 0.00025
+        #   Exchange: sell_price * qty * 0.0000345
+        #   GST: 18% * (brokerage + exchange)
+        #   SEBI: sell_price * qty * 0.000001
+        #   Stamp: 0 (only on buy)
+        #
+        # Total = sum of all
+        # All values rounded to 2 decimal places
+
+    def calculate_equity_delivery(self, buy_price, sell_price, quantity, brokerage_per_order=0):
+        """Same structure but STT 0.1% on both sides, stamp on buy only"""
+
+    def calculate_options(self, buy_premium, sell_premium, quantity, lot_size, brokerage_per_order=20):
+        """
+        Calculate fees for options trade.
+        STT: 0.0625% on sell premium only
+        Exchange: 0.055% on both sides (on premium)
+        """
+
+    def calculate_net_pnl(self, entry_price, exit_price, quantity, direction, segment="EQ", mode="intraday"):
+        """Calculate gross P&L, fees, and net P&L for a completed trade"""
+```
+
+---
+
+## 8. MARKET HOURS (core/market_hours.py)
+
+```python
+class MarketHours:
+    """
+    NSE market hours, holidays, session detection.
+    All times in Asia/Kolkata timezone.
+    """
+    
+    NSE_HOLIDAYS_2025 = [
+        # All NSE trading holidays for 2025
+        "2025-01-26", "2025-03-14", "2025-03-31", "2025-04-10",
+        "2025-04-14", "2025-04-18", "2025-05-01", "2025-06-05",
+        "2025-07-06", "2025-08-15", "2025-08-27", "2025-10-02",
+        "2025-10-21", "2025-10-22", "2025-11-05", "2025-12-25"
+    ]
+    
+    def is_market_open(self) -> bool
+    def is_market_holiday(self, date=None) -> bool
+    def get_market_status(self) -> dict  # {is_open, session: "pre_market"/"market"/"post_market"/"closed", next_open, time_to_open}
+    def get_time_to_close(self) -> timedelta
+    def is_new_trade_window(self) -> bool  # Within allowed new trade hours (9:30-14:30)
+    def get_current_session(self) -> str
+```
+
+---
+
+## 9. ENGINE STATE (core/engine_state.py)
+
+```python
+from enum import Enum
+
+class EngineState(str, Enum):
+    STOPPED = "stopped"
+    STARTING = "starting"
+    RUNNING = "running"
+    PAUSED = "paused"
+    SCANNING = "scanning"
+    ERROR = "error"
+
+class EngineMode(str, Enum):
+    PAPER = "paper"
+    LIVE = "live"
+```
+
+---
+
+## 10. SESSION MANAGER (core/session_manager.py)
+
+```python
+class SessionManager:
+    """
+    Persist engine state to SQLite for crash recovery.
+    Save full state snapshot on every significant event.
+    Recover state on engine startup.
+    """
+    
+    async def create_session(self, mode, broker, initial_capital) -> str  # returns session_id
+    async def save_state(self, session_id, engine) -> None
+        # Captures: open positions, watchlist, daily risk state, active strategies, regime
+        # Serializes to JSON, saves to sessions.state_snapshot
+    async def recover_state(self, session_id) -> dict
+        # Loads state_snapshot, returns parsed dict
+        # Engine can restore positions, risk state, etc.
+    async def close_session(self, session_id, final_capital, status="closed") -> None
+    async def get_active_session(self) -> dict or None
+```
+
+---
+
+## 11. BROKER BASE + PAPER BROKER (brokers/)
+
+### base.py:
+```python
+from abc import ABC, abstractmethod
+
+class BaseBroker(ABC):
+    """Abstract base class for all brokers"""
+    
+    @abstractmethod
+    async def authenticate(self, credentials: dict) -> dict:
+        """Authenticate with broker. Returns {success, token_info}"""
+    
+    @abstractmethod
+    async def get_ltp(self, symbol: str) -> float:
+        """Get last traded price for symbol"""
+    
+    @abstractmethod
+    async def get_margin(self) -> dict:
+        """Get available margin. Returns {available, used, total}"""
+    
+    @abstractmethod
+    async def place_order(self, order: dict) -> dict:
+        """Place order. Returns {success, order_id, details}"""
+    
+    @abstractmethod
+    async def cancel_order(self, order_id: str) -> dict:
+        """Cancel order"""
+    
+    @abstractmethod
+    async def get_positions(self) -> list:
+        """Get current open positions from broker"""
+    
+    @abstractmethod
+    async def get_order_status(self, order_id: str) -> dict:
+        """Get status of an order"""
+    
+    def get_name(self) -> str:
+        return self.__class__.__name__
+```
+
+### paper_broker.py:
+```python
+class PaperBroker(BaseBroker):
+    """
+    Paper trading broker. Simulates order execution.
+    Uses REAL prices from feed but virtual capital.
+    """
+    
+    def __init__(self, initial_capital, fee_calculator, repository):
+        self.capital = initial_capital
+        self.available_capital = initial_capital
+        self.used_capital = 0
+        self.fee_calculator = fee_calculator
+        self.repo = repository
+        self.virtual_positions = {}  # symbol -> position dict
+    
+    async def authenticate(self, credentials):
+        return {"success": True, "message": "Paper broker - no authentication needed"}
+    
+    async def get_ltp(self, symbol):
+        """Get real LTP from the feed (injected)"""
+        if self.feed:
+            return await self.feed.get_ltp(symbol)
+        raise FeedError("No feed connected to paper broker")
+    
+    async def get_margin(self):
+        return {
+            "available": self.available_capital,
+            "used": self.used_capital,
+            "total": self.capital
+        }
+    
+    async def place_order(self, order):
+        """
+        Simulate order execution.
+        1. Get real LTP from feed
+        2. Calculate fees
+        3. Update virtual capital
+        4. Create position
+        5. Save to DB
+        """
+        # Get real live price
+        ltp = await self.get_ltp(order["symbol"])
+        
+        # Calculate required capital
+        entry_value = ltp * order["quantity"]
+        
+        # Calculate fees
+        fees = self.fee_calculator.calculate_equity_intraday(
+            buy_price=ltp if order["direction"] == "BUY" else 0,
+            sell_price=ltp if order["direction"] == "SELL" else 0,
+            quantity=order["quantity"],
+            brokerage_per_order=20
+        )
+        
+        # Check capital
+        if entry_value > self.available_capital * 0.9:
+            return {"success": False, "error": "Insufficient capital", "required": entry_value, "available": self.available_capital}
+        
+        # Update capital
+        if order["direction"] == "BUY":
+            self.used_capital += entry_value
+            self.available_capital -= entry_value
+        else:
+            self.used_capital += entry_value
+            self.available_capital -= entry_value
+        
+        # Create virtual position
+        position_id = str(uuid.uuid4())
+        position = {
+            "id": position_id,
+            "symbol": order["symbol"],
+            "direction": order["direction"],
+            "entry_price": ltp,
+            "sl_price": order.get("sl_price"),
+            "target_price": order.get("target_price"),
+            "quantity": order["quantity"],
+            "remaining_qty": order["quantity"],
+            "status": "open",
+            "entry_time": datetime.now(),
+            "fees_paid": fees["total"]
+        }
+        self.virtual_positions[order["symbol"]] = position
+        
+        # Save to DB
+        await self.repo.create_trade({...})
+        await self.repo.create_position({...})
+        
+        return {"success": True, "order_id": position_id, "entry_price": ltp, "fees": fees["total"]}
+    
+    async def close_position(self, symbol, qty=None, exit_price=None):
+        """
+        Close position (full or partial).
+        If exit_price not provided, get real LTP.
+        Calculate P&L, fees, update capital.
+        """
+        # Implementation with partial close support
+        # Handle partial booking levels
+        # Update DB
+        # Return P&L details
+    
+    async def update_position_prices(self):
+        """Update unrealized P&L for all open positions using current LTPs"""
+        # Called periodically by engine
+```
+
+### factory.py:
+```python
+class BrokerFactory:
+    @staticmethod
+    def create(broker_name: str, mode: str, **kwargs) -> BaseBroker:
+        if mode == "paper":
+            return PaperBroker(**kwargs)
+        if broker_name == "angel_one":
+            return AngelOneBroker(**kwargs)
+        if broker_name == "shoonya":
+            return ShoonyaBroker(**kwargs)
+        raise ValueError(f"Unknown broker: {broker_name}")
+```
+
+---
+
+## 12. RISK ENGINE (risk/)
+
+### risk_engine.py:
+```python
+class RiskEngine:
+    """
+    13-gate risk validation engine.
+    Every signal must pass ALL gates before being presented as opportunity.
+    """
+    
+    def __init__(self, config, repository, daily_risk_manager):
+        self.gates = [
+            G1MaxPositions(config),
+            G2SectorConcentration(config),
+            G3MaxPositionSize(config),
+            G4MaxDailyTrades(config),
+            G5MaxDailyLoss(config),
+            G6CorrelationCheck(config),
+            G7VIXFilter(config),
+            G8TimeOfDay(config),
+            G9PriceMismatch(config),
+            G10MinConfidence(config),
+            G11MaxDrawdown(config),
+            G12MarginCheck(config),
+            G13DuplicateSignal(config),
+        ]
+        self.daily_risk = daily_risk_manager
+    
+    async def validate(self, signal, context) -> RiskResult:
+        """
+        Run signal through all 13 gates.
+        Returns RiskResult with:
+          - passed: bool
+          - gate_results: list of GateResult (gate_name, passed, reason, details)
+          - rejection: None or GateResult of first failing gate
+        """
+        results = []
+        for gate in self.gates:
+            result = await gate.check(signal, context)
+            results.append(result)
+            if not result.passed:
+                # Log risk event
+                await self.daily_risk.record_gate_rejection(gate, result, signal)
+                return RiskResult(passed=False, gate_results=results, rejection=result)
+        return RiskResult(passed=True, gate_results=results, rejection=None)
+```
+
+### Each gate (g1 through g13):
+Every gate implements:
+```python
+class GateName:
+    async def check(self, signal, context) -> GateResult:
+        """
+        signal: Signal model with symbol, direction, entry_price, sl, target, confidence, strategy
+        context: dict with open_positions, daily_pnl, daily_trades, available_capital, vix, market_regime, current_time, broker_ltp, etc.
+        
+        Returns GateResult:
+          - gate_name: str (e.g., "G1_MaxPositions")
+          - gate_number: int (1-13)
+          - passed: bool
+          - reason: str (human readable, why passed or why failed)
+          - details: dict (supporting data)
+        """
+```
+
+Implement full logic for each gate as specified in Section 3.4 of the plan. G9 (PriceMismatch) compares signal.entry_price vs context["broker_ltp"]. G13 (DuplicateSignal) checks if same symbol+direction signal exists in last 15 minutes via repository query.
+
+### daily_risk_manager.py:
+```python
+class DailyRiskManager:
+    """
+    Track and enforce daily risk limits.
+    """
+    
+    async def check_daily_limits(self) -> DailyRiskStatus:
+        """Returns current daily risk status with all limits and usage"""
+    
+    async def should_reduce_size(self) -> bool:
+        """True if daily loss >= 67% of limit"""
+    
+    async def should_stop_trading(self) -> bool:
+        """True if daily loss >= 100% of limit OR max trades reached OR max consec losses"""
+    
+    async def record_trade_result(self, pnl):
+        """Record trade P&L for daily tracking. Check if limits hit after recording."""
+    
+    async def record_gate_rejection(self, gate, result, signal):
+        """Save risk event to DB"""
+    
+    async def get_cooloff_status(self) -> dict:
+        """Is cool-off active? When does it end?"""
+    
+    async def reset_daily(self):
+        """Reset daily counters. Called at market open."""
+```
+
+### position_sizer.py:
+```python
+class PositionSizer:
+    """
+    Dynamic position sizing: Kelly × confidence × volatility × drawdown × capital
+    Full implementation as specified in Section 3.5.
+    """
+    
+    async def calculate(self, signal, context) -> SizingResult:
+        """
+        Returns SizingResult:
+          - base_kelly_fraction
+          - confidence_multiplier
+          - volatility_multiplier
+          - drawdown_multiplier
+          - final_size_rupees
+          - quantity
+          - capital_required
+          - sizing_adjustments: list of str (what was adjusted and why)
+        """
+```
+
+### partial_booker.py:
+```python
+class PartialBooker:
+    """
+    3-level partial profit booking + trailing SL.
+    Full implementation as specified in Section 3.6.
+    """
+    
+    def calculate_booking_levels(self, position) -> BookingLevels:
+        """Calculate Level 1, 2, 3 targets based on entry, SL, and config"""
+    
+    async def check_and_book(self, position, current_price) -> BookingResult:
+        """
+        Check if current_price hits any booking level.
+        If yes: execute partial exit, move SL, return result.
+        If no: check trailing SL, return result.
+        """
+    
+    def calculate_trailing_sl(self, position, current_price) -> float:
+        """Calculate new trailing SL based on method (step or supertrend)"""
+```
+
+---
+
+## 13. CORE ENGINE (core/engine.py)
+
+```python
+class UltraBotEngine:
+    """
+    Main orchestrator. The brain of the system.
+    
+    Pipeline:
+      Feed → Scanner → Strategies → Risk → Sizing → Present to User → Execute
+    
+    Runs as an async background task in FastAPI.
+    """
+    
+    def __init__(self, config, repository, error_engine, risk_engine, 
+                 position_sizer, partial_booker, daily_risk_manager,
+                 broker, feed, session_manager):
+        # Initialize all components
+        self.state = EngineState.STOPPED
+        self.mode = None
+        self.broker = None
+        self.feed = None
+        # ... etc
+    
+    async def start(self, mode: EngineMode, broker_name: str, strategy_names: list = None):
+        """
+        Start the engine.
+        1. Set state to STARTING
+        2. Create broker via factory (paper or live)
+        3. Authenticate broker
+        4. Connect feed
+        5. Create session in DB
+        6. Recover state if resuming
+        7. Initialize scanner, strategies, risk engine
+        8. Set state to RUNNING
+        9. Start main loop as background task
+        10. Return success
+        """
+    
+    async def stop(self):
+        """Graceful shutdown. Save state. Close positions if configured. Close session."""
+    
+    async def pause(self):
+        """Pause scanning. Existing positions still managed."""
+    
+    async def resume(self):
+        """Resume scanning."""
+    
+    async def _main_loop(self):
+        """
+        Main engine loop. Runs continuously while state == RUNNING.
+        
+        Every iteration:
+          1. Check if market is open
+          2. Update position prices from feed
+          3. Check partial booking levels for all open positions
+          4. Check trailing SLs for all open positions
+          5. Check daily risk limits
+          6. If market open AND in trade window AND not paused AND daily risk OK:
+             a. Run scanner (get hot watchlist)
+             b. Run strategies on watchlist stocks (get signals)
+             c. For each signal:
+                - Run risk gates
+                - If passed: calculate position size
+                - If size OK: create Opportunity, push to WebSocket
+             d. Clean up expired opportunities
+          7. Sleep for scan_interval
+        """
+    
+    async def confirm_opportunity(self, opportunity_id, segment="EQ"):
+        """
+        User confirmed an opportunity.
+        1. Get opportunity from pending list
+        2. Re-verify risk gates (market may have changed)
+        3. Re-check price mismatch
+        4. Execute via broker
+        5. Save trade to DB
+        6. Push trade fill via WebSocket
+        7. Send Telegram alert
+        8. Return trade details
+        """
+    
+    async def skip_opportunity(self, opportunity_id, reason=None):
+        """Mark opportunity as skipped. Log reason."""
+    
+    async def _manage_position(self, position):
+        """Check SL, target, partial booking for a position. Called every tick."""
+    
+    async def get_status(self) -> dict:
+        """Return full engine status for dashboard API"""
+    
+    async def get_dashboard_data(self) -> dict:
+        """Aggregated dashboard data: capital, positions, P&L, regime, etc."""
+```
+
+---
+
+## 14. UTILS (utils/)
+
+### indicators.py:
+Implement these technical indicators using numpy/pandas:
+- `calculate_rsi(closes, period=14)` → Series
+- `calculate_macd(closes, fast=12, slow=26, signal=9)` → dict(macd, signal, histogram)
+- `calculate_supertrend(df, period=10, multiplier=3)` → Series (supertrend values, direction)
+- `calculate_vwap(df)` → Series (VWAP values)
+- `calculate_bollinger_bands(closes, period=20, std_dev=2)` → dict(upper, middle, lower)
+- `calculate_atr(df, period=14)` → Series
+- `calculate_ema(closes, period)` → Series
+- `calculate_sma(closes, period)` → Series
+- `calculate_z_score(series)` → float
+- `calculate_rate_of_change(closes, period)` → Series
+
+### market_utils.py:
+- F&O stock universe list (185 stocks with symbol, name, sector, lot_size)
+- `is_fno_stock(symbol)` → bool
+- `get_stock_sector(symbol)` → str
+- `get_lot_size(symbol)` → int
+- `NSE_HOLIDAYS` list
+
+### encryption.py:
+- `encrypt_credentials(data: dict, key: bytes)` → bytes (Fernet encryption)
+- `decrypt_credentials(encrypted: bytes, key: bytes)` → dict
+- `generate_key()` → bytes
+
+### formatters.py:
+- `format_currency(amount)` → str (₹1,23,456.78 with Indian formatting)
+- `format_pct(pct)` → str (+3.46%)
+- `format_duration(seconds)` → str (2h 15m)
+
+### candle_utils.py:
+- `resample_candles(df, target_timeframe)` → DataFrame (e.g., 1min to 5min)
+- `aggregate_candles(candle_list)` → DataFrame
+
+---
+
+## 15. FASTAPI APPLICATION (app.py)
+
+```python
+"""
+UltraBot Web - Main Application Entry Point
+"""
+
+# Setup:
+# - Load config from defaults.yaml + .env
+# - Initialize database (create tables)
+# - Initialize all components: repository, error_engine, risk_engine, 
+#   daily_risk_manager, position_sizer, partial_booker, fee_calculator,
+#   session_manager, engine
+# - Include all API routers
+# - Setup WebSocket endpoint
+# - Setup CORS (allow localhost:3000 for frontend)
+# - On startup: log "UltraBot Web started", show market status
+# - On shutdown: stop engine if running, close DB
+
+# Endpoints:
+# GET  /          → {"app": "UltraBot Web", "version": "1.0.0", "status": "running"}
+# GET  /health    → {"status": "healthy", "db": "connected", "engine": "stopped/running"}
+```
+
+---
+
+## 16. API ROUTES — IMPLEMENT ALL
+
+### api/dependencies.py:
+- `get_current_user(token)` → verify JWT, return username
+- `get_engine()` → return engine instance
+- `get_repository()` → return repository instance
+- `get_db()` → return DB session
+
+### api/routes/auth.py:
+- `POST /api/auth/login` → validate username/password, return JWT token
+- `POST /api/auth/logout` → invalidate token
+
+### api/routes/engine.py:
+- `POST /api/engine/start` → start engine with given mode, broker, strategies
+- `POST /api/engine/stop` → stop engine
+- `POST /api/engine/pause` → pause engine
+- `POST /api/engine/resume` → resume engine
+- `GET /api/engine/status` → engine status
+
+### api/routes/dashboard.py:
+- `GET /api/dashboard` → aggregated dashboard data
+
+### api/routes/trades.py:
+- `GET /api/trades` → trade history with filters
+- `GET /api/trades/{id}` → single trade detail
+- `GET /api/positions` → open positions
+- `POST /api/positions/{id}/close` → manual close
+- `POST /api/positions/{id}/modify-sl` → modify SL
+- `POST /api/positions/{id}/modify-target` → modify target
+
+### api/routes/strategies.py:
+- `GET /api/strategies` → all strategies with status
+- `PUT /api/strategies/{name}/toggle` → enable/disable
+- `PUT /api/strategies/{name}/params` → update params
+- `GET /api/strategies/{name}/performance` → strategy performance stats
+
+### api/routes/watchlist.py:
+- `GET /api/watchlist` → active watchlist
+- `POST /api/watchlist/add` → add stock manually
+- `DELETE /api/watchlist/{symbol}` → remove stock
+- `GET /api/watchlist/universe` → all F&O stocks
+
+### api/routes/risk.py:
+- `GET /api/risk/status` → daily risk status
+- `GET /api/risk/gates` → all 13 gate configs + last results
+- `PUT /api/risk/limits` → update risk limits
+- `GET /api/risk/events` → risk events log
+
+### api/routes/brokers.py:
+- `GET /api/brokers` → broker status
+- `POST /api/brokers/angel-one/credentials` → save Angel One creds (encrypted)
+- `POST /api/brokers/shoonya/credentials` → save Shoonya creds (encrypted)
+- `POST /api/brokers/angel-one/test` → test Angel One connection
+- `POST /api/brokers/shoonya/test` → test Shoonya connection
+- `PUT /api/brokers/active` → set active broker and mode
+
+### api/routes/opportunities.py:
+- `GET /api/opportunities` → pending opportunities
+- `POST /api/opportunities/{id}/confirm` → confirm and execute
+- `POST /api/opportunities/{id}/skip` → skip
+- `POST /api/opportunities/{id}/remind` → remind later
+
+### api/routes/backtest.py:
+- `POST /api/backtest/run` → start backtest (background task)
+- `GET /api/backtest/{id}/status` → backtest progress
+- `GET /api/backtest/{id}/results` → backtest results
+- `GET /api/backtest/history` → previous backtests
+- `DELETE /api/backtest/{id}` → delete backtest
+
+### api/routes/notifications.py:
+- `GET /api/notifications/history` → notification history
+- `PUT /api/notifications/settings` → update settings
+- `POST /api/notifications/test` → send test Telegram
+
+### api/routes/errors.py:
+- `GET /api/errors` → error log with filters
+- `GET /api/errors/{id}` → single error detail
+- `PUT /api/errors/{id}/resolve` → mark resolved
+- `GET /api/errors/stats` → error statistics
+
+### api/routes/settings_api.py:
+- `GET /api/settings` → all settings
+- `PUT /api/settings` → update settings
+- `GET /api/settings/capital` → capital info
+- `PUT /api/settings/capital` → update virtual capital
+
+### api/websocket.py:
+- `WS /ws` → WebSocket endpoint
+  - Accept connection
+  - On connect: add to subscribers list, send initial state
+  - Listen for client messages (subscribe to specific channels)
+  - Broadcast: live_prices, new_opportunity, trade_fill, trade_exit, partial_booking, risk_event, error_alert, engine_status_change, regime_change, scan_complete
+  - On disconnect: remove from subscribers
+  - Use asyncio.Queue for non-blocking broadcast
+
+---
+
+## 17. TESTING
+
+After building everything, include a `backend/tests/` directory with:
+
+- `test_fee_calculator.py` — Test NSE fee calculation with known values
+- `test_risk_gates.py` — Test each of 13 gates with pass/fail scenarios
+- `test_position_sizer.py` — Test dynamic sizing with various capital/confidence/vix/drawdown combos
+- `test_partial_booker.py` — Test 3-level booking with known price sequences
+- `test_paper_broker.py` — Test paper trade execution and P&L
+- `test_error_engine.py` — Test error handling and auto-recovery
+- `test_market_hours.py` — Test market status detection
+- `test_api_endpoints.py` — Test all REST endpoints with httpx AsyncClient
+
+Use pytest + pytest-asyncio. Each test must be fully implemented, not stubs.
+
+---
+
+## 18. BUILD INSTRUCTIONS
+
+At the end, provide a README.md with:
+
+```markdown
+# UltraBot Web
+
+## Quick Start
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r requirements.txt
+python app.py
+```
+
+Server starts at http://localhost:8000
+
+## API Docs
+
+Open http://localhost:8000/docs for Swagger UI
+
+## First Steps
+
+1. Login: POST /api/auth/login with {"username": "admin", "password": "admin"}
+2. Set virtual capital: PUT /api/settings/capital with {"virtual_capital": 100000}
+3. Start engine: POST /api/engine/start with {"mode": "paper", "broker": "paper"}
+4. Check dashboard: GET /api/dashboard
+5. Watch for opportunities: GET /api/opportunities
+```
+
+---
+
+## CRITICAL IMPLEMENTATION RULES
+
+1. **Every function must be fully implemented.** No `pass`, no `raise NotImplementedError`, no `# TODO`, no `...` placeholders.
+2. **Every error must be handled** with the ErrorEngine. Try/except blocks everywhere. Clear error messages.
+3. **All DB operations must be async.** No synchronous SQLite calls.
+4. **All API endpoints must have proper Pydantic request/response models.**
+5. **All API endpoints must require authentication** (except /api/auth/login and /health).
+6. **WebSocket must be non-blocking.** Use asyncio.Queue for broadcasting.
+7. **Paper broker must use REAL prices** from feed, never hardcoded or random.
+8. **Risk gates must never be bypassed.** No shortcuts.
+9. **Fees must always be calculated.** No trade without fee deduction.
+10. **Position sizing must always check available capital.** Never over-allocate.
+11. **Use Indian number formatting** for currency (₹1,23,456.78).
+12. **All timestamps in Asia/Kolkata timezone.**
+13. **UUID for all IDs.** No auto-increment integers as PKs.
+14. **JSON fields stored as TEXT in SQLite.** Use json.dumps/json.loads.
+15. **Config from YAML + .env override.** Never hardcode values.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+---
+
+**This is the complete build prompt for Phase 1. It covers the entire backend foundation: config, database, error engine, fees, risk engine (all 13 gates), position sizer, partial booker, paper broker, core engine, all API endpoints, WebSocket, and tests.**

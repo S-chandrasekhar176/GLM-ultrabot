@@ -1,0 +1,1561 @@
+    42→class UltraBotEngine:
+    43→    """The brain of UltraBot. Orchestrates all subsystems."""
+    44→
+    45→    def __init__(
+    46→        self,
+    47→        config,
+    48→        repository_getter: Callable,
+    49→        error_engine,
+    50→        risk_engine,
+    51→        position_sizer,
+    52→        partial_booker,
+    53→        daily_risk_manager,
+    54→        broker_factory,
+    55→        feed_manager,
+    56→        session_manager,
+    57→        market_hours: Optional[MarketHours] = None,
+    58→        ws_manager=None,
+    59→    ):
+    60→        self.config = config
+    61→        self._repo_getter = repository_getter
+    62→        self.error_engine = error_engine
+    63→        self.risk_engine = risk_engine
+    64→        self.position_sizer = position_sizer
+    65→        self.partial_booker = partial_booker
+    66→        self.daily_risk = daily_risk_manager
+    67→        self.broker_factory = broker_factory
+    68→        self.feed_manager = feed_manager
+    69→        self.session_manager = session_manager
+    70→        self.market_hours = market_hours or MarketHours()
+    71→        self.ws_manager = ws_manager
+    72→
+    73→        # Engine state
+    74→        self.state = EngineState.STOPPED
+    75→        self.mode: Optional[str] = None
+    76→        self.broker = None
+    77→        self.feed = None
+    78→        self.session_id: Optional[str] = None
+    79→        self.initial_capital: Optional[float] = None
+    80→        self.pending_opportunities: Dict[str, dict] = {}  # opportunity_id -> opportunity data
+    81→        self._main_task: Optional[asyncio.Task] = None
+    82→        self._start_time: Optional[datetime] = None
+    83→        self.current_regime: str = "Sideways"
+    84→        self.vix: float = 15.0
+    85→        self.nifty_price: float = 0.0
+    86→        self.active_strategies: List[str] = []
+    87→        self._scan_count: int = 0
+    88→        self._signals_generated: int = 0
+    89→        self._trades_executed: int = 0
+    90→        self._errors_count: int = 0
+    91→
+    92→    # ------------------------------------------------------------------
+    93→    # Repository accessor
+    94→    # ------------------------------------------------------------------
+    95→
+    96→    async def _get_repo(self):
+    97→        return await self._repo_getter()
+    98→
+    99→    # ------------------------------------------------------------------
+   100→    # Start
+   101→    # ------------------------------------------------------------------
+   102→
+   103→    async def start(
+   104→        self,
+   105→        mode: str = "paper",
+   106→        broker_name: str = "paper",
+   107→        strategy_names: Optional[List[str]] = None,
+   108→        initial_capital: Optional[float] = None,
+   109→    ) -> Dict[str, Any]:
+   110→        """Start the trading engine.
+   111→
+   112→        Args:
+   113→            mode: 'paper' or 'live'.
+   114→            broker_name: Broker identifier.
+   115→            strategy_names: Optional list of specific strategies to activate.
+   116→                             If None, uses regime-based activation from config.
+   117→            initial_capital: Starting capital. Defaults to config value.
+   118→
+   119→        Returns:
+   120→            Dict with session_id and status.
+   121→        """
+   122→        if self.state not in (EngineState.STOPPED, EngineState.ERROR):
+   123→            return {"status": "already_running", "state": self.state.value}
+   124→
+   125→        self.state = EngineState.STARTING
+   126→        await self._broadcast("engine", {"type": "engine_state_change", "state": self.state.value})
+   127→
+   128→        try:
+   129→            # Validate mode
+   130→            if mode not in ("paper", "live"):
+   131→                mode = "paper"
+   132→            self.mode = mode
+   133→
+   134→            # Capital
+   135→            capital_config = self.config.get_capital_config()
+   136→            self.initial_capital = initial_capital or capital_config.get("virtual_capital", 100000)
+   137→
+   138→            # Create broker
+   139→            broker_config = self.config.get_broker_config(broker_name)
+   140→            self.broker = await self.broker_factory(broker_name, broker_config, mode=mode)
+   141→
+   142→            # Authenticate
+   143→            if hasattr(self.broker, "authenticate"):
+   144→                await self.broker.authenticate()
+   145→            logger.info("Broker '%s' authenticated successfully", broker_name)
+   146→
+   147→            # Connect feed
+   148→            if self.feed_manager is not None and hasattr(self.feed_manager, "connect"):
+   149→                self.feed = await self.feed_manager.connect()
+   150→                logger.info("Feed manager connected")
+   151→
+   152→            # Create session
+   153→            self.session_id = await self.session_manager.create_session(
+   154→                mode=mode,
+   155→                broker=broker_name,
+   156→                initial_capital=self.initial_capital,
+   157→            )
+   158→
+   159→            # Recover state if resuming a previous session
+   160→            active_session = await self.session_manager.get_active_session()
+   161→            if active_session and active_session.get("session_id") != self.session_id:
+   162→                try:
+   163→                    recovered = await self.session_manager.recover_state(
+   164→                        active_session["session_id"]
+   165→                    )
+   166→                    self.current_regime = recovered.get("current_regime", "Sideways")
+   167→                    self.vix = recovered.get("vix", 15.0)
+   168→                    self.nifty_price = recovered.get("nifty_price", 0.0)
+   169→                    self.active_strategies = recovered.get("active_strategies", [])
+   170→                    logger.info(
+   171→                        "Recovered state from previous session: regime=%s, vix=%.1f",
+   172→                        self.current_regime, self.vix,
+   173→                    )
+   174→                except Exception as exc:
+   175→                    logger.warning("Could not recover previous session state: %s", exc)
+   176→
+   177→            # Initialize active strategies
+   178→            if strategy_names is not None:
+   179→                self.active_strategies = strategy_names
+   180→            elif not self.active_strategies:
+   181→                activation_config = self.config.get_strategy_activation(self.current_regime)
+   182→                self.active_strategies = activation_config.get("active", [])
+   183→                logger.info(
+   184→                    "Activated strategies for regime '%s': %s",
+   185→                    self.current_regime,
+   186→                    self.active_strategies,
+   187→                )
+   188→
+   189→            # Reset counters
+   190→            self._scan_count = 0
+   191→            self._signals_generated = 0
+   192→            self._trades_executed = 0
+   193→            self._errors_count = 0
+   194→            self._start_time = datetime.now(IST)
+   195→            self.pending_opportunities = {}
+   196→
+   197→            # Set running
+   198→            self.state = EngineState.RUNNING
+   199→            await self._broadcast("engine", {
+   200→                "type": "engine_state_change",
+   201→                "state": self.state.value,
+   202→                "session_id": self.session_id,
+   203→                "mode": self.mode,
+   204→            })
+   205→
+   206→            # Start main loop as background task
+   207→            self._main_task = asyncio.create_task(self._main_loop())
+   208→            logger.info(
+   209→                "Engine started: mode=%s, broker=%s, session=%s, strategies=%s",
+   210→                mode,
+   211→                broker_name,
+   212→                self.session_id,
+   213→                self.active_strategies,
+   214→            )
+   215→
+   216→            return {
+   217→                "status": "started",
+   218→                "session_id": self.session_id,
+   219→                "mode": mode,
+   220→                "broker": broker_name,
+   221→                "regime": self.current_regime,
+   222→                "strategies": self.active_strategies,
+   223→            }
+   224→
+   225→        except Exception as exc:
+   226→            self.state = EngineState.ERROR
+   227→            await self.error_engine.handle_error(
+   228→                exc,
+   229→                context={"action": "engine_start", "mode": mode, "broker": broker_name},
+   230→                session_id=self.session_id,
+   231→            )
+   232→            await self._broadcast("engine", {"type": "engine_state_change", "state": "error"})
+   233→            self._errors_count += 1
+   234→            logger.error("Engine start failed: %s", exc, exc_info=True)
+   235→            return {"status": "error", "error": str(exc)}
+   236→
+   237→    # ------------------------------------------------------------------
+   238→    # Stop
+   239→    # ------------------------------------------------------------------
+   240→
+   241→    async def stop(self) -> Dict[str, Any]:
+   242→        """Gracefully stop the engine.
+   243→
+   244→        Saves state, cancels the main loop, disconnects broker/feed,
+   245→        and closes the session.
+   246→        """
+   247→        if self.state == EngineState.STOPPED:
+   248→            return {"status": "already_stopped"}
+   249→
+   250→        logger.info("Engine stopping...")
+   251→        prev_state = self.state.value
+   252→
+   253→        try:
+   254→            # Cancel main loop
+   255→            if self._main_task is not None and not self._main_task.done():
+   256→                self._main_task.cancel()
+   257→                try:
+   258→                    await self._main_task
+   259→                except asyncio.CancelledError:
+   260→                    pass
+   261→                self._main_task = None
+   262→
+   263→            # Save state before shutting down
+   264→            if self.session_id:
+   265→                try:
+   266→                    await self.session_manager.save_state(self.session_id, self)
+   267→                except Exception as exc:
+   268→                    logger.warning("Failed to save session state on stop: %s", exc)
+   269→
+   270→            # Close positions via broker if live mode
+   271→            final_capital = self.initial_capital or 0
+   272→            if self.broker is not None:
+   273→                try:
+   274→                    # Get current capital / P&L
+   275→                    if hasattr(self.broker, "get_balance"):
+   276→                        balance = await self.broker.get_balance()
+   277→                        if isinstance(balance, (int, float)):
+   278→                            final_capital = balance
+   279→                        elif isinstance(balance, dict):
+   280→                            final_capital = balance.get("available_cash", balance.get("net", self.initial_capital or 0))
+   281→
+   282→                    # Disconnect broker
+   283→                    if hasattr(self.broker, "disconnect"):
+   284→                        await self.broker.disconnect()
+   285→                except Exception as exc:
+   286→                    logger.warning("Error during broker shutdown: %s", exc)
+   287→
+   288→            # Disconnect feed
+   289→            if self.feed is not None and hasattr(self.feed, "disconnect"):
+   290→                try:
+   291→                    await self.feed.disconnect()
+   292→                except Exception as exc:
+   293→                    logger.warning("Error during feed disconnect: %s", exc)
+   294→                self.feed = None
+   295→
+   296→            # Close session
+   297→            if self.session_id:
+   298→                try:
+   299→                    await self.session_manager.close_session(
+   300→                        self.session_id,
+   301→                        final_capital=final_capital,
+   302→                        status="stopped",
+   303→                    )
+   304→                except Exception as exc:
+   305→                    logger.warning("Failed to close session: %s", exc)
+   306→
+   307→            self.state = EngineState.STOPPED
+   308→            self.broker = None
+   309→
+   310→            await self._broadcast("engine", {
+   311→                "type": "engine_state_change",
+   312→                "state": self.state.value,
+   313→                "previous_state": prev_state,
+   314→            })
+   315→
+   316→            logger.info(
+   317→                "Engine stopped. Scans: %d, Signals: %d, Trades: %d, Errors: %d",
+   318→                self._scan_count, self._signals_generated, self._trades_executed, self._errors_count,
+   319→            )
+   320→            return {"status": "stopped", "final_capital": round(final_capital, 2)}
+   321→
+   322→        except Exception as exc:
+   323→            self.state = EngineState.ERROR
+   324→            await self.error_engine.handle_error(
+   325→                exc,
+   326→                context={"action": "engine_stop", "previous_state": prev_state},
+   327→                session_id=self.session_id,
+   328→            )
+   329→            return {"status": "error", "error": str(exc)}
+   330→
+   331→    # ------------------------------------------------------------------
+   332→    # Pause / Resume
+   333→    # ------------------------------------------------------------------
+   334→
+   335→    async def pause(self) -> Dict[str, Any]:
+   336→        """Pause the engine scanning loop. Position management continues."""
+   337→        if self.state != EngineState.RUNNING:
+   338→            return {"status": "not_running", "state": self.state.value}
+   339→
+   340→        self.state = EngineState.PAUSED
+   341→        await self._broadcast("engine", {"type": "engine_state_change", "state": "paused"})
+   342→        logger.info("Engine paused")
+   343→        return {"status": "paused"}
+   344→
+   345→    async def resume(self) -> Dict[str, Any]:
+   346→        """Resume the engine scanning loop."""
+   347→        if self.state != EngineState.PAUSED:
+   348→            return {"status": "not_paused", "state": self.state.value}
+   349→
+   350→        self.state = EngineState.RUNNING
+   351→        await self._broadcast("engine", {"type": "engine_state_change", "state": "running"})
+   352→        logger.info("Engine resumed")
+   353→        return {"status": "running"}
+   354→
+   355→    # ------------------------------------------------------------------
+   356→    # Main Loop
+   357→    # ------------------------------------------------------------------
+   358→
+   359→    async def _main_loop(self) -> None:
+   360→        """Core scanning loop. Runs while state is RUNNING or PAUSED.
+   361→
+   362→        Each iteration:
+   363→        1. Check market open / session
+   364→        2. Update position prices
+   365→        3. Check partial bookings & trailing SLs on open positions
+   366→        4. Check daily risk status
+   367→        5. If market open AND trade window AND not paused AND risk OK:
+   368→           a. Fetch watchlist
+   369→           b. Run strategy scans per symbol
+   370→           c. Run risk gates on signals
+   371→           d. Calculate position size
+   372→           e. Create opportunity, push to WS
+   373→        6. Sleep for scan_interval
+   374→        """
+   375→        scan_interval = self.config.get_engine_config().get("scan_interval_seconds", 180)
+   376→        max_retries = self.config.get_engine_config().get("max_scan_retries", 3)
+   377→
+   378→        while self.state in (EngineState.RUNNING, EngineState.PAUSED):
+   379→            iteration_start = datetime.now(IST)
+   380→            retry_count = 0
+   381→
+   382→            try:
+   383→                # --- Step 1: Market check ---
+   384→                market_status = self.market_hours.get_market_status()
+   385→                await self._broadcast("market", {
+   386→                    "type": "market_status",
+   387→                    "is_open": market_status["is_open"],
+   388→                    "session": market_status["session"],
+   389→                })
+   390→
+   391→                # --- Step 2: Update position prices ---
+   392→                await self._update_position_prices()
+   393→
+   394→                # --- Step 3: Manage open positions (SL, target, partial bookings, trailing SL) ---
+   395→                await self._manage_all_positions()
+   396→
+   397→                # --- Step 4: Check daily risk ---
+   398→                risk_ok = True
+   399→                can_trade = False
+   400→                try:
+   401→                    repo = await self._get_repo()
+   402→                    risk_status = await self.daily_risk.get_daily_risk_status()
+   403→                    risk_ok = risk_status.can_take_new_trades
+   404→
+   405→                    await self._broadcast("risk", {
+   406→                        "type": "daily_risk_update",
+   407→                        "can_take_new_trades": risk_ok,
+   408→                        "block_reason": risk_status.block_reason,
+   409→                        "net_pnl": risk_status.net_pnl,
+   410→                        "open_positions": risk_status.open_positions,
+   411→                        "consecutive_losses": risk_status.consecutive_losses,
+   412→                    })
+   413→                except Exception as risk_exc:
+   414→                    logger.warning("Could not check daily risk: %s", risk_exc)
+   415→
+   416→                # --- Steps 5+: Only scan if conditions are met ---
+   417→                can_trade = (
+   418→                    self.state == EngineState.RUNNING
+   419→                    and market_status["is_open"]
+   420→                    and self.market_hours.is_new_trade_window()
+   421→                    and risk_ok
+   422→                )
+   423→
+   424→                if can_trade:
+   425→                    self.state = EngineState.SCANNING
+   426→                    await self._broadcast("engine", {"type": "engine_state_change", "state": "scanning"})
+   427→
+   428→                    try:
+   429→                        await self._scan_watchlist()
+   430→                    except Exception as scan_exc:
+   431→                        logger.error("Watchlist scan error: %s", scan_exc, exc_info=True)
+   432→                        await self.error_engine.handle_error(
+   433→                            scan_exc,
+   434→                            context={"action": "watchlist_scan"},
+   435→                            session_id=self.session_id,
+   436→                        )
+   437→                        self._errors_count += 1
+   438→                    finally:
+   439→                        if self.state == EngineState.SCANNING:
+   440→                            self.state = EngineState.RUNNING
+   441→
+   442→                self._scan_count += 1
+   443→
+   444→                # Auto-save state periodically (every 10 scans)
+   445→                if self._scan_count % 10 == 0 and self.session_id:
+   446→                    try:
+   447→                        await self.session_manager.save_state(self.session_id, self)
+   448→                    except Exception:
+   449→                        logger.debug("Periodic state save failed")
+   450→
+   451→            except asyncio.CancelledError:
+   452→                logger.info("Main loop cancelled")
+   453→                return
+   454→            except Exception as loop_exc:
+   455→                retry_count += 1
+   456→                self._errors_count += 1
+   457→                logger.error("Main loop error (attempt %d/%d): %s", retry_count, max_retries, loop_exc)
+   458→
+   459→                await self.error_engine.handle_error(
+   460→                    loop_exc,
+   461→                    context={"action": "main_loop", "attempt": retry_count},
+   462→                    session_id=self.session_id,
+   463→                )
+   464→
+   465→                if retry_count >= max_retries:
+   466→                    logger.critical("Max retries (%d) exceeded, stopping engine", max_retries)
+   467→                    self.state = EngineState.ERROR
+   468→                    await self._broadcast("engine", {"type": "engine_state_change", "state": "error"})
+   469→                    return
+   470→
+   471→            # Sleep for scan interval (cancellable)
+   472→            try:
+   473→                await asyncio.sleep(scan_interval)
+   474→            except asyncio.CancelledError:
+   475→                logger.info("Main loop sleep cancelled")
+   476→                return
+   477→
+   478→        logger.info("Main loop exited (state=%s)", self.state.value)
+   479→
+   480→    # ------------------------------------------------------------------
+   481→    # Scanning
+   482→    # ------------------------------------------------------------------
+   483→
+   484→    async def _scan_watchlist(self) -> None:
+   485→        """Fetch watchlist and run strategy scans for each symbol."""
+   486→        repo = await self._get_repo()
+   487→        watchlist_items = await repo.get_active_watchlist()
+   488→
+   489→        if not watchlist_items:
+   490→            logger.debug("Watchlist is empty, skipping scan")
+   491→            return
+   492→
+   493→        if not _STRATEGIES_AVAILABLE:
+   494→            logger.debug("No strategy registry available, skipping signal generation")
+   495→            return
+   496→
+   497→        if not self.active_strategies:
+   498→            logger.debug("No active strategies, skipping scan")
+   499→            return
+   500→
+   501→        # Get current VIX and regime from feed/broker if available
+   502→        await self._update_market_context()
+   503→
+   504→        for item in watchlist_items:
+   505→            symbol = item.symbol
+   506→
+   507→            # Check if symbol already has a pending opportunity
+   508→            has_pending = any(
+   509→                opp.get("symbol") == symbol
+   510→                for opp in self.pending_opportunities.values()
+   511→            )
+   512→            if has_pending:
+   513→                logger.debug("Skipping %s: pending opportunity exists", symbol)
+   514→                continue
+   515→
+   516→            try:
+   517→                await self._scan_symbol(symbol, repo)
+   518→            except Exception as sym_exc:
+   519→                logger.warning("Error scanning %s: %s", symbol, sym_exc)
+   520→                self._errors_count += 1
+   521→                await self.error_engine.handle_error(
+   522→                    sym_exc,
+   523→                    context={"action": "scan_symbol", "symbol": symbol},
+   524→                    session_id=self.session_id,
+   525→                )
+   526→
+   527→    async def _scan_symbol(self, symbol: str, repo) -> None:
+   528→        """Run all active strategies on a single symbol."""
+   529→        # Fetch candles from feed
+   530→        candles = []
+   531→        if self.feed is not None and hasattr(self.feed, "get_candles"):
+   532→            candles = await self.feed.get_candles(symbol, timeframe="5min", limit=100)
+   533→        elif self.broker is not None and hasattr(self.broker, "get_candles"):
+   534→            candles = await self.broker.get_candles(symbol, timeframe="5min", limit=100)
+   535→
+   536→        if not candles or len(candles) < 20:
+   537→            logger.debug("Insufficient candles for %s: %d", symbol, len(candles) if candles else 0)
+   538→            return
+   539→
+   540→        # Get current price
+   541→        current_price = 0.0
+   542→        if candles:
+   543→            last_candle = candles[-1]
+   544→            if isinstance(last_candle, dict):
+   545→                current_price = last_candle.get("close", 0)
+   546→            else:
+   547→                current_price = getattr(last_candle, "close", 0)
+   548→
+   549→        if current_price <= 0:
+   550→            return
+   551→
+   552→        # Run each active strategy
+   553→        for strategy_name in self.active_strategies:
+   554→            try:
+   555→                signal = await run_strategy_scan(
+   556→                    symbol=symbol,
+   557→                    candles=candles,
+   558→                    strategy_name=strategy_name,
+   559→                    regime=self.current_regime,
+   560→                    vix=self.vix,
+   561→                )
+   562→
+   563→                if signal is None:
+   564→                    continue
+   565→
+   566→                self._signals_generated += 1
+   567→                logger.info(
+   568→                    "Signal from %s on %s: %s @ %.2f (conf=%.2f)",
+   569→                    strategy_name, symbol, signal.get("direction", "?"),
+   570→                    signal.get("entry_price", 0), signal.get("confidence", 0),
+   571→                )
+   572→
+   573→                # Run risk gates
+   574→                risk_result = await self._run_risk_gates(signal, symbol, current_price)
+   575→                if not risk_result.get("passed", False):
+   576→                    logger.info(
+   577→                        "Signal from %s on %s blocked by risk: %s",
+   578→                        strategy_name, symbol, risk_result.get("block_reason", "unknown"),
+   579→                    )
+   580→                    continue
+   581→
+   582→                # Calculate position size
+   583→                sizing = await self._calculate_position_size(signal, current_price)
+   584→
+   585→                # Build opportunity
+   586→                opportunity = self._build_opportunity(signal, strategy_name, symbol, current_price, sizing, risk_result)
+   587→
+   588→                # Store in pending
+   589→                opp_id = opportunity["id"]
+   590→                self.pending_opportunities[opp_id] = opportunity
+   591→
+   592→                # Push to WebSocket
+   593→                await self._broadcast("opportunity", {
+   594→                    "type": "new_opportunity",
+   595→                    "opportunity": opportunity,
+   596→                })
+   597→
+   598→                # Save signal to DB
+   599→                await repo.create_signal(
+   600→                    symbol=symbol,
+   601→                    direction=signal.get("direction", "LONG"),
+   602→                    strategy=strategy_name,
+   603→                    confidence=signal.get("confidence", 0),
+   604→                    entry_price=signal.get("entry_price", current_price),
+   605→                    stop_loss=signal.get("stop_loss", 0),
+   606→                    target=signal.get("target", 0),
+   607→                    status="pending",
+   608→                    signal_data=signal,
+   609→                    risk_gate_results=risk_result.get("all_gates", []),
+   610→                    session_id=self.session_id,
+   611→                )
+   612→
+   613→            except Exception as strat_exc:
+   614→                logger.warning(
+   615→                    "Error running strategy %s on %s: %s",
+   616→                    strategy_name, symbol, strat_exc,
+   617→                )
+   618→
+   619→    # ------------------------------------------------------------------
+   620→    # Risk Gates
+   621→    # ------------------------------------------------------------------
+   622→
+   623→    async def _run_risk_gates(self, signal: dict, symbol: str, current_price: float) -> dict:
+   624→        """Run all risk gates on a signal.
+   625→
+   626→        Returns dict with: passed, all_gates, blocked_by, block_reason, severity,
+   627→        reduced_size, notes.
+   628→        """
+   629→        try:
+   630→            risk_result = await self.risk_engine.evaluate(
+   631→                signal=signal,
+   632→                symbol=symbol,
+   633→                current_price=current_price,
+   634→                session_id=self.session_id,
+   635→            )
+   636→            if hasattr(risk_result, "model_dump"):
+   637→                return risk_result.model_dump()
+   638→            if isinstance(risk_result, dict):
+   639→                return risk_result
+   640→            return {"passed": False, "block_reason": "Unknown risk result type", "all_gates": []}
+   641→        except Exception as exc:
+   642→            logger.error("Risk gate evaluation failed: %s", exc)
+   643→            return {"passed": False, "block_reason": f"Risk engine error: {exc}", "all_gates": [], "severity": "error"}
+   644→
+   645→    # ------------------------------------------------------------------
+   646→    # Position Sizing
+   647→    # ------------------------------------------------------------------
+   648→
+   649→    async def _calculate_position_size(self, signal: dict, current_price: float) -> dict:
+   650→        """Calculate position size for a signal."""
+   651→        try:
+   652→            sizing_result = await self.position_sizer.calculate(
+   653→                signal=signal,
+   654→                current_price=current_price,
+   655→                regime=self.current_regime,
+   656→                vix=self.vix,
+   657→                session_id=self.session_id,
+   658→            )
+   659→            if hasattr(sizing_result, "model_dump"):
+   660→                return sizing_result.model_dump()
+   661→            if isinstance(sizing_result, dict):
+   662→                return sizing_result
+   663→            return {"quantity": 0, "position_size": 0, "method": "unknown"}
+   664→        except Exception as exc:
+   665→            logger.error("Position sizing failed: %s", exc)
+   666→            return {"quantity": 0, "position_size": 0, "method": "error", "notes": str(exc)}
+   667→
+   668→    # ------------------------------------------------------------------
+   669→    # Build Opportunity
+   670→    # ------------------------------------------------------------------
+   671→
+   672→    def _build_opportunity(
+   673→        self,
+   674→        signal: dict,
+   675→        strategy_name: str,
+   676→        symbol: str,
+   677→        current_price: float,
+   678→        sizing: dict,
+   679→        risk_result: dict,
+   680→    ) -> dict:
+   681→        """Build a full opportunity dict from signal + risk + sizing."""
+   682→        entry_price = signal.get("entry_price", current_price)
+   683→        stop_loss = signal.get("stop_loss", 0)
+   684→        target = signal.get("target", 0)
+   685→
+   686→        # Calculate risk/reward
+   687→        sl_distance = entry_price - stop_loss if signal.get("direction") == "LONG" else stop_loss - entry_price
+   688→        sl_distance = abs(sl_distance)
+   689→        target_distance = target - entry_price if signal.get("direction") == "LONG" else entry_price - target
+   690→        target_distance = abs(target_distance)
+   691→        risk_reward = round(target_distance / sl_distance, 2) if sl_distance > 0 else 0.0
+   692→
+   693→        # Price mismatch check
+   694→        price_mismatch_pct = abs(current_price - entry_price) / entry_price * 100 if entry_price > 0 else 0
+   695→
+   696→        # Partial booking levels
+   697→        booking_levels = []
+   698→        if self.partial_booker is not None:
+   699→            try:
+   700→                booking_config = self.config.get_partial_booking_config()
+   701→                booking_levels = self.partial_booker.get_booking_levels(
+   702→                    entry_price=entry_price,
+   703→                    stop_loss=stop_loss,
+   704→                    target=target,
+   705→                    direction=signal.get("direction", "LONG"),
+   706→                    config=booking_config,
+   707→                )
+   708→                if hasattr(booking_levels, "model_dump"):
+   709→                    booking_levels = booking_levels.model_dump().get("levels", [])
+   710→                elif isinstance(booking_levels, list):
+   711→                    pass
+   712→                else:
+   713→                    booking_levels = []
+   714→            except Exception:
+   715→                booking_levels = []
+   716→
+   717→        opportunity_id = str(uuid.uuid4())
+   718→
+   719→        return {
+   720→            "id": opportunity_id,
+   721→            "signal_id": str(uuid.uuid4()),
+   722→            "created_at": datetime.now(IST).isoformat(),
+   723→            "symbol": symbol,
+   724→            "name": signal.get("name", ""),
+   725→            "direction": signal.get("direction", "LONG"),
+   726→            "strategy": strategy_name,
+   727→            "confidence": signal.get("confidence", 0),
+   728→            "entry_price": entry_price,
+   729→            "current_price": current_price,
+   730→            "stop_loss": stop_loss,
+   731→            "target": target,
+   732→            "risk_reward": risk_reward,
+   733→            "sl_distance_pct": round(sl_distance / entry_price * 100, 2) if entry_price > 0 else 0,
+   734→            "target_pct": round(target_distance / entry_price * 100, 2) if entry_price > 0 else 0,
+   735→            "price_mismatch_pct": round(price_mismatch_pct, 2),
+   736→            "quantity": sizing.get("quantity", 0),
+   737→            "position_size": sizing.get("position_size", 0),
+   738→            "position_size_pct": sizing.get("position_size_pct", 0),
+   739→            "risk_amount": sizing.get("risk_amount", 0),
+   740→            "sizing_method": sizing.get("method", ""),
+   741→            "capital_required": sizing.get("position_size", 0),
+   742→            "kelly_fraction": sizing.get("adjusted_fraction", sizing.get("kelly_fraction")),
+   743→            "volatility_tier": sizing.get("volatility_tier", ""),
+   744→            "drawdown_tier": sizing.get("drawdown_tier", ""),
+   745→            "confidence_tier": sizing.get("confidence_tier", ""),
+   746→            "is_equity": signal.get("is_equity", True),
+   747→            "lot_size": signal.get("lot_size"),
+   748→            "expiry_date": signal.get("expiry_date"),
+   749→            "strike": signal.get("strike"),
+   750→            "option_type": signal.get("option_type"),
+   751→            "is_reduced_size": sizing.get("reduced_size", risk_result.get("reduced_size", False)),
+   752→            "risk_gate_passed": risk_result.get("passed", True),
+   753→            "risk_gates": risk_result.get("all_gates", []),
+   754→            "vix": self.vix,
+   755→            "regime": self.current_regime,
+   756→            "booking_levels": booking_levels,
+   757→            "signal_data": signal,
+   758→            "kronos_score": signal.get("kronos_score"),
+   759→            "win_rate": signal.get("win_rate"),
+   760→            "avg_rr": signal.get("avg_rr"),
+   761→            "notes": risk_result.get("notes", ""),
+   762→        }
+   763→
+   764→    # ------------------------------------------------------------------
+   765→    # Confirm / Skip Opportunity
+   766→    # ------------------------------------------------------------------
+   767→
+   768→    async def confirm_opportunity(self, opportunity_id: str, segment: str = "EQ") -> Dict[str, Any]:
+   769→        """User confirms an opportunity – execute the trade.
+   770→
+   771→        Args:
+   772→            opportunity_id: The pending opportunity ID.
+   773→            segment: Market segment ('EQ', 'FNO', etc.).
+   774→
+   775→        Returns:
+   776→            Dict with trade details.
+   777→        """
+   778→        opportunity = self.pending_opportunities.pop(opportunity_id, None)
+   779→        if opportunity is None:
+   780→            return {"status": "not_found", "error": f"Opportunity {opportunity_id} not in pending list"}
+   781→
+   782→        symbol = opportunity["symbol"]
+   783→        direction = opportunity["direction"]
+   784→        entry_price = opportunity["entry_price"]
+   785→        quantity = opportunity["quantity"]
+   786→        stop_loss = opportunity["stop_loss"]
+   787→        target = opportunity["target"]
+   788→        strategy = opportunity["strategy"]
+   789→
+   790→        # --- Re-verify risk gates ---
+   791→        current_price = entry_price
+   792→        if self.feed is not None and hasattr(self.feed, "get_latest_price"):
+   793→            try:
+   794→                current_price = await self.feed.get_latest_price(symbol)
+   795→            except Exception:
+   796→                pass
+   797→        elif self.broker is not None and hasattr(self.broker, "get_latest_price"):
+   798→            try:
+   799→                current_price = await self.broker.get_latest_price(symbol)
+   800→            except Exception:
+   801→                pass
+   802→
+   803→        # --- Price mismatch re-check ---
+   804→        price_mismatch_pct = abs(current_price - entry_price) / entry_price * 100 if entry_price > 0 else 0
+   805→        risk_config = self.config.get_risk_config()
+   806→        mismatch_threshold = risk_config.get("price_mismatch_threshold_pct", 0.5)
+   807→
+   808→        if price_mismatch_pct > mismatch_threshold:
+   809→            return {
+   810→                "status": "rejected",
+   811→                "reason": f"Price mismatch too large: {price_mismatch_pct:.2f}% > {mismatch_threshold}%",
+   812→                "current_price": current_price,
+   813→                "original_entry": entry_price,
+   814→            }
+   815→
+   816→        # --- Re-run risk gates ---
+   817→        signal_data = opportunity.get("signal_data", opportunity)
+   818→        signal_data["entry_price"] = current_price
+   819→
+   820→        risk_result = await self._run_risk_gates(signal_data, symbol, current_price)
+   821→        if not risk_result.get("passed", False):
+   822→            return {
+   823→                "status": "rejected",
+   824→                "reason": risk_result.get("block_reason", "Risk gates failed on re-check"),
+   825→                "risk_gates": risk_result.get("all_gates", []),
+   826→            }
+   827→
+   828→        # --- Recalculate position size with current price ---
+   829→        sizing = await self._calculate_position_size(signal_data, current_price)
+   830→        quantity = sizing.get("quantity", quantity)
+   831→        if quantity <= 0:
+   832→            return {"status": "rejected", "reason": "Position size calculated as 0"}
+   833→
+   834→        # --- Execute order via broker ---
+   835→        trade_id = str(uuid.uuid4())
+   836→        order_result = {}
+   837→        try:
+   838→            if self.broker is not None and hasattr(self.broker, "place_order"):
+   839→                order_result = await self.broker.place_order(
+   840→                    symbol=symbol,
+   841→                    direction=direction,
+   842→                    quantity=quantity,
+   843→                    price=current_price,
+   844→                    order_type="MARKET",
+   845→                    segment=segment,
+   846→                    stop_loss=stop_loss,
+   847→                    target=target,
+   848→                )
+   849→            else:
+   850→                # Paper simulation
+   851→                order_result = {
+   852→                    "order_id": f"PAPER-{trade_id[:8]}",
+   853→                    "status": "FILLED",
+   854→                    "filled_price": current_price,
+   855→                    "filled_quantity": quantity,
+   856→                }
+   857→        except Exception as order_exc:
+   858→            await self.error_engine.handle_error(
+   859→                order_exc,
+   860→                context={"action": "place_order", "symbol": symbol, "direction": direction, "quantity": quantity},
+   861→                session_id=self.session_id,
+   862→            )
+   863→            self._errors_count += 1
+   864→            return {"status": "order_failed", "error": str(order_exc)}
+   865→
+   866→        # --- Determine fill price ---
+   867→        filled_price = current_price
+   868→        filled_qty = quantity
+   869→        order_status = "OPEN"
+   870→        broker_order_id = ""
+   871→
+   872→        if isinstance(order_result, dict):
+   873→            broker_order_id = order_result.get("order_id", "")
+   874→            if order_result.get("filled_price"):
+   875→                filled_price = order_result["filled_price"]
+   876→            if order_result.get("filled_quantity"):
+   877→                filled_qty = order_result["filled_quantity"]
+   878→            if order_result.get("status") == "FILLED":
+   879→                order_status = "OPEN"  # Position is now open
+   880→
+   881→        invested_amount = filled_price * filled_qty
+   882→        sl_distance = abs(filled_price - stop_loss)
+   883→        target_distance = abs(target - filled_price)
+   884→
+   885→        # --- Save trade to DB ---
+   886→        repo = await self._get_repo()
+   887→
+   888→        # Fees calculation
+   889→        fees_config = self.config.get_fees_config()
+   890→        brokerage = fees_config.get("brokerage_per_order", 20)
+   891→        exchange_txn = invested_amount * fees_config.get("exchange_txn_pct", 0.00345) / 100
+   892→        stt = invested_amount * fees_config.get("stt_intraday_sell_pct", 0.025) / 100
+   893→        sebi_fee = invested_amount * fees_config.get("sebi_fee_pct", 0.0001) / 100
+   894→        stamp_duty = invested_amount * fees_config.get("stamp_duty_pct", 0.003) / 100
+   895→        gst = (brokerage + exchange_txn + stt + sebi_fee + stamp_duty) * fees_config.get("gst_pct", 18) / 100
+   896→        total_fees = round(brokerage + exchange_txn + stt + sebi_fee + stamp_duty + gst, 2)
+   897→
+   898→        trade = await repo.create_trade(
+   899→            id=trade_id,
+   900→            symbol=symbol,
+   901→            direction=direction,
+   902→            strategy=strategy,
+   903→            entry_price=filled_price,
+   904→            exit_price=0,
+   905→            quantity=filled_qty,
+   906→            invested_amount=round(invested_amount, 2),
+   907→            stop_loss=stop_loss,
+   908→            target=target,
+   909→            status=order_status,
+   910→            session_id=self.session_id,
+   911→            signal_confidence=opportunity.get("confidence", 0),
+   912→            risk_reward=opportunity.get("risk_reward", 0),
+   913→            brokerage=brokerage,
+   914→            fees=total_fees,
+   915→            net_pnl=0,
+   916→            pnl=0,
+   917→            tags=[strategy, segment],
+   918→            extra={
+   919→                "opportunity_id": opportunity_id,
+   920→                "broker_order_id": broker_order_id,
+   921→                "sizing_method": opportunity.get("sizing_method", ""),
+   922→                "regime": self.current_regime,
+   923→                "vix": self.vix,
+   924→                "kronos_score": opportunity.get("kronos_score"),
+   925→            },
+   926→        )
+   927→
+   928→        # --- Create position ---
+   929→        await repo.create_position(
+   930→            trade_id=trade_id,
+   931→            symbol=symbol,
+   932→            direction=direction,
+   933→            strategy=strategy,
+   934→            entry_price=filled_price,
+   935→            quantity=filled_qty,
+   936→            invested_amount=round(invested_amount, 2),
+   937→            stop_loss=stop_loss,
+   938→            target=target,
+   939→            current_price=filled_price,
+   940→            status="OPEN",
+   941→            session_id=self.session_id,
+   942→            extra={
+   943→                "booking_levels": opportunity.get("booking_levels", []),
+   944→                "broker_order_id": broker_order_id,
+   945→                "sl_distance": sl_distance,
+   946→                "target_distance": target_distance,
+   947→            },
+   948→        )
+   949→
+   950→        self._trades_executed += 1
+   951→
+   952→        # --- Broadcast trade fill ---
+   953→        await self._broadcast("trade", {
+   954→            "type": "trade_fill",
+   955→            "trade_id": trade_id,
+   956→            "symbol": symbol,
+   957→            "direction": direction,
+   958→            "quantity": filled_qty,
+   959→            "filled_price": filled_price,
+   960→            "invested_amount": round(invested_amount, 2),
+   961→            "stop_loss": stop_loss,
+   962→            "target": target,
+   963→            "strategy": strategy,
+   964→            "broker_order_id": broker_order_id,
+   965→            "fees": total_fees,
+   966→        })
+   967→
+   968→        logger.info(
+   969→            "Trade executed: %s %s x%d @ %.2f (SL=%.2f, T=%.2f) [%s]",
+   970→            direction, symbol, filled_qty, filled_price, stop_loss, target, strategy,
+   971→        )
+   972→
+   973→        return {
+   974→            "status": "filled",
+   975→            "trade_id": trade_id,
+   976→            "symbol": symbol,
+   977→            "direction": direction,
+   978→            "quantity": filled_qty,
+   979→            "filled_price": filled_price,
+   980→            "invested_amount": round(invested_amount, 2),
+   981→            "stop_loss": stop_loss,
+   982→            "target": target,
+   983→            "strategy": strategy,
+   984→            "broker_order_id": broker_order_id,
+   985→            "fees": total_fees,
+   986→        }
+   987→
+   988→    async def skip_opportunity(self, opportunity_id: str, reason: Optional[str] = None) -> Dict[str, Any]:
+   989→        """User skips an opportunity."""
+   990→        opportunity = self.pending_opportunities.pop(opportunity_id, None)
+   991→        if opportunity is None:
+   992→            return {"status": "not_found", "error": f"Opportunity {opportunity_id} not in pending list"}
+   993→
+   994→        symbol = opportunity.get("symbol", "")
+   995→        strategy = opportunity.get("strategy", "")
+   996→        skip_reason = reason or "User skipped"
+   997→
+   998→        # Update signal status in DB
+   999→        try:
+  1000→            repo = await self._get_repo()
+  1001→            signal_id = opportunity.get("signal_id")
+  1002→            if signal_id:
+  1003→                await repo.update_signal(signal_id, status="skipped")
+  1004→        except Exception as exc:
+  1005→            logger.debug("Could not update signal status: %s", exc)
+  1006→
+  1007→        await self._broadcast("opportunity", {
+  1008→            "type": "opportunity_skipped",
+  1009→            "opportunity_id": opportunity_id,
+  1010→            "symbol": symbol,
+  1011→            "strategy": strategy,
+  1012→            "reason": skip_reason,
+  1013→        })
+  1014→
+  1015→        logger.info("Opportunity %s (%s %s) skipped: %s", opportunity_id, symbol, strategy, skip_reason)
+  1016→        return {"status": "skipped", "opportunity_id": opportunity_id, "reason": skip_reason}
+  1017→
+  1018→    # ------------------------------------------------------------------
+  1019→    # Position Management
+  1020→    # ------------------------------------------------------------------
+  1021→
+  1022→    async def _manage_all_positions(self) -> None:
+  1023→        """Manage all open positions: update prices, check SL/target/partial bookings."""
+  1024→        repo = await self._get_repo()
+  1025→        positions = await repo.get_open_positions()
+  1026→
+  1027→        for position in positions:
+  1028→            try:
+  1029→                await self._manage_position(position)
+  1030→            except Exception as pos_exc:
+  1031→                logger.error("Error managing position %s: %s", position.id, pos_exc)
+  1032→                await self.error_engine.handle_error(
+  1033→                    pos_exc,
+  1034→                    context={"action": "manage_position", "position_id": position.id, "symbol": position.symbol},
+  1035→                    session_id=self.session_id,
+  1036→                )
+  1037→
+  1038→    async def _manage_position(self, position) -> None:
+  1039→        """Manage a single open position: check SL hit, target hit, partial bookings.
+  1040→
+  1041→        Args:
+  1042→            position: A Position ORM object from the repository.
+  1043→        """
+  1044→        # Get latest price
+  1045→        current_price = 0.0
+  1046→        if self.feed is not None and hasattr(self.feed, "get_latest_price"):
+  1047→            try:
+  1048→                current_price = await self.feed.get_latest_price(position.symbol)
+  1049→            except Exception:
+  1050→                pass
+  1051→        if current_price <= 0 and self.broker is not None and hasattr(self.broker, "get_latest_price"):
+  1052→            try:
+  1053→                current_price = await self.broker.get_latest_price(position.symbol)
+  1054→            except Exception:
+  1055→                pass
+  1056→        if current_price <= 0:
+  1057→            current_price = position.current_price or position.entry_price
+  1058→
+  1059→        # Update current price on position
+  1060→        repo = await self._get_repo()
+  1061→        await repo.update_position(position.id, current_price=current_price)
+  1062→
+  1063→        entry = position.entry_price
+  1064→        sl = position.stop_loss
+  1065→        target = position.target
+  1066→        direction = position.direction
+  1067→        quantity = position.quantity
+  1068→
+  1069→        # Calculate current P&L
+  1070→        if direction == "LONG":
+  1071→            pnl_pct = (current_price - entry) / entry * 100 if entry > 0 else 0
+  1072→            pnl_amount = (current_price - entry) * quantity
+  1073→            sl_hit = current_price <= sl
+  1074→            target_hit = current_price >= target
+  1075→        else:  # SHORT
+  1076→            pnl_pct = (entry - current_price) / entry * 100 if entry > 0 else 0
+  1077→            pnl_amount = (entry - current_price) * quantity
+  1078→            sl_hit = current_price >= sl
+  1079→            target_hit = current_price <= target
+  1080→
+  1081→        # --- Stop Loss Hit ---
+  1082→        if sl_hit and sl > 0:
+  1083→            await self._close_position(
+  1084→                position=position,
+  1085→                exit_price=current_price,
+  1086→                close_reason="stop_loss",
+  1087→                pnl_amount=pnl_amount,
+  1088→                pnl_pct=pnl_pct,
+  1089→            )
+  1090→            return
+  1091→
+  1092→        # --- Target Hit ---
+  1093→        if target_hit and target > 0:
+  1094→            await self._close_position(
+  1095→                position=position,
+  1096→                exit_price=current_price,
+  1097→                close_reason="target",
+  1098→                pnl_amount=pnl_amount,
+  1099→                pnl_pct=pnl_pct,
+  1100→            )
+  1101→            return
+  1102→
+  1103→        # --- Partial Booking Check ---
+  1104→        if self.partial_booker is not None and position.extra:
+  1105→            try:
+  1106→                extra = position.extra
+  1107→                if isinstance(extra, str):
+  1108→                    import json
+  1109→                    extra = json.loads(extra)
+  1110→
+  1111→                booking_levels = extra.get("booking_levels", [])
+  1112→                if booking_levels:
+  1113→                    booking_result = self.partial_booker.check_partial_booking(
+  1114→                        current_price=current_price,
+  1115→                        entry_price=entry,
+  1116→                        stop_loss=sl,
+  1117→                        target=target,
+  1118→                        direction=direction,
+  1119→                        booking_levels=booking_levels,
+  1120→                    )
+  1121→
+  1122→                    if hasattr(booking_result, "model_dump"):
+  1123→                        booking_data = booking_result.model_dump()
+  1124→                    elif isinstance(booking_result, dict):
+  1125→                        booking_data = booking_result
+  1126→                    else:
+  1127→                        booking_data = {}
+  1128→
+  1129→                    # Execute partial booking if a new level is triggered
+  1130→                    if booking_data.get("triggered_level"):
+  1131→                        await self._execute_partial_booking(
+  1132→                            position=position,
+  1133→                            booking_data=booking_data,
+  1134→                            current_price=current_price,
+  1135→                        )
+  1136→
+  1137→                    # Update trailing SL if active
+  1138→                    if booking_data.get("trailing_sl_active") and booking_data.get("current_trailing_sl"):
+  1139→                        new_sl = booking_data["current_trailing_sl"]
+  1140→                        if direction == "LONG" and new_sl > sl:
+  1141→                            await repo.update_position(position.id, stop_loss=round(new_sl, 2))
+  1142→                            await repo.update_trade(position.trade_id, stop_loss=round(new_sl, 2))
+  1143→                            logger.info(
+  1144→                                "Trailing SL updated for %s: %.2f -> %.2f",
+  1145→                                position.symbol, sl, new_sl,
+  1146→                            )
+  1147→                        elif direction == "SHORT" and (new_sl < sl or sl == 0):
+  1148→                            await repo.update_position(position.id, stop_loss=round(new_sl, 2))
+  1149→                            await repo.update_trade(position.trade_id, stop_loss=round(new_sl, 2))
+  1150→                            logger.info(
+  1151→                                "Trailing SL updated for %s: %.2f -> %.2f",
+  1152→                                position.symbol, sl, new_sl,
+  1153→                            )
+  1154→
+  1155→            except Exception as pb_exc:
+  1156→                logger.debug("Partial booking check error for %s: %s", position.symbol, pb_exc)
+  1157→
+  1158→    async def _execute_partial_booking(
+  1159→        self,
+  1160→        position,
+  1161→        booking_data: dict,
+  1162→        current_price: float,
+  1163→    ) -> None:
+  1164→        """Execute a partial book exit for a position."""
+  1165→        level = booking_data.get("triggered_level", 0)
+  1166→        book_qty = booking_data.get("book_qty", 0)
+  1167→        remaining_qty = booking_data.get("remaining_qty", 0)
+  1168→
+  1169→        if book_qty <= 0:
+  1170→            return
+  1171→
+  1172→        symbol = position.symbol
+  1173→        direction = position.direction
+  1174→        repo = await self._get_repo()
+  1175→
+  1176→        # Execute partial exit via broker
+  1177→        try:
+  1178→            if self.broker is not None and hasattr(self.broker, "place_order"):
+  1179→                exit_direction = "SELL" if direction == "LONG" else "BUY"
+  1180→                await self.broker.place_order(
+  1181→                    symbol=symbol,
+  1182→                    direction=exit_direction,
+  1183→                    quantity=book_qty,
+  1184→                    price=current_price,
+  1185→                    order_type="MARKET",
+  1186→                )
+  1187→        except Exception as exc:
+  1188→            logger.error("Partial booking order failed for %s: %s", symbol, exc)
+  1189→            await self.error_engine.handle_error(
+  1190→                exc,
+  1191→                context={"action": "partial_booking", "symbol": symbol, "level": level, "qty": book_qty},
+  1192→                session_id=self.session_id,
+  1193→            )
+  1194→            return
+  1195→
+  1196→        # Calculate P&L for partial exit
+  1197→        entry = position.entry_price
+  1198→        if direction == "LONG":
+  1199→            pnl_amount = (current_price - entry) * book_qty
+  1200→        else:
+  1201→            pnl_amount = (entry - current_price) * book_qty
+  1202→
+  1203→        # Update position quantity
+  1204→        await repo.update_position(
+  1205→            position.id,
+  1206→            quantity=remaining_qty,
+  1207→            current_price=current_price,
+  1208→        )
+  1209→
+  1210→        # If fully exited, close the position
+  1211→        if remaining_qty <= 0:
+  1212→            await self._close_position(
+  1213→                position=position,
+  1214→                exit_price=current_price,
+  1215→                close_reason="partial_complete",
+  1216→                pnl_amount=pnl_amount,
+  1217→            )
+  1218→
+  1219→        await self._broadcast("trade", {
+  1220→            "type": "partial_book",
+  1221→            "position_id": position.id,
+  1222→            "symbol": symbol,
+  1223→            "level": level,
+  1224→            "booked_qty": book_qty,
+  1225→            "remaining_qty": remaining_qty,
+  1226→            "booked_price": current_price,
+  1227→            "pnl": round(pnl_amount, 2),
+  1228→        })
+  1229→
+  1230→        logger.info(
+  1231→            "Partial book L%d for %s: %d @ %.2f (P&L: %.2f, remaining: %d)",
+  1232→            level, symbol, book_qty, current_price, pnl_amount, remaining_qty,
+  1233→        )
+  1234→
+  1235→    async def _close_position(
+  1236→        self,
+  1237→        position,
+  1238→        exit_price: float,
+  1239→        close_reason: str,
+  1240→        pnl_amount: float = 0,
+  1241→        pnl_pct: float = 0,
+  1242→    ) -> None:
+  1243→        """Close a position and update the corresponding trade."""
+  1244→        repo = await self._get_repo()
+  1245→
+  1246→        # Execute exit order via broker
+  1247→        try:
+  1248→            if self.broker is not None and hasattr(self.broker, "place_order"):
+  1249→                exit_direction = "SELL" if position.direction == "LONG" else "BUY"
+  1250→                await self.broker.place_order(
+  1251→                    symbol=position.symbol,
+  1252→                    direction=exit_direction,
+  1253→                    quantity=position.quantity,
+  1254→                    price=exit_price,
+  1255→                    order_type="MARKET",
+  1256→                )
+  1257→        except Exception as exc:
+  1258→            logger.error("Exit order failed for %s: %s", position.symbol, exc)
+  1259→            await self.error_engine.handle_error(
+  1260→                exc,
+  1261→                context={"action": "close_position", "symbol": position.symbol, "reason": close_reason},
+  1262→                session_id=self.session_id,
+  1263→            )
+  1264→
+  1265→        # Calculate fees for exit
+  1266→        fees_config = self.config.get_fees_config()
+  1267→        exit_value = exit_price * position.quantity
+  1268→        brokerage = fees_config.get("brokerage_per_order", 20)
+  1269→        exchange_txn = exit_value * fees_config.get("exchange_txn_pct", 0.00345) / 100
+  1270→        stt = exit_value * fees_config.get("stt_intraday_sell_pct", 0.025) / 100
+  1271→        sebi_fee = exit_value * fees_config.get("sebi_fee_pct", 0.0001) / 100
+  1272→        stamp_duty = exit_value * fees_config.get("stamp_duty_pct", 0.003) / 100
+  1273→        gst = (brokerage + exchange_txn + stt + sebi_fee + stamp_duty) * fees_config.get("gst_pct", 18) / 100
+  1274→        exit_fees = round(brokerage + exchange_txn + stt + sebi_fee + stamp_duty + gst, 2)
+  1275→
+  1276→        # Get entry fees from trade
+  1277→        entry_fees = 0
+  1278→        trade = await repo.get_trade(position.trade_id)
+  1279→        if trade:
+  1280→            entry_fees = trade.fees or 0
+  1281→
+  1282→        total_fees = entry_fees + exit_fees
+  1283→        net_pnl = round(pnl_amount - total_fees, 2)
+  1284→
+  1285→        # Update trade
+  1286→        await repo.update_trade(
+  1287→            position.trade_id,
+  1288→            exit_price=exit_price,
+  1289→            exit_time=datetime.now(IST).isoformat(),
+  1290→            status="CLOSED",
+  1291→            pnl=round(pnl_amount, 2),
+  1292→            fees=total_fees,
+  1293→            net_pnl=net_pnl,
+  1294→        )
+  1295→
+  1296→        # Update position
+  1297→        await repo.update_position(
+  1298→            position.id,
+  1299→            current_price=exit_price,
+  1300→            status="CLOSED",
+  1301→        )
+  1302→
+  1303→        await self._broadcast("trade", {
+  1304→            "type": "position_closed",
+  1305→            "position_id": position.id,
+  1306→            "trade_id": position.trade_id,
+  1307→            "symbol": position.symbol,
+  1308→            "direction": position.direction,
+  1309→            "entry_price": position.entry_price,
+  1310→            "exit_price": exit_price,
+  1311→            "quantity": position.quantity,
+  1312→            "pnl": round(pnl_amount, 2),
+  1313→            "net_pnl": net_pnl,
+  1314→            "fees": total_fees,
+  1315→            "close_reason": close_reason,
+  1316→        })
+  1317→
+  1318→        logger.info(
+  1319→            "Position closed: %s %s x%d | Entry: %.2f -> Exit: %.2f | P&L: %.2f (Net: %.2f) | Reason: %s",
+  1320→            position.direction, position.symbol, position.quantity,
+  1321→            position.entry_price, exit_price, pnl_amount, net_pnl, close_reason,
+  1322→        )
+  1323→
+  1324→    # ------------------------------------------------------------------
+  1325→    # Market Context
+  1326→    # ------------------------------------------------------------------
+  1327→
+  1328→    async def _update_market_context(self) -> None:
+  1329→        """Update VIX, nifty price, and regime from feed/broker."""
+  1330→        # Get Nifty price
+  1331→        if self.feed is not None and hasattr(self.feed, "get_latest_price"):
+  1332→            try:
+  1333→                self.nifty_price = await self.feed.get_latest_price("NIFTY")
+  1334→            except Exception:
+  1335→                pass
+  1336→        if self.nifty_price <= 0 and self.broker is not None and hasattr(self.broker, "get_latest_price"):
+  1337→            try:
+  1338→                self.nifty_price = await self.broker.get_latest_price("NIFTY 50")
+  1339→            except Exception:
+  1340→                pass
+  1341→
+  1342→        # Get VIX
+  1343→        if self.feed is not None and hasattr(self.feed, "get_latest_price"):
+  1344→            try:
+  1345→                self.vix = await self.feed.get_latest_price("INDIAVIX")
+  1346→            except Exception:
+  1347→                pass
+  1348→        if self.vix <= 0 and self.broker is not None and hasattr(self.broker, "get_latest_price"):
+  1349→            try:
+  1350→                self.vix = await self.broker.get_latest_price("INDIAVIX")
+  1351→            except Exception:
+  1352→                self.vix = 15.0  # fallback default
+  1353→
+  1354→        # Update regime (simplified: based on VIX and Nifty change)
+  1355→        # Full regime classification will be in a dedicated module
+  1356→        self._update_regime_simple()
+  1357→
+  1358→    def _update_regime_simple(self) -> None:
+  1359→        """Simplified regime classification based on VIX.
+  1360→
+  1361→        Proper regime detection (AD ratio, Nifty 5-day change) will be
+  1362→        in a dedicated regime module. This provides a basic fallback.
+  1363→        """
+  1364→        regime_config = self.config.get_regime_config()
+  1365→        high_vix = regime_config.get("high_vix_threshold", 22)
+  1366→
+  1367→        if self.vix >= high_vix:
+  1368→            new_regime = "Volatile"
+  1369→        elif self.vix >= 18:
+  1370→            new_regime = "Bear"
+  1371→        else:
+  1372→            new_regime = "Bull"
+  1373→
+  1374→        if new_regime != self.current_regime:
+  1375→            old_regime = self.current_regime
+  1376→            self.current_regime = new_regime
+  1377→
+  1378→            # Update active strategies for new regime
+  1379→            activation = self.config.get_strategy_activation(new_regime)
+  1380→            self.active_strategies = activation.get("active", [])
+  1381→
+  1382→            logger.info(
+  1383→                "Regime changed: %s -> %s (VIX=%.1f, strategies=%s)",
+  1384→                old_regime, new_regime, self.vix, self.active_strategies,
+  1385→            )
+  1386→
+  1387→    async def _update_position_prices(self) -> None:
+  1388→        """Update current_price for all open positions."""
+  1389→        repo = await self._get_repo()
+  1390→        positions = await repo.get_open_positions()
+  1391→
+  1392→        for pos in positions:
+  1393→            price = 0.0
+  1394→            if self.feed is not None and hasattr(self.feed, "get_latest_price"):
+  1395→                try:
+  1396→                    price = await self.feed.get_latest_price(pos.symbol)
+  1397→                except Exception:
+  1398→                    pass
+  1399→            if price <= 0 and self.broker is not None and hasattr(self.broker, "get_latest_price"):
+  1400→                try:
+  1401→                    price = await self.broker.get_latest_price(pos.symbol)
+  1402→                except Exception:
+  1403→                    pass
+  1404→            if price > 0:
+  1405→                await repo.update_position(pos.id, current_price=price)
+  1406→
+  1407→    # ------------------------------------------------------------------
+  1408→    # Status & Dashboard
+  1409→    # ------------------------------------------------------------------
+  1410→
+  1411→    async def get_status(self) -> dict:
+  1412→        """Get full engine status."""
+  1413→        market_status = self.market_hours.get_market_status()
+  1414→        uptime_seconds = 0
+  1415→        if self._start_time:
+  1416→            uptime_seconds = (datetime.now(IST) - self._start_time).total_seconds()
+  1417→
+  1418→        # Get daily P&L
+  1419→        pnl_data = {"net_pnl": 0, "total_trades": 0, "wins": 0, "losses": 0}
+  1420→        try:
+  1421→            repo = await self._get_repo()
+  1422→            pnl_data = await repo.get_todays_pnl()
+  1423→        except Exception:
+  1424→            pass
+  1425→
+  1426→        # Get risk status
+  1427→        risk_summary = {}
+  1428→        try:
+  1429→            risk_status = await self.daily_risk.get_daily_risk_status()
+  1430→            if hasattr(risk_status, "model_dump"):
+  1431→                risk_summary = risk_status.model_dump()
+  1432→            elif isinstance(risk_status, dict):
+  1433→                risk_summary = risk_status
+  1434→        except Exception:
+  1435→            pass
+  1436→
+  1437→        return {
+  1438→            "state": self.state.value,
+  1439→            "mode": self.mode,
+  1440→            "session_id": self.session_id,
+  1441→            "regime": self.current_regime,
+  1442→            "vix": self.vix,
+  1443→            "nifty_price": self.nifty_price,
+  1444→            "market": market_status,
+  1445→            "active_strategies": self.active_strategies,
+  1446→            "pending_opportunities": len(self.pending_opportunities),
+  1447→            "scans_completed": self._scan_count,
+  1448→            "signals_generated": self._signals_generated,
+  1449→            "trades_executed": self._trades_executed,
+  1450→            "errors_count": self._errors_count,
+  1451→            "uptime_seconds": round(uptime_seconds, 1),
+  1452→            "daily_pnl": pnl_data,
+  1453→            "risk": risk_summary,
+  1454→            "initial_capital": self.initial_capital,
+  1455→        }
+  1456→
+  1457→    async def get_dashboard_data(self) -> dict:
+  1458→        """Get aggregated dashboard data."""
+  1459→        repo = await self._get_repo()
+  1460→
+  1461→        # Today's P&L
+  1462→        pnl_data = await repo.get_todays_pnl()
+  1463→
+  1464→        # Open positions
+  1465→        open_positions = await repo.get_open_positions()
+  1466→        positions_data = []
+  1467→        total_invested = 0
+  1468→        total_unrealized_pnl = 0
+  1469→
+  1470→        for pos in open_positions:
+  1471→            entry = pos.entry_price or 0
+  1472→            current = pos.current_price or pos.entry_price or 0
+  1473→            qty = pos.quantity or 0
+  1474→            invested = entry * qty
+  1475→            unrealized = 0
+  1476→            if pos.direction == "LONG":
+  1477→                unrealized = (current - entry) * qty
+  1478→            else:
+  1479→                unrealized = (entry - current) * qty
+  1480→
+  1481→            positions_data.append({
+  1482→                "position_id": pos.id,
+  1483→                "trade_id": pos.trade_id,
+  1484→                "symbol": pos.symbol,
+  1485→                "direction": pos.direction,
+  1486→                "strategy": pos.strategy,
+  1487→                "entry_price": entry,
+  1488→                "current_price": current,
+  1489→                "quantity": qty,
+  1490→                "invested_amount": round(invested, 2),
+  1491→                "unrealized_pnl": round(unrealized, 2),
+  1492→                "unrealized_pnl_pct": round(unrealized / invested * 100, 2) if invested > 0 else 0,
+  1493→                "stop_loss": pos.stop_loss,
+  1494→                "target": pos.target,
+  1495→            })
+  1496→            total_invested += invested
+  1497→            total_unrealized_pnl += unrealized
+  1498→
+  1499→        # Capital info
+  1500→        capital_config = self.config.get_capital_config()
+  1501→        total_capital = self.initial_capital or capital_config.get("virtual_capital", 100000)
+  1502→        capital_available = total_capital - total_invested
+  1503→        capital_usage_pct = round(total_invested / total_capital * 100, 2) if total_capital > 0 else 0
+  1504→
+  1505→        # Today's trades
+  1506→        todays_trades = await repo.get_todays_trades()
+  1507→        trades_data = []
+  1508→        for t in todays_trades:
+  1509→            trades_data.append({
+  1510→                "trade_id": t.id,
+  1511→                "symbol": t.symbol,
+  1512→                "direction": t.direction,
+  1513→                "strategy": t.strategy,
+  1514→                "entry_price": t.entry_price,
+  1515→                "exit_price": t.exit_price,
+  1516→                "quantity": t.quantity,
+  1517→                "status": t.status,
+  1518→                "pnl": t.pnl,
+  1519→                "net_pnl": t.net_pnl,
+  1520→                "entry_time": t.entry_time,
+  1521→                "exit_time": t.exit_time,
+  1522→            })
+  1523→
+  1524→        # Risk state
+  1525→        risk_state = {}
+  1526→        try:
+  1527→            risk_status = await self.daily_risk.get_daily_risk_status()
+  1528→            if hasattr(risk_status, "model_dump"):
+  1529→                risk_state = risk_status.model_dump()
+  1530→            elif isinstance(risk_status, dict):
+  1531→                risk_state = risk_status
+  1532→        except Exception:
+  1533→            pass
+  1534→
+  1535→        # Market status
+  1536→        market_status = self.market_hours.get_market_status()
+  1537→
+  1538→        # Pending opportunities
+  1539→        pending = list(self.pending_opportunities.values())
+  1540→
+  1541→        # Engine status
+  1542→        uptime_seconds = 0
+  1543→        if self._start_time:
+  1544→            uptime_seconds = (datetime.now(IST) - self._start_time).total_seconds()
+  1545→
+  1546→        return {
+  1547→            "engine": {
+  1548→                "state": self.state.value,
+  1549→                "mode": self.mode,
+  1550→                "session_id": self.session_id,
+  1551→                "uptime_seconds": round(uptime_seconds, 1),
+  1552→                "scans_completed": self._scan_count,
+  1553→                "signals_generated": self._signals_generated,
+  1554→                "trades_executed": self._trades_executed,
+  1555→                "errors_count": self._errors_count,
+  1556→            },
+  1557→            "market": market_status,
+  1558→            "regime": self.current_regime,
+  1559→            "vix": self.vix,
+  1560→            "nifty_price": self.nifty_price,
+  1561→            "active_strategies": self.active_strategies,
+  1562→            "capital": {
+  1563→                "total": total_capital,
+  1564→                "invested": round(total_invested, 2),
+  1565→                "available": round(capital_available, 2),
+  1566→                "usage_pct": capital_usage_pct,
+  1567→                "unrealized_pnl": round(total_unrealized_pnl, 2),
+  1568→            },
+  1569→            "daily_pnl": pnl_data,
+  1570→            "risk": risk_state,
+  1571→            "open_positions": positions_data,
+  1572→            "open_position_count": len(open_positions),
+  1573→            "todays_trades": trades_data,
+  1574→            "pending_opportunities": pending,
+  1575→            "pending_opportunity_count": len(pending),
+  1576→            "timestamp": datetime.now(IST).isoformat(),
+  1577→        }
+  1578→
+  1579→    # ------------------------------------------------------------------
+  1580→    # WebSocket Broadcast
+  1581→    # ------------------------------------------------------------------
+  1582→
+  1583→    async def _broadcast(self, channel: str, data: dict) -> None:
+  1584→        """Send data via WebSocket manager if available.
+  1585→
+  1586→        Args:
+  1587→            channel: Channel name (e.g. 'engine', 'trade', 'opportunity', 'risk').
+  1588→            data: Payload dict to send.
+  1589→        """
+  1590→        if self.ws_manager is None:
+  1591→            return
+  1592→
+  1593→        try:
+  1594→            if hasattr(self.ws_manager, "broadcast"):
+  1595→                await self.ws_manager.broadcast(channel, data)
+  1596→            elif callable(self.ws_manager):
+  1597→                result = self.ws_manager(channel, data)
+  1598→                if asyncio.iscoroutine(result):
+  1599→                    await result
+  1600→        except Exception as ws_exc:
+  1601→            logger.debug("WebSocket broadcast failed on channel '%s': %s", channel, ws_exc)
+  1602→

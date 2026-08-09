@@ -1,0 +1,680 @@
+   100→            status="running",
+   101→            engine_state=_to_json(engine_state or {}),
+   102→            metadata_json=_to_json({}),
+   103→            created_at=_ist_now(),
+   104→            updated_at=_ist_now(),
+   105→        )
+   106→        return await self._add_and_flush(obj)
+   107→
+   108→    async def get_session(self, session_id: str) -> Optional[SessionModel]:
+   109→        return await self._get_by_id(SessionModel, session_id)
+   110→
+   111→    async def get_latest_session(self) -> Optional[SessionModel]:
+   112→        stmt = select(SessionModel).order_by(SessionModel.created_at.desc()).limit(1)
+   113→        result = await self.session.execute(stmt)
+   114→        return result.scalar_one_or_none()
+   115→
+   116→    async def get_sessions(self, limit: int = 50, offset: int = 0) -> List[SessionModel]:
+   117→        return await self._get_all(SessionModel, limit, offset)
+   118→
+   119→    async def update_session(self, session_id: str, **kwargs) -> Optional[SessionModel]:
+   120→        obj = await self.get_session(session_id)
+   121→        if obj is None:
+   122→            return None
+   123→        for key, value in kwargs.items():
+   124→            if key in ("engine_state", "metadata_json") and isinstance(value, dict):
+   125→                value = _to_json(value)
+   126→            if hasattr(obj, key):
+   127→                setattr(obj, key, value)
+   128→        obj.updated_at = _ist_now()
+   129→        await self.session.flush()
+   130→        return obj
+   131→
+   132→    async def save_session_state(self, session_id: str, state: Dict[str, Any]) -> Optional[SessionModel]:
+   133→        return await self.update_session(session_id, engine_state=state, updated_at=_ist_now())
+   134→
+   135→    async def delete_session(self, session_id: str) -> bool:
+   136→        return await self._delete_by_id(SessionModel, session_id)
+   137→
+   138→    # ────────────────────────────────────────
+   139→    # TRADES
+   140→    # ────────────────────────────────────────
+   141→
+   142→    async def create_trade(self, **kwargs) -> Trade:
+   143→        data = {
+   144→            "id": str(uuid.uuid4()),
+   145→            "created_at": _ist_now(),
+   146→            "updated_at": _ist_now(),
+   147→        }
+   148→        if "tags" in kwargs and isinstance(kwargs["tags"], list):
+   149→            kwargs["tags"] = _to_json(kwargs["tags"])
+   150→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   151→            kwargs["extra"] = _to_json(kwargs["extra"])
+   152→        data.update(kwargs)
+   153→        obj = Trade(**data)
+   154→        return await self._add_and_flush(obj)
+   155→
+   156→    async def get_trade(self, trade_id: str) -> Optional[Trade]:
+   157→        return await self._get_by_id(Trade, trade_id)
+   158→
+   159→    async def get_trades(self, limit: int = 100, offset: int = 0) -> List[Trade]:
+   160→        return await self._get_all(Trade, limit, offset)
+   161→
+   162→    async def get_trades_by_date(self, trade_date: str, limit: int = 100) -> List[Trade]:
+   163→        stmt = (
+   164→            select(Trade)
+   165→            .where(Trade.entry_time.startswith(trade_date))
+   166→            .order_by(Trade.entry_time.desc())
+   167→            .limit(limit)
+   168→        )
+   169→        result = await self.session.execute(stmt)
+   170→        return list(result.scalars().all())
+   171→
+   172→    async def get_trades_by_status(self, status: str) -> List[Trade]:
+   173→        stmt = select(Trade).where(Trade.status == status).order_by(Trade.entry_time.desc())
+   174→        result = await self.session.execute(stmt)
+   175→        return list(result.scalars().all())
+   176→
+   177→    async def get_trades_by_symbol(self, symbol: str, limit: int = 50) -> List[Trade]:
+   178→        stmt = select(Trade).where(Trade.symbol == symbol).order_by(Trade.entry_time.desc()).limit(limit)
+   179→        result = await self.session.execute(stmt)
+   180→        return list(result.scalars().all())
+   181→
+   182→    async def get_trades_by_strategy(self, strategy: str, limit: int = 50) -> List[Trade]:
+   183→        stmt = select(Trade).where(Trade.strategy == strategy).order_by(Trade.entry_time.desc()).limit(limit)
+   184→        result = await self.session.execute(stmt)
+   185→        return list(result.scalars().all())
+   186→
+   187→    async def get_todays_trades(self) -> List[Trade]:
+   188→        today = _today_str()
+   189→        return await self.get_trades_by_date(today, limit=500)
+   190→
+   191→    async def update_trade(self, trade_id: str, **kwargs) -> Optional[Trade]:
+   192→        obj = await self.get_trade(trade_id)
+   193→        if obj is None:
+   194→            return None
+   195→        for key, value in kwargs.items():
+   196→            if key in ("tags", "extra") and isinstance(value, (dict, list)):
+   197→                value = _to_json(value)
+   198→            if hasattr(obj, key):
+   199→                setattr(obj, key, value)
+   200→        obj.updated_at = _ist_now()
+   201→        await self.session.flush()
+   202→        return obj
+   203→
+   204→    async def delete_trade(self, trade_id: str) -> bool:
+   205→        return await self._delete_by_id(Trade, trade_id)
+   206→
+   207→    async def get_todays_pnl(self) -> Dict[str, Any]:
+   208→        """Get today's aggregate P&L."""
+   209→        today = _today_str()
+   210→        trades = await self.get_trades_by_date(today, limit=500)
+   211→        closed = [t for t in trades if t.status == "CLOSED"]
+   212→        gross_pnl = sum(t.pnl for t in closed)
+   213→        total_fees = sum(t.fees for t in closed) + sum(t.brokerage for t in closed)
+   214→        net_pnl = sum(t.net_pnl for t in closed)
+   215→        wins = sum(1 for t in closed if t.net_pnl > 0)
+   216→        losses = sum(1 for t in closed if t.net_pnl < 0)
+   217→        total = len(closed)
+   218→        return {
+   219→            "date": today,
+   220→            "total_trades": total,
+   221→            "wins": wins,
+   222→            "losses": losses,
+   223→            "win_rate": (wins / total * 100) if total > 0 else 0.0,
+   224→            "gross_pnl": round(gross_pnl, 2),
+   225→            "total_fees": round(total_fees, 2),
+   226→            "net_pnl": round(net_pnl, 2),
+   227→            "best_trade": round(max((t.net_pnl for t in closed), default=0), 2),
+   228→            "worst_trade": round(min((t.net_pnl for t in closed), default=0), 2),
+   229→        }
+   230→
+   231→    # ────────────────────────────────────────
+   232→    # SIGNALS
+   233→    # ────────────────────────────────────────
+   234→
+   235→    async def create_signal(self, **kwargs) -> Signal:
+   236→        data = {
+   237→            "id": str(uuid.uuid4()),
+   238→            "created_at": _ist_now(),
+   239→            "updated_at": _ist_now(),
+   240→        }
+   241→        if "signal_data" in kwargs and isinstance(kwargs["signal_data"], dict):
+   242→            kwargs["signal_data"] = _to_json(kwargs["signal_data"])
+   243→        if "risk_gate_results" in kwargs and isinstance(kwargs["risk_gate_results"], dict):
+   244→            kwargs["risk_gate_results"] = _to_json(kwargs["risk_gate_results"])
+   245→        data.update(kwargs)
+   246→        obj = Signal(**data)
+   247→        return await self._add_and_flush(obj)
+   248→
+   249→    async def get_signal(self, signal_id: str) -> Optional[Signal]:
+   250→        return await self._get_by_id(Signal, signal_id)
+   251→
+   252→    async def get_signals(self, limit: int = 100, offset: int = 0) -> List[Signal]:
+   253→        return await self._get_all(Signal, limit, offset)
+   254→
+   255→    async def get_signals_by_status(self, status: str) -> List[Signal]:
+   256→        stmt = select(Signal).where(Signal.status == status).order_by(Signal.created_at.desc())
+   257→        result = await self.session.execute(stmt)
+   258→        return list(result.scalars().all())
+   259→
+   260→    async def get_signals_by_symbol(self, symbol: str, limit: int = 50) -> List[Signal]:
+   261→        stmt = select(Signal).where(Signal.symbol == symbol).order_by(Signal.created_at.desc()).limit(limit)
+   262→        result = await self.session.execute(stmt)
+   263→        return list(result.scalars().all())
+   264→
+   265→    async def get_signals_by_strategy(self, strategy: str, limit: int = 50) -> List[Signal]:
+   266→        stmt = select(Signal).where(Signal.strategy == strategy).order_by(Signal.created_at.desc()).limit(limit)
+   267→        result = await self.session.execute(stmt)
+   268→        return list(result.scalars().all())
+   269→
+   270→    async def get_todays_signals(self) -> List[Signal]:
+   271→        today = _today_str()
+   272→        stmt = select(Signal).where(Signal.created_at.startswith(today)).order_by(Signal.created_at.desc())
+   273→        result = await self.session.execute(stmt)
+   274→        return list(result.scalars().all())
+   275→
+   276→    async def update_signal(self, signal_id: str, **kwargs) -> Optional[Signal]:
+   277→        obj = await self.get_signal(signal_id)
+   278→        if obj is None:
+   279→            return None
+   280→        for key, value in kwargs.items():
+   281→            if key in ("signal_data", "risk_gate_results") and isinstance(value, dict):
+   282→                value = _to_json(value)
+   283→            if hasattr(obj, key):
+   284→                setattr(obj, key, value)
+   285→        obj.updated_at = _ist_now()
+   286→        await self.session.flush()
+   287→        return obj
+   288→
+   289→    async def delete_signal(self, signal_id: str) -> bool:
+   290→        return await self._delete_by_id(Signal, signal_id)
+   291→
+   292→    # ────────────────────────────────────────
+   293→    # POSITIONS
+   294→    # ────────────────────────────────────────
+   295→
+   296→    async def create_position(self, **kwargs) -> Position:
+   297→        data = {
+   298→            "id": str(uuid.uuid4()),
+   299→            "created_at": _ist_now(),
+   300→            "updated_at": _ist_now(),
+   301→        }
+   302→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   303→            kwargs["extra"] = _to_json(kwargs["extra"])
+   304→        data.update(kwargs)
+   305→        obj = Position(**data)
+   306→        return await self._add_and_flush(obj)
+   307→
+   308→    async def get_position(self, position_id: str) -> Optional[Position]:
+   309→        return await self._get_by_id(Position, position_id)
+   310→
+   311→    async def get_positions(self, limit: int = 100, offset: int = 0) -> List[Position]:
+   312→        return await self._get_all(Position, limit, offset)
+   313→
+   314→    async def get_open_positions(self) -> List[Position]:
+   315→        stmt = select(Position).where(Position.status == "OPEN").order_by(Position.entry_time.desc())
+   316→        result = await self.session.execute(stmt)
+   317→        return list(result.scalars().all())
+   318→
+   319→    async def get_positions_by_symbol(self, symbol: str) -> List[Position]:
+   320→        stmt = select(Position).where(Position.symbol == symbol).order_by(Position.entry_time.desc())
+   321→        result = await self.session.execute(stmt)
+   322→        return list(result.scalars().all())
+   323→
+   324→    async def get_positions_by_strategy(self, strategy: str) -> List[Position]:
+   325→        stmt = select(Position).where(Position.strategy == strategy).order_by(Position.entry_time.desc())
+   326→        result = await self.session.execute(stmt)
+   327→        return list(result.scalars().all())
+   328→
+   329→    async def get_position_count_by_sector(self) -> Dict[str, int]:
+   330→        positions = await self.get_open_positions()
+   331→        from utils.market_utils import get_stock_sector
+   332→        sector_counts: Dict[str, int] = {}
+   333→        for pos in positions:
+   334→            sector = get_stock_sector(pos.symbol)
+   335→            sector_counts[sector] = sector_counts.get(sector, 0) + 1
+   336→        return sector_counts
+   337→
+   338→    async def update_position(self, position_id: str, **kwargs) -> Optional[Position]:
+   339→        obj = await self.get_position(position_id)
+   340→        if obj is None:
+   341→            return None
+   342→        for key, value in kwargs.items():
+   343→            if key == "extra" and isinstance(value, dict):
+   344→                value = _to_json(value)
+   345→            if hasattr(obj, key):
+   346→                setattr(obj, key, value)
+   347→        obj.updated_at = _ist_now()
+   348→        await self.session.flush()
+   349→        return obj
+   350→
+   351→    async def delete_position(self, position_id: str) -> bool:
+   352→        return await self._delete_by_id(Position, position_id)
+   353→
+   354→    # ────────────────────────────────────────
+   355→    # WATCHLIST
+   356→    # ────────────────────────────────────────
+   357→
+   358→    async def add_watchlist_item(self, **kwargs) -> WatchlistItem:
+   359→        data = {
+   360→            "id": str(uuid.uuid4()),
+   361→            "added_at": _ist_now(),
+   362→            "created_at": _ist_now(),
+   363→            "updated_at": _ist_now(),
+   364→        }
+   365→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   366→            kwargs["extra"] = _to_json(kwargs["extra"])
+   367→        data.update(kwargs)
+   368→        obj = WatchlistItem(**data)
+   369→        return await self._add_and_flush(obj)
+   370→
+   371→    async def get_watchlist_item(self, item_id: str) -> Optional[WatchlistItem]:
+   372→        return await self._get_by_id(WatchlistItem, item_id)
+   373→
+   374→    async def get_watchlist_item_by_symbol(self, symbol: str) -> Optional[WatchlistItem]:
+   375→        stmt = select(WatchlistItem).where(WatchlistItem.symbol == symbol)
+   376→        result = await self.session.execute(stmt)
+   377→        return result.scalar_one_or_none()
+   378→
+   379→    async def get_active_watchlist(self) -> List[WatchlistItem]:
+   380→        stmt = select(WatchlistItem).where(WatchlistItem.is_active == True).order_by(WatchlistItem.added_at.desc())
+   381→        result = await self.session.execute(stmt)
+   382→        return list(result.scalars().all())
+   383→
+   384→    async def get_all_watchlist_items(self, limit: int = 100, offset: int = 0) -> List[WatchlistItem]:
+   385→        return await self._get_all(WatchlistItem, limit, offset)
+   386→
+   387→    async def update_watchlist_item(self, item_id: str, **kwargs) -> Optional[WatchlistItem]:
+   388→        obj = await self.get_watchlist_item(item_id)
+   389→        if obj is None:
+   390→            return None
+   391→        for key, value in kwargs.items():
+   392→            if key == "extra" and isinstance(value, dict):
+   393→                value = _to_json(value)
+   394→            if hasattr(obj, key):
+   395→                setattr(obj, key, value)
+   396→        obj.updated_at = _ist_now()
+   397→        await self.session.flush()
+   398→        return obj
+   399→
+   400→    async def delete_watchlist_item(self, item_id: str) -> bool:
+   401→        return await self._delete_by_id(WatchlistItem, item_id)
+   402→
+   403→    async def get_watchlist_count(self) -> int:
+   404→        return await self._count(WatchlistItem)
+   405→
+   406→    # ────────────────────────────────────────
+   407→    # STRATEGY PERFORMANCE
+   408→    # ────────────────────────────────────────
+   409→
+   410→    async def create_strategy_performance(self, strategy: str) -> StrategyPerformance:
+   411→        obj = StrategyPerformance(
+   412→            id=str(uuid.uuid4()),
+   413→            strategy=strategy,
+   414→            created_at=_ist_now(),
+   415→            updated_at=_ist_now(),
+   416→        )
+   417→        return await self._add_and_flush(obj)
+   418→
+   419→    async def get_strategy_performance(self, strategy: str) -> Optional[StrategyPerformance]:
+   420→        stmt = select(StrategyPerformance).where(StrategyPerformance.strategy == strategy)
+   421→        result = await self.session.execute(stmt)
+   422→        return result.scalar_one_or_none()
+   423→
+   424→    async def get_all_strategy_performance(self) -> List[StrategyPerformance]:
+   425→        stmt = select(StrategyPerformance).order_by(StrategyPerformance.strategy)
+   426→        result = await self.session.execute(stmt)
+   427→        return list(result.scalars().all())
+   428→
+   429→    async def update_strategy_performance(self, strategy: str, **kwargs) -> Optional[StrategyPerformance]:
+   430→        obj = await self.get_strategy_performance(strategy)
+   431→        if obj is None:
+   432→            return None
+   433→        for key, value in kwargs.items():
+   434→            if key in ("daily_stats", "extra") and isinstance(value, dict):
+   435→                value = _to_json(value)
+   436→            if hasattr(obj, key):
+   437→                setattr(obj, key, value)
+   438→        obj.updated_at = _ist_now()
+   439→        await self.session.flush()
+   440→        return obj
+   441→
+   442→    async def delete_strategy_performance(self, strategy: str) -> bool:
+   443→        obj = await self.get_strategy_performance(strategy)
+   444→        if obj is None:
+   445→            return False
+   446→        await self.session.delete(obj)
+   447→        await self.session.flush()
+   448→        return True
+   449→
+   450→    async def ensure_strategy_performance(self, strategy: str) -> StrategyPerformance:
+   451→        obj = await self.get_strategy_performance(strategy)
+   452→        if obj is None:
+   453→            obj = await self.create_strategy_performance(strategy)
+   454→        return obj
+   455→
+   456→    # ────────────────────────────────────────
+   457→    # RISK EVENTS
+   458→    # ────────────────────────────────────────
+   459→
+   460→    async def create_risk_event(self, **kwargs) -> RiskEvent:
+   461→        data = {
+   462→            "id": str(uuid.uuid4()),
+   463→            "created_at": _ist_now(),
+   464→        }
+   465→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   466→            kwargs["extra"] = _to_json(kwargs["extra"])
+   467→        data.update(kwargs)
+   468→        obj = RiskEvent(**data)
+   469→        return await self._add_and_flush(obj)
+   470→
+   471→    async def get_risk_events(self, limit: int = 100, offset: int = 0) -> List[RiskEvent]:
+   472→        stmt = select(RiskEvent).order_by(RiskEvent.created_at.desc()).limit(limit).offset(offset)
+   473→        result = await self.session.execute(stmt)
+   474→        return list(result.scalars().all())
+   475→
+   476→    async def get_risk_events_by_severity(self, severity: str) -> List[RiskEvent]:
+   477→        stmt = select(RiskEvent).where(RiskEvent.severity == severity).order_by(RiskEvent.created_at.desc())
+   478→        result = await self.session.execute(stmt)
+   479→        return list(result.scalars().all())
+   480→
+   481→    async def get_todays_risk_events(self) -> List[RiskEvent]:
+   482→        today = _today_str()
+   483→        stmt = select(RiskEvent).where(RiskEvent.created_at.startswith(today)).order_by(RiskEvent.created_at.desc())
+   484→        result = await self.session.execute(stmt)
+   485→        return list(result.scalars().all())
+   486→
+   487→    async def delete_risk_event(self, event_id: str) -> bool:
+   488→        return await self._delete_by_id(RiskEvent, event_id)
+   489→
+   490→    # ────────────────────────────────────────
+   491→    # BROKER CREDENTIALS
+   492→    # ────────────────────────────────────────
+   493→
+   494→    async def save_broker_credentials(self, broker_name: str, encrypted_creds: str, **kwargs) -> BrokerCredential:
+   495→        existing = await self.get_broker_credentials(broker_name)
+   496→        if existing:
+   497→            existing.encrypted_credentials = encrypted_creds
+   498→            existing.updated_at = _ist_now()
+   499→            for k, v in kwargs.items():
+   500→                if k == "extra" and isinstance(v, dict):
+   501→                    v = _to_json(v)
+   502→                if hasattr(existing, k):
+   503→                    setattr(existing, k, v)
+   504→            await self.session.flush()
+   505→            return existing
+   506→
+   507→        data = {
+   508→            "id": str(uuid.uuid4()),
+   509→            "broker_name": broker_name,
+   510→            "encrypted_credentials": encrypted_creds,
+   511→            "created_at": _ist_now(),
+   512→            "updated_at": _ist_now(),
+   513→        }
+   514→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   515→            kwargs["extra"] = _to_json(kwargs["extra"])
+   516→        data.update(kwargs)
+   517→        obj = BrokerCredential(**data)
+   518→        return await self._add_and_flush(obj)
+   519→
+   520→    async def get_broker_credentials(self, broker_name: str) -> Optional[BrokerCredential]:
+   521→        stmt = select(BrokerCredential).where(BrokerCredential.broker_name == broker_name)
+   522→        result = await self.session.execute(stmt)
+   523→        return result.scalar_one_or_none()
+   524→
+   525→    async def get_all_broker_credentials(self) -> List[BrokerCredential]:
+   526→        stmt = select(BrokerCredential).order_by(BrokerCredential.broker_name)
+   527→        result = await self.session.execute(stmt)
+   528→        return list(result.scalars().all())
+   529→
+   530→    async def delete_broker_credentials(self, broker_name: str) -> bool:
+   531→        stmt = delete(BrokerCredential).where(BrokerCredential.broker_name == broker_name)
+   532→        result = await self.session.execute(stmt)
+   533→        await self.session.flush()
+   534→        return result.rowcount > 0
+   535→
+   536→    # ────────────────────────────────────────
+   537→    # ERROR LOGS
+   538→    # ────────────────────────────────────────
+   539→
+   540→    async def create_error_log(self, **kwargs) -> ErrorLog:
+   541→        data = {
+   542→            "id": str(uuid.uuid4()),
+   543→            "created_at": _ist_now(),
+   544→            "updated_at": _ist_now(),
+   545→        }
+   546→        if "context" in kwargs and isinstance(kwargs["context"], dict):
+   547→            kwargs["context"] = _to_json(kwargs["context"])
+   548→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   549→            kwargs["extra"] = _to_json(kwargs["extra"])
+   550→        data.update(kwargs)
+   551→        obj = ErrorLog(**data)
+   552→        return await self._add_and_flush(obj)
+   553→
+   554→    async def get_error_log(self, error_id: str) -> Optional[ErrorLog]:
+   555→        return await self._get_by_id(ErrorLog, error_id)
+   556→
+   557→    async def get_error_by_code(self, error_code: str) -> Optional[ErrorLog]:
+   558→        stmt = select(ErrorLog).where(ErrorLog.error_code == error_code)
+   559→        result = await self.session.execute(stmt)
+   560→        return result.scalar_one_or_none()
+   561→
+   562→    async def get_errors(self, resolved: Optional[bool] = None, limit: int = 100, offset: int = 0) -> List[ErrorLog]:
+   563→        stmt = select(ErrorLog).order_by(ErrorLog.created_at.desc())
+   564→        if resolved is not None:
+   565→            stmt = stmt.where(ErrorLog.is_resolved == resolved)
+   566→        stmt = stmt.limit(limit).offset(offset)
+   567→        result = await self.session.execute(stmt)
+   568→        return list(result.scalars().all())
+   569→
+   570→    async def get_unresolved_errors(self) -> List[ErrorLog]:
+   571→        return await self.get_errors(resolved=False, limit=500)
+   572→
+   573→    async def get_error_stats(self) -> Dict[str, Any]:
+   574→        total = await self._count(ErrorLog)
+   575→        stmt_unresolved = select(func.count()).select_from(ErrorLog).where(ErrorLog.is_resolved == False)
+   576→        result_unresolved = await self.session.execute(stmt_unresolved)
+   577→        unresolved = result_unresolved.scalar_one() or 0
+   578→
+   579→        stmt_today = select(func.count()).select_from(ErrorLog).where(ErrorLog.created_at.startswith(_today_str()))
+   580→        result_today = await self.session.execute(stmt_today)
+   581→        today_count = result_today.scalar_one() or 0
+   582→
+   583→        stmt_critical = select(func.count()).select_from(ErrorLog).where(ErrorLog.severity == "critical", ErrorLog.is_resolved == False)
+   584→        result_critical = await self.session.execute(stmt_critical)
+   585→        critical_unresolved = result_critical.scalar_one() or 0
+   586→
+   587→        # Count by type
+   588→        stmt_types = select(ErrorLog.error_type, func.count()).group_by(ErrorLog.error_type)
+   589→        result_types = await self.session.execute(stmt_types)
+   590→        by_type = dict(result_types.all())
+   591→
+   592→        return {
+   593→            "total_errors": total,
+   594→            "unresolved": unresolved,
+   595→            "today_count": today_count,
+   596→            "critical_unresolved": critical_unresolved,
+   597→            "by_type": by_type,
+   598→        }
+   599→
+   600→    async def resolve_error(self, error_id: str, resolution_note: str = "") -> Optional[ErrorLog]:
+   601→        obj = await self.get_error_log(error_id)
+   602→        if obj is None:
+   603→            return None
+   604→        obj.is_resolved = True
+   605→        obj.resolved_at = _ist_now()
+   606→        obj.resolution_note = resolution_note
+   607→        obj.updated_at = _ist_now()
+   608→        await self.session.flush()
+   609→        return obj
+   610→
+   611→    async def delete_error_log(self, error_id: str) -> bool:
+   612→        return await self._delete_by_id(ErrorLog, error_id)
+   613→
+   614→    # ────────────────────────────────────────
+   615→    # BACKTEST RUNS
+   616→    # ────────────────────────────────────────
+   617→
+   618→    async def create_backtest_run(self, **kwargs) -> BacktestRun:
+   619→        data = {
+   620→            "id": str(uuid.uuid4()),
+   621→            "created_at": _ist_now(),
+   622→            "updated_at": _ist_now(),
+   623→        }
+   624→        if "parameters" in kwargs and isinstance(kwargs["parameters"], dict):
+   625→            kwargs["parameters"] = _to_json(kwargs["parameters"])
+   626→        if "results" in kwargs and isinstance(kwargs["results"], dict):
+   627→            kwargs["results"] = _to_json(kwargs["results"])
+   628→        if "equity_curve" in kwargs and isinstance(kwargs["equity_curve"], list):
+   629→            kwargs["equity_curve"] = _to_json(kwargs["equity_curve"])
+   630→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   631→            kwargs["extra"] = _to_json(kwargs["extra"])
+   632→        data.update(kwargs)
+   633→        obj = BacktestRun(**data)
+   634→        return await self._add_and_flush(obj)
+   635→
+   636→    async def get_backtest_run(self, run_id: str) -> Optional[BacktestRun]:
+   637→        return await self._get_by_id(BacktestRun, run_id)
+   638→
+   639→    async def get_backtest_runs(self, strategy: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[BacktestRun]:
+   640→        stmt = select(BacktestRun).order_by(BacktestRun.created_at.desc())
+   641→        if strategy:
+   642→            stmt = stmt.where(BacktestRun.strategy == strategy)
+   643→        stmt = stmt.limit(limit).offset(offset)
+   644→        result = await self.session.execute(stmt)
+   645→        return list(result.scalars().all())
+   646→
+   647→    async def update_backtest_run(self, run_id: str, **kwargs) -> Optional[BacktestRun]:
+   648→        obj = await self.get_backtest_run(run_id)
+   649→        if obj is None:
+   650→            return None
+   651→        for key, value in kwargs.items():
+   652→            if key in ("parameters", "results", "extra") and isinstance(value, dict):
+   653→                value = _to_json(value)
+   654→            if key == "equity_curve" and isinstance(value, list):
+   655→                value = _to_json(value)
+   656→            if hasattr(obj, key):
+   657→                setattr(obj, key, value)
+   658→        obj.updated_at = _ist_now()
+   659→        await self.session.flush()
+   660→        return obj
+   661→
+   662→    async def delete_backtest_run(self, run_id: str) -> bool:
+   663→        return await self._delete_by_id(BacktestRun, run_id)
+   664→
+   665→    # ────────────────────────────────────────
+   666→    # DAILY SUMMARY
+   667→    # ────────────────────────────────────────
+   668→
+   669→    async def create_daily_summary(self, **kwargs) -> DailySummary:
+   670→        data = {
+   671→            "id": str(uuid.uuid4()),
+   672→            "created_at": _ist_now(),
+   673→            "updated_at": _ist_now(),
+   674→        }
+   675→        if "strategies_used" in kwargs and isinstance(kwargs["strategies_used"], list):
+   676→            kwargs["strategies_used"] = _to_json(kwargs["strategies_used"])
+   677→        if "sector_pnl" in kwargs and isinstance(kwargs["sector_pnl"], dict):
+   678→            kwargs["sector_pnl"] = _to_json(kwargs["sector_pnl"])
+   679→        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
+   680→            kwargs["extra"] = _to_json(kwargs["extra"])
+   681→        data.update(kwargs)
+   682→        obj = DailySummary(**data)
+   683→        return await self._add_and_flush(obj)
+   684→
+   685→    async def get_daily_summary(self, date_str: str) -> Optional[DailySummary]:
+   686→        stmt = select(DailySummary).where(DailySummary.date == date_str)
+   687→        result = await self.session.execute(stmt)
+   688→        return result.scalar_one_or_none()
+   689→
+   690→    async def get_latest_daily_summary(self) -> Optional[DailySummary]:
+   691→        stmt = select(DailySummary).order_by(DailySummary.date.desc()).limit(1)
+   692→        result = await self.session.execute(stmt)
+   693→        return result.scalar_one_or_none()
+   694→
+   695→    async def get_daily_summaries(self, limit: int = 30, offset: int = 0) -> List[DailySummary]:
+   696→        stmt = select(DailySummary).order_by(DailySummary.date.desc()).limit(limit).offset(offset)
+   697→        result = await self.session.execute(stmt)
+   698→        return list(result.scalars().all())
+   699→
+   700→    async def update_daily_summary(self, date_str: str, **kwargs) -> Optional[DailySummary]:
+   701→        obj = await self.get_daily_summary(date_str)
+   702→        if obj is None:
+   703→            return None
+   704→        for key, value in kwargs.items():
+   705→            if key in ("strategies_used", "extra") and isinstance(value, (dict, list)):
+   706→                value = _to_json(value)
+   707→            if key == "sector_pnl" and isinstance(value, dict):
+   708→                value = _to_json(value)
+   709→            if hasattr(obj, key):
+   710→                setattr(obj, key, value)
+   711→        obj.updated_at = _ist_now()
+   712→        await self.session.flush()
+   713→        return obj
+   714→
+   715→    async def delete_daily_summary(self, date_str: str) -> bool:
+   716→        stmt = delete(DailySummary).where(DailySummary.date == date_str)
+   717→        result = await self.session.execute(stmt)
+   718→        await self.session.flush()
+   719→        return result.rowcount > 0
+   720→
+   721→    # ────────────────────────────────────────
+   722→    # BULK / AGGREGATE HELPERS
+   723→    # ────────────────────────────────────────
+   724→
+   725→    async def get_capital_in_use(self) -> float:
+   726→        """Sum of invested_amount for all open positions."""
+   727→        positions = await self.get_open_positions()
+   728→        return sum(p.invested_amount for p in positions)
+   729→
+   730→    async def get_todays_trade_count(self) -> int:
+   731→        """Count of all trades (including open) created today."""
+   732→        today = _today_str()
+   733→        stmt = select(func.count()).select_from(Trade).where(Trade.entry_time.startswith(today))
+   734→        result = await self.session.execute(stmt)
+   735→        return result.scalar_one() or 0
+   736→
+   737→    async def get_todays_closed_trades(self) -> List[Trade]:
+   738→        """Get all closed trades from today."""
+   739→        today = _today_str()
+   740→        stmt = (
+   741→            select(Trade)
+   742→            .where(Trade.entry_time.startswith(today), Trade.status == "CLOSED")
+   743→            .order_by(Trade.exit_time.desc())
+   744→        )
+   745→        result = await self.session.execute(stmt)
+   746→        return list(result.scalars().all())
+   747→
+   748→    async def get_consecutive_losses(self) -> int:
+   749→        """Count consecutive losses from the most recent trades."""
+   750→        stmt = select(Trade).where(Trade.status == "CLOSED").order_by(Trade.exit_time.desc()).limit(20)
+   751→        result = await self.session.execute(stmt)
+   752→        trades = list(result.scalars().all())
+   753→        count = 0
+   754→        for t in trades:
+   755→            if t.net_pnl < 0:
+   756→                count += 1
+   757→            else:
+   758→                break
+   759→        return count
+   760→
+   761→    async def get_max_drawdown_pct(self) -> float:
+   762→        """Calculate max drawdown percentage from all closed trades."""
+   763→        stmt = select(Trade).where(Trade.status == "CLOSED").order_by(Trade.exit_time.asc())
+   764→        result = await self.session.execute(stmt)
+   765→        trades = list(result.scalars().all())
+   766→        if not trades:
+   767→            return 0.0
+   768→        peak = 100000.0  # Starting capital
+   769→        max_dd = 0.0
+   770→        running = peak
+   771→        for t in trades:
+   772→            running += t.net_pnl
+   773→            if running > peak:
+   774→                peak = running
+   775→            dd = (peak - running) / peak * 100 if peak > 0 else 0.0
+   776→            if dd > max_dd:
+   777→                max_dd = dd
+   778→        return round(max_dd, 2)
+   779→

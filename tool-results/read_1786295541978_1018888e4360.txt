@@ -1,0 +1,1239 @@
+     1→     1→
+     2→     2→# PROJECT: UltraBot Web — Algorithmic Trading Terminal for NSE
+     3→     3→
+     4→     4→## BUILD: Phase 1 — Backend Foundation (Complete Implementation)
+     5→     5→
+     6→     6→You are building the backend foundation of UltraBot Web, a semi-automated algorithmic trading terminal for Indian NSE markets. Build everything described below. Generate complete, working, production-quality Python code. No placeholders. No stubs. No TODOs. Every function must have full implementation.
+     7→     7→
+     8→     8→---
+     9→     9→
+    10→    10→## 1. PROJECT STRUCTURE
+    11→    11→
+    12→    12→Create this exact directory structure with all files:
+    13→    13→
+    14→    14→```
+    15→    15→ultrabot-web/
+    16→    16→├── backend/
+    17→    17→│   ├── app.py
+    18→    18→│   ├── requirements.txt
+    19→    19→│   ├── config/
+    20→    20→│   │   ├── __init__.py
+    21→    21→│   │   ├── settings.py
+    22→    22→│   │   └── defaults.yaml
+    23→    23→│   ├── api/
+    24→    24→│   │   ├── __init__.py
+    25→    25→│   │   ├── dependencies.py
+    26→    26→│   │   ├── routes/
+    27→    27→│   │   │   ├── __init__.py
+    28→    28→│   │   │   ├── auth.py
+    29→    29→│   │   │   ├── dashboard.py
+    30→    30→│   │   │   ├── engine.py
+    31→    31→│   │   │   ├── trades.py
+    32→    32→│   │   │   ├── strategies.py
+    33→    33→│   │   │   ├── watchlist.py
+    34→    34→│   │   │   ├── risk.py
+    35→    35→│   │   │   ├── backtest.py
+    36→    36→│   │   │   ├── brokers.py
+    37→    37→│   │   │   ├── opportunities.py
+    38→    38→│   │   │   ├── notifications.py
+    39→    39→│   │   │   ├── errors.py
+    40→    40→│   │   │   └── settings_api.py
+    41→    41→│   │   └── websocket.py
+    42→    42→│   ├── core/
+    43→    43→│   │   ├── __init__.py
+    44→    44→│   │   ├── engine.py
+    45→    45→│   │   ├── engine_state.py
+    46→    46→│   │   ├── market_hours.py
+    47→    47→│   │   └── session_manager.py
+    48→    48→│   ├── risk/
+    49→    49→│   │   ├── __init__.py
+    50→    50→│   │   ├── risk_engine.py
+    51→    51→│   │   ├── gates/
+    52→    52→│   │   │   ├── __init__.py
+    53→    53→│   │   │   ├── g1_max_positions.py
+    54→    54→│   │   │   ├── g2_sector_concentration.py
+    55→    55→│   │   │   ├── g3_max_position_size.py
+    56→    56→│   │   │   ├── g4_max_daily_trades.py
+    57→    57→│   │   │   ├── g5_max_daily_loss.py
+    58→    58→│   │   │   ├── g6_correlation_check.py
+    59→    59→│   │   │   ├── g7_vix_filter.py
+    60→    60→│   │   │   ├── g8_time_of_day.py
+    61→    61→│   │   │   ├── g9_price_mismatch.py
+    62→    62→│   │   │   ├── g10_min_confidence.py
+    63→    63→│   │   │   ├── g11_max_drawdown.py
+    64→    64→│   │   │   ├── g12_margin_check.py
+    65→    65→│   │   │   └── g13_duplicate_signal.py
+    66→    66→│   │   ├── daily_risk_manager.py
+    67→    67→│   │   ├── position_sizer.py
+    68→    68→│   │   └── partial_booker.py
+    69→    69→│   ├── strategies/
+    70→    70→│   │   ├── __init__.py
+    71→    71→│   │   ├── base.py
+    72→    72→│   │   ├── registry.py
+    73→    73→│   │   ├── regime_detector.py
+    74→    74→│   │   ├── adaptive_manager.py
+    75→    75→│   │   ├── performance_tracker.py
+    76→    76→│   │   ├── core/
+    77→    77→│   │   │   ├── __init__.py
+    78→    78→│   │   │   ├── breakout.py
+    79→    79→│   │   │   ├── mean_reversion.py
+    80→    80→│   │   │   ├── momentum.py
+    81→    81→│   │   │   ├── orb.py
+    82→    82→│   │   │   ├── rsi_divergence.py
+    83→    83→│   │   │   ├── supertrend.py
+    84→    84→│   │   │   └── vwap_reversion.py
+    85→    85→│   │   └── advanced/
+    86→    86→│   │       ├── __init__.py
+    87→    87→│   │       ├── gap_fill.py
+    88→    88→│   │       ├── sector_rotation.py
+    89→    89→│   │       ├── multi_timeframe.py
+    90→    90→│   │       ├── orb_volume.py
+    91→    91→│   │       ├── trend_exhaustion.py
+    92→    92→│   │       ├── news_momentum.py
+    93→    93→│   │       └── adaptive_supertrend.py
+    94→    94→│   ├── scanner/
+    95→    95→│   │   ├── __init__.py
+    96→    96→│   │   ├── scanner_engine.py
+    97→    97→│   │   ├── kronos/
+    98→    98→│   │   │   ├── __init__.py
+    99→    99→│   │   │   ├── kronos_scanner.py
+   100→   100→│   │   │   ├── signal_scorer.py
+   101→   101→│   │   │   └── model_manager.py
+   102→   102→│   │   ├── technical_scanner.py
+   103→   103→│   │   └── watchlist_builder.py
+   104→   104→│   ├── news/
+   105→   105→│   │   ├── __init__.py
+   106→   106→│   │   ├── news_engine.py
+   107→   107→│   │   ├── sources/
+   108→   108→│   │   │   ├── __init__.py
+   109→   109→│   │   │   ├── nse_corporate.py
+   110→   110→│   │   │   ├── moneycontrol.py
+   111→   111→│   │   │   ├── economic_times.py
+   112→   112→│   │   │   ├── google_finance.py
+   113→   113→│   │   │   └── result_calendar.py
+   114→   114→│   │   ├── news_analyzer.py
+   115→   115→│   │   └── news_to_watchlist.py
+   116→   116→│   ├── brokers/
+   117→   117→│   │   ├── __init__.py
+   118→   118→│   │   ├── base.py
+   119→   119→│   │   ├── factory.py
+   120→   120→│   │   ├── paper_broker.py
+   121→   121→│   │   ├── angel_one.py
+   122→   122→│   │   ├── shoonya.py
+   123→   123→│   │   └── token_manager.py
+   124→   124→│   ├── feeds/
+   125→   125→│   │   ├── __init__.py
+   126→   126→│   │   ├── base.py
+   127→   127→│   │   ├── angel_websocket.py
+   128→   128→│   │   ├── shoonya_websocket.py
+   129→   129→│   │   ├── yahoo_historical.py
+   130→   130→│   │   └── feed_manager.py
+   131→   131→│   ├── options/
+   132→   132→│   │   ├── __init__.py
+   133→   133→│   │   ├── option_chain.py
+   134→   134→│   │   ├── strike_selector.py
+   135→   135→│   │   ├── greeks.py
+   136→   136→│   │   ├── liquidity_filter.py
+   137→   137→│   │   └── options_risk.py
+   138→   138→│   ├── notifications/
+   139→   139→│   │   ├── __init__.py
+   140→   140→│   │   ├── telegram_bot.py
+   141→   141→│   │   ├── alert_manager.py
+   142→   142→│   │   └── eod_report.py
+   143→   143→│   ├── fees/
+   144→   144→│   │   ├── __init__.py
+   145→   145→│   │   ├── nse_fee_calculator.py
+   146→   146→│   │   └── broker_brokerage.py
+   147→   147→│   ├── errors/
+   148→   148→│   │   ├── __init__.py
+   149→   149→│   │   ├── error_engine.py
+   150→   150→│   │   ├── error_types.py
+   151→   151→│   │   ├── error_context.py
+   152→   152→│   │   └── auto_recovery.py
+   153→   153→│   ├── models/
+   154→   154→│   │   ├── __init__.py
+   155→   155→│   │   ├── trade.py
+   156→   156→│   │   ├── position.py
+   157→   157→│   │   ├── signal.py
+   158→   158→│   │   ├── opportunity.py
+   159→   159→│   │   ├── candle.py
+   160→   160→│   │   ├── watchlist_item.py
+   161→   161→│   │   ├── strategy_config.py
+   162→   162→│   │   ├── risk_state.py
+   163→   163→│   │   ├── error_log.py
+   164→   164→│   │   └── backtest_result.py
+   165→   165→│   ├── db/
+   166→   166→│   │   ├── __init__.py
+   167→   167→│   │   ├── database.py
+   168→   168→│   │   ├── repository.py
+   169→   169→│   │   └── migrations.py
+   170→   170→│   └── utils/
+   171→   171→│       ├── __init__.py
+   172→   172→│       ├── indicators.py
+   173→   173→│       ├── candle_utils.py
+   174→   174→│       ├── market_utils.py
+   175→   175→│       ├── encryption.py
+   176→   176→│       └── formatters.py
+   177→   177→└── data/
+   178→   178→    └── ultrabot.db
+   179→   179→```
+   180→   180→
+   181→   181→---
+   182→   182→
+   183→   183→## 2. REQUIREMENTS (requirements.txt)
+   184→   184→
+   185→   185→```
+   186→   186→fastapi==0.104.1
+   187→   187→uvicorn==0.24.0
+   188→   188→websockets==12.0
+   189→   189→pydantic==2.5.0
+   190→   190→pydantic-settings==2.1.0
+   191→   191→sqlalchemy==2.0.23
+   192→   192→aiosqlite==0.19.0
+   193→   193→httpx==0.25.2
+   194→   194→yfinance==0.3.2
+   195→   195→pandas==2.1.4
+   196→   196→numpy==1.26.2
+   197→   197→ta==0.10.2
+   198→   198→python-jose==3.3.0
+   199→   199→passlib==1.7.4
+   200→   200→bcrypt==4.1.2
+   201→   201→cryptography==41.0.7
+   202→   202→python-dotenv==1.0.0
+   203→   203→pyyaml==6.0.1
+   204→   204→aiohttp==3.9.1
+   205→   205→feedparser==6.0.11
+   206→   206→beautifulsoup4==4.12.2
+   207→   207→apscheduler==3.10.4
+   208→   208→```
+   209→   209→
+   210→   210→---
+   211→   211→
+   212→   212→## 3. CONFIGURATION (config/settings.py + config/defaults.yaml)
+   213→   213→
+   214→   214→### defaults.yaml:
+   215→   215→```yaml
+   216→   216→app:
+   217→   217→  name: UltraBot Web
+   218→   218→  version: "1.0.0"
+   219→   219→  secret_key: "change-me-in-production"
+   220→   220→  host: "0.0.0.0"
+   221→   221→  port: 8000
+   222→   222→
+   223→   223→auth:
+   224→   224→  username: "admin"
+   225→   225→  password_hash: "$2b$12$LJ3m4ys3Hzg5Kg5HbXNOAeYr1J5Z3X8K9P0Q1R2S3T4U5V6W7X8Y9Z0"
+   226→   226→
+   227→   227→engine:
+   228→   228→  scan_interval_seconds: 180
+   229→   229→  max_scan_retries: 3
+   230→   230→
+   231→   231→market:
+   232→   232→  nse_open: "09:15"
+   233→   233→  nse_close: "15:30"
+   234→   234→  pre_market_start: "09:00"
+   235→   235→  post_market_end: "16:00"
+   236→   236→  timezone: "Asia/Kolkata"
+   237→   237→
+   238→   238→capital:
+   239→   239→  virtual_capital: 100000
+   240→   240→  max_capital_usage_pct: 90
+   241→   241→  min_position_size: 5000
+   242→   242→  max_per_position_pct: 25
+   243→   243→
+   244→   244→risk:
+   245→   245→  max_open_positions: 5
+   246→   246→  max_per_sector: 2
+   247→   247→  max_daily_trades: 10
+   248→   248→  max_daily_loss_pct: 3
+   249→   249→  max_consecutive_losses: 5
+   250→   250→  consec_loss_cooloff_minutes: 30
+   251→   251→  vix_threshold: 20
+   252→   252→  new_trade_window_start: "09:30"
+   253→   253→  new_trade_window_end: "14:30"
+   254→   254→  price_mismatch_threshold_pct: 0.5
+   255→   255→  min_signal_confidence: 0.6
+   256→   256→  max_drawdown_pct: 5
+   257→   257→
+   258→   258→partial_booking:
+   259→   259→  enabled: true
+   260→   260→  level1_rr: 1.0
+   261→   261→  level1_book_pct: 50
+   262→   262→  level2_rr: 1.5
+   263→   263→  level2_book_pct: 50
+   264→   264→  level3_rr: 2.0
+   265→   265→  level3_book_pct: 100
+   266→   266→  trailing_sl_method: "step"
+   267→   267→  trailing_step_pct: 0.5
+   268→   268→
+   269→   269→position_sizing:
+   270→   270→  method: "dynamic_kelly"
+   271→   271→  kelly_min_fraction: 0.02
+   272→   272→  kelly_max_fraction: 0.25
+   273→   273→  confidence_tiers:
+   274→   274→    high: { min: 0.8, multiplier: 1.0 }
+   275→   275→    medium: { min: 0.6, multiplier: 0.8 }
+   276→   276→    low: { min: 0.4, multiplier: 0.5 }
+   277→   277→  volatility_tiers:
+   278→   278→    calm: { max_vix: 14, multiplier: 1.0 }
+   279→   279→    normal: { max_vix: 18, multiplier: 0.85 }
+   280→   280→    nervous: { max_vix: 22, multiplier: 0.65 }
+   281→   281→    fearful: { max_vix: 999, multiplier: 0.4 }
+   282→   282→  drawdown_tiers:
+   283→   283→    profit: { min_pct: 0, multiplier: 1.0 }
+   284→   284→    small_loss: { min_pct: -1, multiplier: 0.9 }
+   285→   285→    mod_loss: { min_pct: -2, multiplier: 0.7 }
+   286→   286→    big_loss: { min_pct: -3, multiplier: 0.4 }
+   287→   287→
+   288→   288→fees:
+   289→   289→  brokerage_per_order: 20
+   290→   290→  stt_intraday_sell_pct: 0.025
+   291→   291→  stt_delivery_pct: 0.1
+   292→   292→  exchange_txn_pct: 0.00345
+   293→   293→  gst_pct: 18
+   294→   294→  sebi_fee_pct: 0.0001
+   295→   295→  stamp_duty_pct: 0.003
+   296→   296→
+   297→   297→notifications:
+   298→   298→  telegram_enabled: false
+   299→   299→  telegram_bot_token: ""
+   300→   300→  telegram_chat_id: ""
+   301→   301→  morning_briefing_time: "08:30"
+   302→   302→  eod_report_time: "15:45"
+   303→   303→
+   304→   304→brokers:
+   305→   305→  angel_one:
+   306→   306→    enabled: false
+   307→   307→    api_key: ""
+   308→   308→    client_code: ""
+   309→   309→    pin: ""
+   310→   310→    jwt_token: ""
+   311→   311→    refresh_token: ""
+   312→   312→    feed_token: ""
+   313→   313→  shoonya:
+   314→   314→    enabled: false
+   315→   315→    user_id: ""
+   316→   316→    password: ""
+   317→   317→    vendor_code: ""
+   318→   318→    app_key: ""
+   319→   319→
+   320→   320→watchlist:
+   321→   321→  fno_universe_file: null
+   322→   322→  max_watchlist_size: 40
+   323→   323→  news_scan_interval_minutes: 15
+   324→   324→  technical_scan_interval_minutes: 5
+   325→   325→  kronos_scan_interval_minutes: 5
+   326→   326→
+   327→   327→regime:
+   328→   328→  classification_interval_minutes: 15
+   329→   329→  bull_nifty_day_change_pct: 0.3
+   330→   330→  bull_nifty_5day_change_pct: 1.0
+   331→   331→  bull_ad_ratio: 1.5
+   332→   332→  bear_nifty_day_change_pct: -0.3
+   333→   333→  bear_ad_ratio: 0.67
+   334→   334→  high_vix_threshold: 22
+   335→   335→
+   336→   336→strategy_activation:
+   337→   337→  Bull:
+   338→   338→    active: [Breakout, Momentum, ORB, Supertrend, GapFill, SectorRotation, AdaptiveSupertrend, ORBVolume]
+   339→   339→    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
+   340→   340→  Bear:
+   341→   341→    active: [Breakout, Momentum, ORB, Supertrend, RSIDivergence, TrendExhaustion, AdaptiveSupertrend]
+   342→   342→    paused: [MeanReversion, VWAPReversion, NewsMomentum]
+   343→   343→    note: "Breakout and Momentum in SHORT direction only"
+   344→   344→  Sideways:
+   345→   345→    active: [MeanReversion, VWAPReversion, RSIDivergence, ORB, AdaptiveSupertrend, MultiTimeframe]
+   346→   346→    paused: [Breakout, Momentum, GapFill, SectorRotation]
+   347→   347→  Volatile:
+   348→   348→    active: [ORB, GapFill, AdaptiveSupertrend, ORBVolume]
+   349→   349→    reduced_size: [Breakout, Momentum, Supertrend, SectorRotation, MultiTimeframe, NewsMomentum]
+   350→   350→    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
+   351→   351→```
+   352→   352→
+   353→   353→### config/settings.py:
+   354→   354→Create a Pydantic Settings class that loads from defaults.yaml and overrides from .env file. Must support nested YAML config. All values accessible as attributes. Include methods: `get_risk_config()`, `get_capital_config()`, `get_broker_config(name)`, `get_strategy_activation(regime)`.
+   355→   355→
+   356→   356→---
+   357→   357→
+   358→   358→## 4. DATABASE (db/database.py + db/repository.py + db/migrations.py)
+   359→   359→
+   360→   360→### database.py:
+   361→   361→- Use SQLAlchemy async engine with aiosqlite
+   362→   362→- SQLite file at `data/ultrabot.db`
+   363→   363→- Create `data/` directory if not exists
+   364→   364→- Async session maker
+   365→   365→- `get_db()` dependency for FastAPI
+   366→   366→- `init_db()` function that creates all tables on startup
+   367→   367→
+   368→   368→### migrations.py:
+   369→   369→- Define all SQLAlchemy ORM models for these tables:
+   370→   370→
+   371→   371→**sessions table:**
+   372→   372→- id (TEXT PK), start_time (DATETIME), end_time (DATETIME), mode (TEXT: paper/live), broker (TEXT), initial_capital (REAL), final_capital (REAL), status (TEXT: active/closed/crashed), state_snapshot (TEXT/JSON)
+   373→   373→
+   374→   374→**trades table:**
+   375→   375→- id (TEXT PK), session_id (FK→sessions), symbol (TEXT), segment (TEXT: EQ/OPT), direction (TEXT: BUY/SELL), strategy (TEXT), entry_price (REAL), exit_price (REAL), sl_price (REAL), target_price (REAL), quantity (INTEGER), entry_time (DATETIME), exit_time (DATETIME), status (TEXT: open/partial_closed/closed/sl_hit/target_hit), gross_pnl (REAL), fees (REAL), net_pnl (REAL), kronos_score (REAL), market_regime (TEXT), partial_bookings (TEXT/JSON), error_log (TEXT/JSON)
+   376→   376→
+   377→   377→**signals table:**
+   378→   378→- id (TEXT PK), session_id (FK), symbol (TEXT), strategy (TEXT), direction (TEXT), entry_price (REAL), sl_price (REAL), target_price (REAL), confidence (REAL), risk_reward (REAL), signal_time (DATETIME), status (TEXT: pending/confirmed/skipped/expired/rejected), rejection_reason (TEXT), confirmation_time (DATETIME), expiry_time (DATETIME)
+   379→   379→
+   380→   380→**positions table:**
+   381→   381→- id (TEXT PK), trade_id (FK→trades), symbol (TEXT), direction (TEXT), entry_price (REAL), current_price (REAL), sl_price (REAL), target_price (REAL), total_quantity (INTEGER), remaining_qty (INTEGER), booked_levels (TEXT/JSON), unrealized_pnl (REAL), market_regime (TEXT), last_updated (DATETIME)
+   382→   382→
+   383→   383→**watchlist table:**
+   384→   384→- id (TEXT PK), symbol (TEXT), source (TEXT: news/technical/kronos/manual), reason (TEXT), score (REAL), added_at (DATETIME), expires_at (DATETIME), is_active (BOOLEAN)
+   385→   385→
+   386→   386→**strategy_performance table:**
+   387→   387→- id (TEXT PK), strategy_name (TEXT), market_regime (TEXT), total_signals (INT), total_trades (INT), wins (INT), losses (INT), win_rate (REAL), avg_pnl (REAL), total_pnl (REAL), avg_hold_time (TEXT), period_start (DATE), period_end (DATE)
+   388→   388→
+   389→   389→**risk_events table:**
+   390→   390→- id (TEXT PK), event_type (TEXT), gate_number (INT nullable), details (TEXT/JSON), signal_id (FK nullable), timestamp (DATETIME)
+   391→   391→
+   392→   392→**broker_credentials table:**
+   393→   393→- id (TEXT PK), broker_name (TEXT), encrypted_data (BLOB), is_connected (BOOLEAN), last_auth_time (DATETIME), token_expires (DATETIME), last_error (TEXT), updated_at (DATETIME)
+   394→   394→
+   395→   395→**error_logs table:**
+   396→   396→- id (TEXT PK), error_code (TEXT), error_type (TEXT), severity (TEXT: critical/warning/info), what_happened (TEXT), why_happened (TEXT), how_to_fix (TEXT), context (TEXT/JSON), stack_trace (TEXT), auto_recovery (TEXT/JSON), is_resolved (BOOLEAN), resolved_at (DATETIME nullable), resolved_how (TEXT nullable), timestamp (DATETIME)
+   397→   397→
+   398→   398→**backtest_runs table:**
+   399→   399→- id (TEXT PK), strategy_name (TEXT), symbols (TEXT/JSON), start_date (DATE), end_date (DATE), timeframe (TEXT), initial_capital (REAL), total_return (REAL), annualized_return (REAL), max_drawdown (REAL), sharpe_ratio (REAL), sortino_ratio (REAL), win_rate (REAL), profit_factor (REAL), total_trades (INT), total_fees (REAL), equity_curve (TEXT/JSON), monthly_returns (TEXT/JSON), trades_detail (TEXT/JSON), risk_gate_stats (TEXT/JSON), run_at (DATETIME)
+   400→   400→
+   401→   401→**daily_summary table:**
+   402→   402→- id (TEXT PK), date (DATE), mode (TEXT), starting_capital (REAL), ending_capital (REAL), day_pnl (REAL), day_pnl_pct (REAL), total_trades (INT), wins (INT), losses (INT), win_rate (REAL), total_fees (REAL), max_drawdown (REAL), regime (TEXT), telegram_sent (BOOLEAN)
+   403→   403→
+   404→   404→### repository.py:
+   405→   405→Create a `Repository` class with complete async CRUD operations for every table. Methods must include:
+   406→   406→- `create_*()` / `get_*()` / `update_*()` / `delete_*()` for each model
+   407→   407→- `get_open_positions()` — returns all positions where remaining_qty > 0
+   408→   408→- `get_trades_by_date(date)` — trades for a specific date
+   409→   409→- `get_signals_by_status(status)` — signals filtered by status
+   410→   410→- `get_active_watchlist()` — watchlist items where is_active=True
+   411→   411→- `get_todays_trades()` — trades from today
+   412→   412→- `get_todays_pnl()` — sum of net_pnl for today's closed trades + sum of unrealized_pnl for open positions
+   413→   413→- `get_strategy_performance(strategy, regime)` — performance for strategy in regime
+   414→   414→- `get_unresolved_errors()` — errors where is_resolved=False
+   415→   415→- `get_daily_summary(date)` — summary for date
+   416→   416→- `save_session_state(session_id, state_json)` — update state_snapshot
+   417→   417→- `get_latest_session()` — most recent session for recovery
+   418→   418→
+   419→   419→All methods must be async. Use proper SQLAlchemy queries. Handle exceptions and log errors.
+   420→   420→
+   421→   421→---
+   422→   422→
+   423→   423→## 5. ERROR ENGINE (errors/)
+   424→   424→
+   425→   425→### error_types.py:
+   426→   426→Define custom exception hierarchy:
+   427→   427→- `UltraBotError` (base)
+   428→   428→  - `BrokerError` → `TokenExpiredError`, `OrderRejectedError`, `ConnectionLostError`
+   429→   429→  - `FeedError` → `WebSocketDisconnectedError`, `StaleDataError`, `PriceMismatchError`
+   430→   430→  - `StrategyError` → `InsufficientDataError`, `CalculationError`
+   431→   431→  - `RiskError` → `DailyLimitError`, `RiskGateRejectionError`
+   432→   432→  - `EngineError` → `EngineCrashError`, `SessionRecoveryError`
+   433→   433→
+   434→   434→Each exception must have attributes: `error_type`, `severity`, `what_happened`, `why_happened`, `how_to_fix`, `context` (dict)
+   435→   435→
+   436→   436→### error_context.py:
+   437→   437→- `capture_context()` function that captures: current engine state, open positions count, active broker, active feed, current VIX, market regime, timestamp, and any additional kwargs
+   438→   438→- Returns a dict ready for error log storage
+   439→   439→
+   440→   440→### auto_recovery.py:
+   441→   441→- `AutoRecovery` class with methods for each recoverable error type:
+   442→   442→  - `recover_token_expired(broker)` → re-authenticate, return success/failure
+   443→   443→  - `recover_websocket_disconnected(feed)` → reconnect with exponential backoff (5s, 10s, 20s, 40s, 80s), max 5 attempts, return success/failure
+   444→   444→  - `recover_stale_data(feed)` → disconnect and reconnect feed, return success/failure
+   445→   445→  - `recover_price_mismatch(signal, feed)` → refresh LTP from broker, recalculate signal prices, return updated signal or failure
+   446→   446→  - Each method logs every attempt and result
+   447→   447→
+   448→   448→### error_engine.py:
+   449→   449→- `ErrorEngine` class (singleton) that:
+   450→   450→  - `handle_error(exception, context_override=None)` → main entry point
+   451→   451→    - Captures context via `capture_context()`
+   452→   452→    - Generates unique error_code (format: ERR-YYYY-MMDD-NNNN)
+   453→   453→    - Determines severity from exception
+   454→   454→    - Attempts auto-recovery if applicable
+   455→   455→    - Saves to error_logs table via repository
+   456→   456→    - Sends to WebSocket subscribers (critical + warning only)
+   457→   457→    - Sends to Telegram if critical
+   458→   458→    - Returns error_log record
+   459→   459→  - `resolve_error(error_id, resolution_note)` → mark as resolved
+   460→   460→  - `get_errors(severity=None, resolved=None, limit=50)` → query error logs
+   461→   461→  - `get_error_stats()` → aggregate stats by type and severity
+   462→   462→
+   463→   463→---
+   464→   464→
+   465→   465→## 6. PYDANTIC MODELS (models/)
+   466→   466→
+   467→   467→Each file defines Pydantic V2 models for API request/response validation:
+   468→   468→
+   469→   469→### trade.py:
+   470→   470→- `TradeCreate`, `TradeResponse`, `TradeDetailResponse` (includes partial_bookings and error_log parsed from JSON)
+   471→   471→- `PositionResponse`, `PositionModifySL`, `PositionModifyTarget`, `PositionClose`
+   472→   472→
+   473→   473→### signal.py:
+   474→   474→- `SignalCreate`, `SignalResponse`
+   475→   475→- `SignalWithOpportunity` (includes risk gate results, probability data)
+   476→   476→
+   477→   477→### opportunity.py:
+   478→   478→- `OpportunityResponse` — full opportunity with all details for confirmation UI:
+   479→   479→  - signal data, strategy name, kronos score, win_rate (from performance tracker), equity trade details, options trade details, all 13 risk gate results, market context (vix, nifty_trend, sector), capital_required, available_capital, expiry_time, time_remaining_seconds
+   480→   480→
+   481→   481→### position.py, candle.py, watchlist_item.py, strategy_config.py, risk_state.py, error_log.py, backtest_result.py:
+   482→   482→- All with Create/Response models as appropriate
+   483→   483→
+   484→   484→---
+   485→   485→
+   486→   486→## 7. FEES (fees/)
+   487→   487→
+   488→   488→### nse_fee_calculator.py:
+   489→   489→```python
+   490→   490→class NSEFeeCalculator:
+   491→   491→    """Calculate all NSE charges for equity and options trades"""
+   492→   492→    
+   493→   493→    def calculate_equity_intraday(self, buy_price, sell_price, quantity, brokerage_per_order=20):
+   494→   494→        """
+   495→   495→        Calculate fees for intraday equity trade.
+   496→   496→        Returns dict with: brokerage, stt, exchange_txn, gst, sebi, stamp_duty, total
+   497→   497→        """
+   498→   498→        # Buy side:
+   499→   499→        #   Brokerage: flat per order
+   500→   500→        #   STT: 0 (only on sell for intraday)
+   501→   501→        #   Exchange: buy_price * qty * 0.0000345
+   502→   502→        #   GST: 18% * (brokerage + exchange)
+   503→   503→        #   SEBI: buy_price * qty * 0.000001
+   504→   504→        #   Stamp: buy_price * qty * 0.00003
+   505→   505→        #
+   506→   506→        # Sell side:
+   507→   507→        #   Brokerage: flat per order
+   508→   508→        #   STT: sell_price * qty * 0.00025
+   509→   509→        #   Exchange: sell_price * qty * 0.0000345
+   510→   510→        #   GST: 18% * (brokerage + exchange)
+   511→   511→        #   SEBI: sell_price * qty * 0.000001
+   512→   512→        #   Stamp: 0 (only on buy)
+   513→   513→        #
+   514→   514→        # Total = sum of all
+   515→   515→        # All values rounded to 2 decimal places
+   516→   516→
+   517→   517→    def calculate_equity_delivery(self, buy_price, sell_price, quantity, brokerage_per_order=0):
+   518→   518→        """Same structure but STT 0.1% on both sides, stamp on buy only"""
+   519→   519→
+   520→   520→    def calculate_options(self, buy_premium, sell_premium, quantity, lot_size, brokerage_per_order=20):
+   521→   521→        """
+   522→   522→        Calculate fees for options trade.
+   523→   523→        STT: 0.0625% on sell premium only
+   524→   524→        Exchange: 0.055% on both sides (on premium)
+   525→   525→        """
+   526→   526→
+   527→   527→    def calculate_net_pnl(self, entry_price, exit_price, quantity, direction, segment="EQ", mode="intraday"):
+   528→   528→        """Calculate gross P&L, fees, and net P&L for a completed trade"""
+   529→   529→```
+   530→   530→
+   531→   531→---
+   532→   532→
+   533→   533→## 8. MARKET HOURS (core/market_hours.py)
+   534→   534→
+   535→   535→```python
+   536→   536→class MarketHours:
+   537→   537→    """
+   538→   538→    NSE market hours, holidays, session detection.
+   539→   539→    All times in Asia/Kolkata timezone.
+   540→   540→    """
+   541→   541→    
+   542→   542→    NSE_HOLIDAYS_2025 = [
+   543→   543→        # All NSE trading holidays for 2025
+   544→   544→        "2025-01-26", "2025-03-14", "2025-03-31", "2025-04-10",
+   545→   545→        "2025-04-14", "2025-04-18", "2025-05-01", "2025-06-05",
+   546→   546→        "2025-07-06", "2025-08-15", "2025-08-27", "2025-10-02",
+   547→   547→        "2025-10-21", "2025-10-22", "2025-11-05", "2025-12-25"
+   548→   548→    ]
+   549→   549→    
+   550→   550→    def is_market_open(self) -> bool
+   551→   551→    def is_market_holiday(self, date=None) -> bool
+   552→   552→    def get_market_status(self) -> dict  # {is_open, session: "pre_market"/"market"/"post_market"/"closed", next_open, time_to_open}
+   553→   553→    def get_time_to_close(self) -> timedelta
+   554→   554→    def is_new_trade_window(self) -> bool  # Within allowed new trade hours (9:30-14:30)
+   555→   555→    def get_current_session(self) -> str
+   556→   556→```
+   557→   557→
+   558→   558→---
+   559→   559→
+   560→   560→## 9. ENGINE STATE (core/engine_state.py)
+   561→   561→
+   562→   562→```python
+   563→   563→from enum import Enum
+   564→   564→
+   565→   565→class EngineState(str, Enum):
+   566→   566→    STOPPED = "stopped"
+   567→   567→    STARTING = "starting"
+   568→   568→    RUNNING = "running"
+   569→   569→    PAUSED = "paused"
+   570→   570→    SCANNING = "scanning"
+   571→   571→    ERROR = "error"
+   572→   572→
+   573→   573→class EngineMode(str, Enum):
+   574→   574→    PAPER = "paper"
+   575→   575→    LIVE = "live"
+   576→   576→```
+   577→   577→
+   578→   578→---
+   579→   579→
+   580→   580→## 10. SESSION MANAGER (core/session_manager.py)
+   581→   581→
+   582→   582→```python
+   583→   583→class SessionManager:
+   584→   584→    """
+   585→   585→    Persist engine state to SQLite for crash recovery.
+   586→   586→    Save full state snapshot on every significant event.
+   587→   587→    Recover state on engine startup.
+   588→   588→    """
+   589→   589→    
+   590→   590→    async def create_session(self, mode, broker, initial_capital) -> str  # returns session_id
+   591→   591→    async def save_state(self, session_id, engine) -> None
+   592→   592→        # Captures: open positions, watchlist, daily risk state, active strategies, regime
+   593→   593→        # Serializes to JSON, saves to sessions.state_snapshot
+   594→   594→    async def recover_state(self, session_id) -> dict
+   595→   595→        # Loads state_snapshot, returns parsed dict
+   596→   596→        # Engine can restore positions, risk state, etc.
+   597→   597→    async def close_session(self, session_id, final_capital, status="closed") -> None
+   598→   598→    async def get_active_session(self) -> dict or None
+   599→   599→```
+   600→   600→
+   601→   601→---
+   602→   602→
+   603→   603→## 11. BROKER BASE + PAPER BROKER (brokers/)
+   604→   604→
+   605→   605→### base.py:
+   606→   606→```python
+   607→   607→from abc import ABC, abstractmethod
+   608→   608→
+   609→   609→class BaseBroker(ABC):
+   610→   610→    """Abstract base class for all brokers"""
+   611→   611→    
+   612→   612→    @abstractmethod
+   613→   613→    async def authenticate(self, credentials: dict) -> dict:
+   614→   614→        """Authenticate with broker. Returns {success, token_info}"""
+   615→   615→    
+   616→   616→    @abstractmethod
+   617→   617→    async def get_ltp(self, symbol: str) -> float:
+   618→   618→        """Get last traded price for symbol"""
+   619→   619→    
+   620→   620→    @abstractmethod
+   621→   621→    async def get_margin(self) -> dict:
+   622→   622→        """Get available margin. Returns {available, used, total}"""
+   623→   623→    
+   624→   624→    @abstractmethod
+   625→   625→    async def place_order(self, order: dict) -> dict:
+   626→   626→        """Place order. Returns {success, order_id, details}"""
+   627→   627→    
+   628→   628→    @abstractmethod
+   629→   629→    async def cancel_order(self, order_id: str) -> dict:
+   630→   630→        """Cancel order"""
+   631→   631→    
+   632→   632→    @abstractmethod
+   633→   633→    async def get_positions(self) -> list:
+   634→   634→        """Get current open positions from broker"""
+   635→   635→    
+   636→   636→    @abstractmethod
+   637→   637→    async def get_order_status(self, order_id: str) -> dict:
+   638→   638→        """Get status of an order"""
+   639→   639→    
+   640→   640→    def get_name(self) -> str:
+   641→   641→        return self.__class__.__name__
+   642→   642→```
+   643→   643→
+   644→   644→### paper_broker.py:
+   645→   645→```python
+   646→   646→class PaperBroker(BaseBroker):
+   647→   647→    """
+   648→   648→    Paper trading broker. Simulates order execution.
+   649→   649→    Uses REAL prices from feed but virtual capital.
+   650→   650→    """
+   651→   651→    
+   652→   652→    def __init__(self, initial_capital, fee_calculator, repository):
+   653→   653→        self.capital = initial_capital
+   654→   654→        self.available_capital = initial_capital
+   655→   655→        self.used_capital = 0
+   656→   656→        self.fee_calculator = fee_calculator
+   657→   657→        self.repo = repository
+   658→   658→        self.virtual_positions = {}  # symbol -> position dict
+   659→   659→    
+   660→   660→    async def authenticate(self, credentials):
+   661→   661→        return {"success": True, "message": "Paper broker - no authentication needed"}
+   662→   662→    
+   663→   663→    async def get_ltp(self, symbol):
+   664→   664→        """Get real LTP from the feed (injected)"""
+   665→   665→        if self.feed:
+   666→   666→            return await self.feed.get_ltp(symbol)
+   667→   667→        raise FeedError("No feed connected to paper broker")
+   668→   668→    
+   669→   669→    async def get_margin(self):
+   670→   670→        return {
+   671→   671→            "available": self.available_capital,
+   672→   672→            "used": self.used_capital,
+   673→   673→            "total": self.capital
+   674→   674→        }
+   675→   675→    
+   676→   676→    async def place_order(self, order):
+   677→   677→        """
+   678→   678→        Simulate order execution.
+   679→   679→        1. Get real LTP from feed
+   680→   680→        2. Calculate fees
+   681→   681→        3. Update virtual capital
+   682→   682→        4. Create position
+   683→   683→        5. Save to DB
+   684→   684→        """
+   685→   685→        # Get real live price
+   686→   686→        ltp = await self.get_ltp(order["symbol"])
+   687→   687→        
+   688→   688→        # Calculate required capital
+   689→   689→        entry_value = ltp * order["quantity"]
+   690→   690→        
+   691→   691→        # Calculate fees
+   692→   692→        fees = self.fee_calculator.calculate_equity_intraday(
+   693→   693→            buy_price=ltp if order["direction"] == "BUY" else 0,
+   694→   694→            sell_price=ltp if order["direction"] == "SELL" else 0,
+   695→   695→            quantity=order["quantity"],
+   696→   696→            brokerage_per_order=20
+   697→   697→        )
+   698→   698→        
+   699→   699→        # Check capital
+   700→   700→        if entry_value > self.available_capital * 0.9:
+   701→   701→            return {"success": False, "error": "Insufficient capital", "required": entry_value, "available": self.available_capital}
+   702→   702→        
+   703→   703→        # Update capital
+   704→   704→        if order["direction"] == "BUY":
+   705→   705→            self.used_capital += entry_value
+   706→   706→            self.available_capital -= entry_value
+   707→   707→        else:
+   708→   708→            self.used_capital += entry_value
+   709→   709→            self.available_capital -= entry_value
+   710→   710→        
+   711→   711→        # Create virtual position
+   712→   712→        position_id = str(uuid.uuid4())
+   713→   713→        position = {
+   714→   714→            "id": position_id,
+   715→   715→            "symbol": order["symbol"],
+   716→   716→            "direction": order["direction"],
+   717→   717→            "entry_price": ltp,
+   718→   718→            "sl_price": order.get("sl_price"),
+   719→   719→            "target_price": order.get("target_price"),
+   720→   720→            "quantity": order["quantity"],
+   721→   721→            "remaining_qty": order["quantity"],
+   722→   722→            "status": "open",
+   723→   723→            "entry_time": datetime.now(),
+   724→   724→            "fees_paid": fees["total"]
+   725→   725→        }
+   726→   726→        self.virtual_positions[order["symbol"]] = position
+   727→   727→        
+   728→   728→        # Save to DB
+   729→   729→        await self.repo.create_trade({...})
+   730→   730→        await self.repo.create_position({...})
+   731→   731→        
+   732→   732→        return {"success": True, "order_id": position_id, "entry_price": ltp, "fees": fees["total"]}
+   733→   733→    
+   734→   734→    async def close_position(self, symbol, qty=None, exit_price=None):
+   735→   735→        """
+   736→   736→        Close position (full or partial).
+   737→   737→        If exit_price not provided, get real LTP.
+   738→   738→        Calculate P&L, fees, update capital.
+   739→   739→        """
+   740→   740→        # Implementation with partial close support
+   741→   741→        # Handle partial booking levels
+   742→   742→        # Update DB
+   743→   743→        # Return P&L details
+   744→   744→    
+   745→   745→    async def update_position_prices(self):
+   746→   746→        """Update unrealized P&L for all open positions using current LTPs"""
+   747→   747→        # Called periodically by engine
+   748→   748→```
+   749→   749→
+   750→   750→### factory.py:
+   751→   751→```python
+   752→   752→class BrokerFactory:
+   753→   753→    @staticmethod
+   754→   754→    def create(broker_name: str, mode: str, **kwargs) -> BaseBroker:
+   755→   755→        if mode == "paper":
+   756→   756→            return PaperBroker(**kwargs)
+   757→   757→        if broker_name == "angel_one":
+   758→   758→            return AngelOneBroker(**kwargs)
+   759→   759→        if broker_name == "shoonya":
+   760→   760→            return ShoonyaBroker(**kwargs)
+   761→   761→        raise ValueError(f"Unknown broker: {broker_name}")
+   762→   762→```
+   763→   763→
+   764→   764→---
+   765→   765→
+   766→   766→## 12. RISK ENGINE (risk/)
+   767→   767→
+   768→   768→### risk_engine.py:
+   769→   769→```python
+   770→   770→class RiskEngine:
+   771→   771→    """
+   772→   772→    13-gate risk validation engine.
+   773→   773→    Every signal must pass ALL gates before being presented as opportunity.
+   774→   774→    """
+   775→   775→    
+   776→   776→    def __init__(self, config, repository, daily_risk_manager):
+   777→   777→        self.gates = [
+   778→   778→            G1MaxPositions(config),
+   779→   779→            G2SectorConcentration(config),
+   780→   780→            G3MaxPositionSize(config),
+   781→   781→            G4MaxDailyTrades(config),
+   782→   782→            G5MaxDailyLoss(config),
+   783→   783→            G6CorrelationCheck(config),
+   784→   784→            G7VIXFilter(config),
+   785→   785→            G8TimeOfDay(config),
+   786→   786→            G9PriceMismatch(config),
+   787→   787→            G10MinConfidence(config),
+   788→   788→            G11MaxDrawdown(config),
+   789→   789→            G12MarginCheck(config),
+   790→   790→            G13DuplicateSignal(config),
+   791→   791→        ]
+   792→   792→        self.daily_risk = daily_risk_manager
+   793→   793→    
+   794→   794→    async def validate(self, signal, context) -> RiskResult:
+   795→   795→        """
+   796→   796→        Run signal through all 13 gates.
+   797→   797→        Returns RiskResult with:
+   798→   798→          - passed: bool
+   799→   799→          - gate_results: list of GateResult (gate_name, passed, reason, details)
+   800→   800→          - rejection: None or GateResult of first failing gate
+   801→   801→        """
+   802→   802→        results = []
+   803→   803→        for gate in self.gates:
+   804→   804→            result = await gate.check(signal, context)
+   805→   805→            results.append(result)
+   806→   806→            if not result.passed:
+   807→   807→                # Log risk event
+   808→   808→                await self.daily_risk.record_gate_rejection(gate, result, signal)
+   809→   809→                return RiskResult(passed=False, gate_results=results, rejection=result)
+   810→   810→        return RiskResult(passed=True, gate_results=results, rejection=None)
+   811→   811→```
+   812→   812→
+   813→   813→### Each gate (g1 through g13):
+   814→   814→Every gate implements:
+   815→   815→```python
+   816→   816→class GateName:
+   817→   817→    async def check(self, signal, context) -> GateResult:
+   818→   818→        """
+   819→   819→        signal: Signal model with symbol, direction, entry_price, sl, target, confidence, strategy
+   820→   820→        context: dict with open_positions, daily_pnl, daily_trades, available_capital, vix, market_regime, current_time, broker_ltp, etc.
+   821→   821→        
+   822→   822→        Returns GateResult:
+   823→   823→          - gate_name: str (e.g., "G1_MaxPositions")
+   824→   824→          - gate_number: int (1-13)
+   825→   825→          - passed: bool
+   826→   826→          - reason: str (human readable, why passed or why failed)
+   827→   827→          - details: dict (supporting data)
+   828→   828→        """
+   829→   829→```
+   830→   830→
+   831→   831→Implement full logic for each gate as specified in Section 3.4 of the plan. G9 (PriceMismatch) compares signal.entry_price vs context["broker_ltp"]. G13 (DuplicateSignal) checks if same symbol+direction signal exists in last 15 minutes via repository query.
+   832→   832→
+   833→   833→### daily_risk_manager.py:
+   834→   834→```python
+   835→   835→class DailyRiskManager:
+   836→   836→    """
+   837→   837→    Track and enforce daily risk limits.
+   838→   838→    """
+   839→   839→    
+   840→   840→    async def check_daily_limits(self) -> DailyRiskStatus:
+   841→   841→        """Returns current daily risk status with all limits and usage"""
+   842→   842→    
+   843→   843→    async def should_reduce_size(self) -> bool:
+   844→   844→        """True if daily loss >= 67% of limit"""
+   845→   845→    
+   846→   846→    async def should_stop_trading(self) -> bool:
+   847→   847→        """True if daily loss >= 100% of limit OR max trades reached OR max consec losses"""
+   848→   848→    
+   849→   849→    async def record_trade_result(self, pnl):
+   850→   850→        """Record trade P&L for daily tracking. Check if limits hit after recording."""
+   851→   851→    
+   852→   852→    async def record_gate_rejection(self, gate, result, signal):
+   853→   853→        """Save risk event to DB"""
+   854→   854→    
+   855→   855→    async def get_cooloff_status(self) -> dict:
+   856→   856→        """Is cool-off active? When does it end?"""
+   857→   857→    
+   858→   858→    async def reset_daily(self):
+   859→   859→        """Reset daily counters. Called at market open."""
+   860→   860→```
+   861→   861→
+   862→   862→### position_sizer.py:
+   863→   863→```python
+   864→   864→class PositionSizer:
+   865→   865→    """
+   866→   866→    Dynamic position sizing: Kelly × confidence × volatility × drawdown × capital
+   867→   867→    Full implementation as specified in Section 3.5.
+   868→   868→    """
+   869→   869→    
+   870→   870→    async def calculate(self, signal, context) -> SizingResult:
+   871→   871→        """
+   872→   872→        Returns SizingResult:
+   873→   873→          - base_kelly_fraction
+   874→   874→          - confidence_multiplier
+   875→   875→          - volatility_multiplier
+   876→   876→          - drawdown_multiplier
+   877→   877→          - final_size_rupees
+   878→   878→          - quantity
+   879→   879→          - capital_required
+   880→   880→          - sizing_adjustments: list of str (what was adjusted and why)
+   881→   881→        """
+   882→   882→```
+   883→   883→
+   884→   884→### partial_booker.py:
+   885→   885→```python
+   886→   886→class PartialBooker:
+   887→   887→    """
+   888→   888→    3-level partial profit booking + trailing SL.
+   889→   889→    Full implementation as specified in Section 3.6.
+   890→   890→    """
+   891→   891→    
+   892→   892→    def calculate_booking_levels(self, position) -> BookingLevels:
+   893→   893→        """Calculate Level 1, 2, 3 targets based on entry, SL, and config"""
+   894→   894→    
+   895→   895→    async def check_and_book(self, position, current_price) -> BookingResult:
+   896→   896→        """
+   897→   897→        Check if current_price hits any booking level.
+   898→   898→        If yes: execute partial exit, move SL, return result.
+   899→   899→        If no: check trailing SL, return result.
+   900→   900→        """
+   901→   901→    
+   902→   902→    def calculate_trailing_sl(self, position, current_price) -> float:
+   903→   903→        """Calculate new trailing SL based on method (step or supertrend)"""
+   904→   904→```
+   905→   905→
+   906→   906→---
+   907→   907→
+   908→   908→## 13. CORE ENGINE (core/engine.py)
+   909→   909→
+   910→   910→```python
+   911→   911→class UltraBotEngine:
+   912→   912→    """
+   913→   913→    Main orchestrator. The brain of the system.
+   914→   914→    
+   915→   915→    Pipeline:
+   916→   916→      Feed → Scanner → Strategies → Risk → Sizing → Present to User → Execute
+   917→   917→    
+   918→   918→    Runs as an async background task in FastAPI.
+   919→   919→    """
+   920→   920→    
+   921→   921→    def __init__(self, config, repository, error_engine, risk_engine, 
+   922→   922→                 position_sizer, partial_booker, daily_risk_manager,
+   923→   923→                 broker, feed, session_manager):
+   924→   924→        # Initialize all components
+   925→   925→        self.state = EngineState.STOPPED
+   926→   926→        self.mode = None
+   927→   927→        self.broker = None
+   928→   928→        self.feed = None
+   929→   929→        # ... etc
+   930→   930→    
+   931→   931→    async def start(self, mode: EngineMode, broker_name: str, strategy_names: list = None):
+   932→   932→        """
+   933→   933→        Start the engine.
+   934→   934→        1. Set state to STARTING
+   935→   935→        2. Create broker via factory (paper or live)
+   936→   936→        3. Authenticate broker
+   937→   937→        4. Connect feed
+   938→   938→        5. Create session in DB
+   939→   939→        6. Recover state if resuming
+   940→   940→        7. Initialize scanner, strategies, risk engine
+   941→   941→        8. Set state to RUNNING
+   942→   942→        9. Start main loop as background task
+   943→   943→        10. Return success
+   944→   944→        """
+   945→   945→    
+   946→   946→    async def stop(self):
+   947→   947→        """Graceful shutdown. Save state. Close positions if configured. Close session."""
+   948→   948→    
+   949→   949→    async def pause(self):
+   950→   950→        """Pause scanning. Existing positions still managed."""
+   951→   951→    
+   952→   952→    async def resume(self):
+   953→   953→        """Resume scanning."""
+   954→   954→    
+   955→   955→    async def _main_loop(self):
+   956→   956→        """
+   957→   957→        Main engine loop. Runs continuously while state == RUNNING.
+   958→   958→        
+   959→   959→        Every iteration:
+   960→   960→          1. Check if market is open
+   961→   961→          2. Update position prices from feed
+   962→   962→          3. Check partial booking levels for all open positions
+   963→   963→          4. Check trailing SLs for all open positions
+   964→   964→          5. Check daily risk limits
+   965→   965→          6. If market open AND in trade window AND not paused AND daily risk OK:
+   966→   966→             a. Run scanner (get hot watchlist)
+   967→   967→             b. Run strategies on watchlist stocks (get signals)
+   968→   968→             c. For each signal:
+   969→   969→                - Run risk gates
+   970→   970→                - If passed: calculate position size
+   971→   971→                - If size OK: create Opportunity, push to WebSocket
+   972→   972→             d. Clean up expired opportunities
+   973→   973→          7. Sleep for scan_interval
+   974→   974→        """
+   975→   975→    
+   976→   976→    async def confirm_opportunity(self, opportunity_id, segment="EQ"):
+   977→   977→        """
+   978→   978→        User confirmed an opportunity.
+   979→   979→        1. Get opportunity from pending list
+   980→   980→        2. Re-verify risk gates (market may have changed)
+   981→   981→        3. Re-check price mismatch
+   982→   982→        4. Execute via broker
+   983→   983→        5. Save trade to DB
+   984→   984→        6. Push trade fill via WebSocket
+   985→   985→        7. Send Telegram alert
+   986→   986→        8. Return trade details
+   987→   987→        """
+   988→   988→    
+   989→   989→    async def skip_opportunity(self, opportunity_id, reason=None):
+   990→   990→        """Mark opportunity as skipped. Log reason."""
+   991→   991→    
+   992→   992→    async def _manage_position(self, position):
+   993→   993→        """Check SL, target, partial booking for a position. Called every tick."""
+   994→   994→    
+   995→   995→    async def get_status(self) -> dict:
+   996→   996→        """Return full engine status for dashboard API"""
+   997→   997→    
+   998→   998→    async def get_dashboard_data(self) -> dict:
+   999→   999→        """Aggregated dashboard data: capital, positions, P&L, regime, etc."""
+  1000→  1000→```
+  1001→  1001→
+  1002→  1002→---
+  1003→  1003→
+  1004→  1004→## 14. UTILS (utils/)
+  1005→  1005→
+  1006→  1006→### indicators.py:
+  1007→  1007→Implement these technical indicators using numpy/pandas:
+  1008→  1008→- `calculate_rsi(closes, period=14)` → Series
+  1009→  1009→- `calculate_macd(closes, fast=12, slow=26, signal=9)` → dict(macd, signal, histogram)
+  1010→  1010→- `calculate_supertrend(df, period=10, multiplier=3)` → Series (supertrend values, direction)
+  1011→  1011→- `calculate_vwap(df)` → Series (VWAP values)
+  1012→  1012→- `calculate_bollinger_bands(closes, period=20, std_dev=2)` → dict(upper, middle, lower)
+  1013→  1013→- `calculate_atr(df, period=14)` → Series
+  1014→  1014→- `calculate_ema(closes, period)` → Series
+  1015→  1015→- `calculate_sma(closes, period)` → Series
+  1016→  1016→- `calculate_z_score(series)` → float
+  1017→  1017→- `calculate_rate_of_change(closes, period)` → Series
+  1018→  1018→
+  1019→  1019→### market_utils.py:
+  1020→  1020→- F&O stock universe list (185 stocks with symbol, name, sector, lot_size)
+  1021→  1021→- `is_fno_stock(symbol)` → bool
+  1022→  1022→- `get_stock_sector(symbol)` → str
+  1023→  1023→- `get_lot_size(symbol)` → int
+  1024→  1024→- `NSE_HOLIDAYS` list
+  1025→  1025→
+  1026→  1026→### encryption.py:
+  1027→  1027→- `encrypt_credentials(data: dict, key: bytes)` → bytes (Fernet encryption)
+  1028→  1028→- `decrypt_credentials(encrypted: bytes, key: bytes)` → dict
+  1029→  1029→- `generate_key()` → bytes
+  1030→  1030→
+  1031→  1031→### formatters.py:
+  1032→  1032→- `format_currency(amount)` → str (₹1,23,456.78 with Indian formatting)
+  1033→  1033→- `format_pct(pct)` → str (+3.46%)
+  1034→  1034→- `format_duration(seconds)` → str (2h 15m)
+  1035→  1035→
+  1036→  1036→### candle_utils.py:
+  1037→  1037→- `resample_candles(df, target_timeframe)` → DataFrame (e.g., 1min to 5min)
+  1038→  1038→- `aggregate_candles(candle_list)` → DataFrame
+  1039→  1039→
+  1040→  1040→---
+  1041→  1041→
+  1042→  1042→## 15. FASTAPI APPLICATION (app.py)
+  1043→  1043→
+  1044→  1044→```python
+  1045→  1045→"""
+  1046→  1046→UltraBot Web - Main Application Entry Point
+  1047→  1047→"""
+  1048→  1048→
+  1049→  1049→# Setup:
+  1050→  1050→# - Load config from defaults.yaml + .env
+  1051→  1051→# - Initialize database (create tables)
+  1052→  1052→# - Initialize all components: repository, error_engine, risk_engine, 
+  1053→  1053→#   daily_risk_manager, position_sizer, partial_booker, fee_calculator,
+  1054→  1054→#   session_manager, engine
+  1055→  1055→# - Include all API routers
+  1056→  1056→# - Setup WebSocket endpoint
+  1057→  1057→# - Setup CORS (allow localhost:3000 for frontend)
+  1058→  1058→# - On startup: log "UltraBot Web started", show market status
+  1059→  1059→# - On shutdown: stop engine if running, close DB
+  1060→  1060→
+  1061→  1061→# Endpoints:
+  1062→  1062→# GET  /          → {"app": "UltraBot Web", "version": "1.0.0", "status": "running"}
+  1063→  1063→# GET  /health    → {"status": "healthy", "db": "connected", "engine": "stopped/running"}
+  1064→  1064→```
+  1065→  1065→
+  1066→  1066→---
+  1067→  1067→
+  1068→  1068→## 16. API ROUTES — IMPLEMENT ALL
+  1069→  1069→
+  1070→  1070→### api/dependencies.py:
+  1071→  1071→- `get_current_user(token)` → verify JWT, return username
+  1072→  1072→- `get_engine()` → return engine instance
+  1073→  1073→- `get_repository()` → return repository instance
+  1074→  1074→- `get_db()` → return DB session
+  1075→  1075→
+  1076→  1076→### api/routes/auth.py:
+  1077→  1077→- `POST /api/auth/login` → validate username/password, return JWT token
+  1078→  1078→- `POST /api/auth/logout` → invalidate token
+  1079→  1079→
+  1080→  1080→### api/routes/engine.py:
+  1081→  1081→- `POST /api/engine/start` → start engine with given mode, broker, strategies
+  1082→  1082→- `POST /api/engine/stop` → stop engine
+  1083→  1083→- `POST /api/engine/pause` → pause engine
+  1084→  1084→- `POST /api/engine/resume` → resume engine
+  1085→  1085→- `GET /api/engine/status` → engine status
+  1086→  1086→
+  1087→  1087→### api/routes/dashboard.py:
+  1088→  1088→- `GET /api/dashboard` → aggregated dashboard data
+  1089→  1089→
+  1090→  1090→### api/routes/trades.py:
+  1091→  1091→- `GET /api/trades` → trade history with filters
+  1092→  1092→- `GET /api/trades/{id}` → single trade detail
+  1093→  1093→- `GET /api/positions` → open positions
+  1094→  1094→- `POST /api/positions/{id}/close` → manual close
+  1095→  1095→- `POST /api/positions/{id}/modify-sl` → modify SL
+  1096→  1096→- `POST /api/positions/{id}/modify-target` → modify target
+  1097→  1097→
+  1098→  1098→### api/routes/strategies.py:
+  1099→  1099→- `GET /api/strategies` → all strategies with status
+  1100→  1100→- `PUT /api/strategies/{name}/toggle` → enable/disable
+  1101→  1101→- `PUT /api/strategies/{name}/params` → update params
+  1102→  1102→- `GET /api/strategies/{name}/performance` → strategy performance stats
+  1103→  1103→
+  1104→  1104→### api/routes/watchlist.py:
+  1105→  1105→- `GET /api/watchlist` → active watchlist
+  1106→  1106→- `POST /api/watchlist/add` → add stock manually
+  1107→  1107→- `DELETE /api/watchlist/{symbol}` → remove stock
+  1108→  1108→- `GET /api/watchlist/universe` → all F&O stocks
+  1109→  1109→
+  1110→  1110→### api/routes/risk.py:
+  1111→  1111→- `GET /api/risk/status` → daily risk status
+  1112→  1112→- `GET /api/risk/gates` → all 13 gate configs + last results
+  1113→  1113→- `PUT /api/risk/limits` → update risk limits
+  1114→  1114→- `GET /api/risk/events` → risk events log
+  1115→  1115→
+  1116→  1116→### api/routes/brokers.py:
+  1117→  1117→- `GET /api/brokers` → broker status
+  1118→  1118→- `POST /api/brokers/angel-one/credentials` → save Angel One creds (encrypted)
+  1119→  1119→- `POST /api/brokers/shoonya/credentials` → save Shoonya creds (encrypted)
+  1120→  1120→- `POST /api/brokers/angel-one/test` → test Angel One connection
+  1121→  1121→- `POST /api/brokers/shoonya/test` → test Shoonya connection
+  1122→  1122→- `PUT /api/brokers/active` → set active broker and mode
+  1123→  1123→
+  1124→  1124→### api/routes/opportunities.py:
+  1125→  1125→- `GET /api/opportunities` → pending opportunities
+  1126→  1126→- `POST /api/opportunities/{id}/confirm` → confirm and execute
+  1127→  1127→- `POST /api/opportunities/{id}/skip` → skip
+  1128→  1128→- `POST /api/opportunities/{id}/remind` → remind later
+  1129→  1129→
+  1130→  1130→### api/routes/backtest.py:
+  1131→  1131→- `POST /api/backtest/run` → start backtest (background task)
+  1132→  1132→- `GET /api/backtest/{id}/status` → backtest progress
+  1133→  1133→- `GET /api/backtest/{id}/results` → backtest results
+  1134→  1134→- `GET /api/backtest/history` → previous backtests
+  1135→  1135→- `DELETE /api/backtest/{id}` → delete backtest
+  1136→  1136→
+  1137→  1137→### api/routes/notifications.py:
+  1138→  1138→- `GET /api/notifications/history` → notification history
+  1139→  1139→- `PUT /api/notifications/settings` → update settings
+  1140→  1140→- `POST /api/notifications/test` → send test Telegram
+  1141→  1141→
+  1142→  1142→### api/routes/errors.py:
+  1143→  1143→- `GET /api/errors` → error log with filters
+  1144→  1144→- `GET /api/errors/{id}` → single error detail
+  1145→  1145→- `PUT /api/errors/{id}/resolve` → mark resolved
+  1146→  1146→- `GET /api/errors/stats` → error statistics
+  1147→  1147→
+  1148→  1148→### api/routes/settings_api.py:
+  1149→  1149→- `GET /api/settings` → all settings
+  1150→  1150→- `PUT /api/settings` → update settings
+  1151→  1151→- `GET /api/settings/capital` → capital info
+  1152→  1152→- `PUT /api/settings/capital` → update virtual capital
+  1153→  1153→
+  1154→  1154→### api/websocket.py:
+  1155→  1155→- `WS /ws` → WebSocket endpoint
+  1156→  1156→  - Accept connection
+  1157→  1157→  - On connect: add to subscribers list, send initial state
+  1158→  1158→  - Listen for client messages (subscribe to specific channels)
+  1159→  1159→  - Broadcast: live_prices, new_opportunity, trade_fill, trade_exit, partial_booking, risk_event, error_alert, engine_status_change, regime_change, scan_complete
+  1160→  1160→  - On disconnect: remove from subscribers
+  1161→  1161→  - Use asyncio.Queue for non-blocking broadcast
+  1162→  1162→
+  1163→  1163→---
+  1164→  1164→
+  1165→  1165→## 17. TESTING
+  1166→  1166→
+  1167→  1167→After building everything, include a `backend/tests/` directory with:
+  1168→  1168→
+  1169→  1169→- `test_fee_calculator.py` — Test NSE fee calculation with known values
+  1170→  1170→- `test_risk_gates.py` — Test each of 13 gates with pass/fail scenarios
+  1171→  1171→- `test_position_sizer.py` — Test dynamic sizing with various capital/confidence/vix/drawdown combos
+  1172→  1172→- `test_partial_booker.py` — Test 3-level booking with known price sequences
+  1173→  1173→- `test_paper_broker.py` — Test paper trade execution and P&L
+  1174→  1174→- `test_error_engine.py` — Test error handling and auto-recovery
+  1175→  1175→- `test_market_hours.py` — Test market status detection
+  1176→  1176→- `test_api_endpoints.py` — Test all REST endpoints with httpx AsyncClient
+  1177→  1177→
+  1178→  1178→Use pytest + pytest-asyncio. Each test must be fully implemented, not stubs.
+  1179→  1179→
+  1180→  1180→---
+  1181→  1181→
+  1182→  1182→## 18. BUILD INSTRUCTIONS
+  1183→  1183→
+  1184→  1184→At the end, provide a README.md with:
+  1185→  1185→
+  1186→  1186→```markdown
+  1187→  1187→# UltraBot Web
+  1188→  1188→
+  1189→  1189→## Quick Start
+  1190→  1190→
+  1191→  1191→```bash
+  1192→  1192→cd backend
+  1193→  1193→python -m venv venv
+  1194→  1194→source venv/bin/activate  # or venv\Scripts\activate on Windows
+  1195→  1195→pip install -r requirements.txt
+  1196→  1196→python app.py
+  1197→  1197→```
+  1198→  1198→
+  1199→  1199→Server starts at http://localhost:8000
+  1200→  1200→
+  1201→  1201→## API Docs
+  1202→  1202→
+  1203→  1203→Open http://localhost:8000/docs for Swagger UI
+  1204→  1204→
+  1205→  1205→## First Steps
+  1206→  1206→
+  1207→  1207→1. Login: POST /api/auth/login with {"username": "admin", "password": "admin"}
+  1208→  1208→2. Set virtual capital: PUT /api/settings/capital with {"virtual_capital": 100000}
+  1209→  1209→3. Start engine: POST /api/engine/start with {"mode": "paper", "broker": "paper"}
+  1210→  1210→4. Check dashboard: GET /api/dashboard
+  1211→  1211→5. Watch for opportunities: GET /api/opportunities
+  1212→  1212→```
+  1213→  1213→
+  1214→  1214→---
+  1215→  1215→
+  1216→  1216→## CRITICAL IMPLEMENTATION RULES
+  1217→  1217→
+  1218→  1218→1. **Every function must be fully implemented.** No `pass`, no `raise NotImplementedError`, no `# TODO`, no `...` placeholders.
+  1219→  1219→2. **Every error must be handled** with the ErrorEngine. Try/except blocks everywhere. Clear error messages.
+  1220→  1220→3. **All DB operations must be async.** No synchronous SQLite calls.
+  1221→  1221→4. **All API endpoints must have proper Pydantic request/response models.**
+  1222→  1222→5. **All API endpoints must require authentication** (except /api/auth/login and /health).
+  1223→  1223→6. **WebSocket must be non-blocking.** Use asyncio.Queue for broadcasting.
+  1224→  1224→7. **Paper broker must use REAL prices** from feed, never hardcoded or random.
+  1225→  1225→8. **Risk gates must never be bypassed.** No shortcuts.
+  1226→  1226→9. **Fees must always be calculated.** No trade without fee deduction.
+  1227→  1227→10. **Position sizing must always check available capital.** Never over-allocate.
+  1228→  1228→11. **Use Indian number formatting** for currency (₹1,23,456.78).
+  1229→  1229→12. **All timestamps in Asia/Kolkata timezone.**
+  1230→  1230→13. **UUID for all IDs.** No auto-increment integers as PKs.
+  1231→  1231→14. **JSON fields stored as TEXT in SQLite.** Use json.dumps/json.loads.
+  1232→  1232→15. **Config from YAML + .env override.** Never hardcode values.
+  1233→  1233→
+  1234→  1234→═══════════════════════════════════════════════════════════════════════════════
+  1235→  1235→
+  1236→  1236→---
+  1237→  1237→
+  1238→  1238→**This is the complete build prompt for Phase 1. It covers the entire backend foundation: config, database, error engine, fees, risk engine (all 13 gates), position sizer, partial booker, paper broker, core engine, all API endpoints, WebSocket, and tests.**
+  1239→  1239→

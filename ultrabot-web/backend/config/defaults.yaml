@@ -1,0 +1,122 @@
+app:
+  name: UltraBot Web
+  version: "1.0.0"
+  secret_key: "change-me-in-production"
+  host: "0.0.0.0"
+  port: 8000
+auth:
+  username: "admin"
+  password_hash: "$2b$12$LJ3m4ys3Hzg5Kg5HbXNOAeYr1J5Z3X8K9P0Q1R2S3T4U5V6W7X8Y9Z0"
+engine:
+  scan_interval_seconds: 180
+  max_scan_retries: 3
+market:
+  nse_open: "09:15"
+  nse_close: "15:30"
+  pre_market_start: "09:00"
+  post_market_end: "16:00"
+  timezone: "Asia/Kolkata"
+capital:
+  virtual_capital: 100000
+  max_capital_usage_pct: 90
+  min_position_size: 5000
+  max_per_position_pct: 25
+risk:
+  max_open_positions: 5
+  max_per_sector: 2
+  max_daily_trades: 10
+  max_daily_loss_pct: 3
+  max_consecutive_losses: 5
+  consec_loss_cooloff_minutes: 30
+  vix_threshold: 20
+  new_trade_window_start: "09:30"
+  new_trade_window_end: "14:30"
+  price_mismatch_threshold_pct: 0.5
+  min_signal_confidence: 0.6
+  max_drawdown_pct: 5
+partial_booking:
+  enabled: true
+  level1_rr: 1.0
+  level1_book_pct: 50
+  level2_rr: 1.5
+  level2_book_pct: 50
+  level3_rr: 2.0
+  level3_book_pct: 100
+  trailing_sl_method: "step"
+  trailing_step_pct: 0.5
+position_sizing:
+  method: "dynamic_kelly"
+  kelly_min_fraction: 0.02
+  kelly_max_fraction: 0.25
+  confidence_tiers:
+    high: { min: 0.8, multiplier: 1.0 }
+    medium: { min: 0.6, multiplier: 0.8 }
+    low: { min: 0.4, multiplier: 0.5 }
+  volatility_tiers:
+    calm: { max_vix: 14, multiplier: 1.0 }
+    normal: { max_vix: 18, multiplier: 0.85 }
+    nervous: { max_vix: 22, multiplier: 0.65 }
+    fearful: { max_vix: 999, multiplier: 0.4 }
+  drawdown_tiers:
+    profit: { min_pct: 0, multiplier: 1.0 }
+    small_loss: { min_pct: -1, multiplier: 0.9 }
+    mod_loss: { min_pct: -2, multiplier: 0.7 }
+    big_loss: { min_pct: -3, multiplier: 0.4 }
+fees:
+  brokerage_per_order: 20
+  stt_intraday_sell_pct: 0.025
+  stt_delivery_pct: 0.1
+  exchange_txn_pct: 0.00345
+  gst_pct: 18
+  sebi_fee_pct: 0.0001
+  stamp_duty_pct: 0.003
+notifications:
+  telegram_enabled: false
+  telegram_bot_token: ""
+  telegram_chat_id: ""
+  morning_briefing_time: "08:30"
+  eod_report_time: "15:45"
+brokers:
+  angel_one:
+    enabled: false
+    api_key: ""
+    client_code: ""
+    pin: ""
+    jwt_token: ""
+    refresh_token: ""
+    feed_token: ""
+  shoonya:
+    enabled: false
+    user_id: ""
+    password: ""
+    vendor_code: ""
+    app_key: ""
+watchlist:
+  fno_universe_file: null
+  max_watchlist_size: 40
+  news_scan_interval_minutes: 15
+  technical_scan_interval_minutes: 5
+  kronos_scan_interval_minutes: 5
+regime:
+  classification_interval_minutes: 15
+  bull_nifty_day_change_pct: 0.3
+  bull_nifty_5day_change_pct: 1.0
+  bull_ad_ratio: 1.5
+  bear_nifty_day_change_pct: -0.3
+  bear_ad_ratio: 0.67
+  high_vix_threshold: 22
+strategy_activation:
+  Bull:
+    active: [Breakout, Momentum, ORB, Supertrend, GapFill, SectorRotation, AdaptiveSupertrend, ORBVolume]
+    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
+  Bear:
+    active: [Breakout, Momentum, ORB, Supertrend, RSIDivergence, TrendExhaustion, AdaptiveSupertrend]
+    paused: [MeanReversion, VWAPReversion, NewsMomentum]
+    note: "Breakout and Momentum in SHORT direction only"
+  Sideways:
+    active: [MeanReversion, VWAPReversion, RSIDivergence, ORB, AdaptiveSupertrend, MultiTimeframe]
+    paused: [Breakout, Momentum, GapFill, SectorRotation]
+  Volatile:
+    active: [ORB, GapFill, AdaptiveSupertrend, ORBVolume]
+    reduced_size: [Breakout, Momentum, Supertrend, SectorRotation, MultiTimeframe, NewsMomentum]
+    paused: [MeanReversion, VWAPReversion, RSIDivergence, TrendExhaustion]
