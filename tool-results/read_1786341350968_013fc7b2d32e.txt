@@ -1,0 +1,1259 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import {
+     6→  TrendingUp,
+     7→  TrendingDown,
+     8→  ArrowLeftRight,
+     9→  Target,
+    10→  ShieldAlert,
+    11→  Activity,
+    12→  Zap,
+    13→  Clock,
+    14→  Play,
+    15→  Square,
+    16→  Radio,
+    17→  TrendingUpIcon,
+    18→  BarChart3,
+    19→  CircleCheck,
+    20→  CircleX,
+    21→  ArrowRight,
+    22→} from 'lucide-react';
+    23→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    24→import { Badge } from '@/components/ui/badge';
+    25→import { Button } from '@/components/ui/button';
+    26→import { Progress } from '@/components/ui/progress';
+    27→import { Skeleton } from '@/components/ui/skeleton';
+    28→import {
+    29→  Table,
+    30→  TableBody,
+    31→  TableCell,
+    32→  TableHead,
+    33→  TableHeader,
+    34→  TableRow,
+    35→} from '@/components/ui/table';
+    36→import { ScrollArea } from '@/components/ui/scroll-area';
+    37→import { Separator } from '@/components/ui/separator';
+    38→import { useDashboard, useEngineStatus } from '@/hooks/useApi';
+    39→import useEngine from '@/hooks/useEngine';
+    40→import { theme } from '@/styles/theme';
+    41→import type { MarketRegime } from '@/lib/store';
+    42→
+    43→// ─────────────────────────────────────────────
+    44→// Types
+    45→// ─────────────────────────────────────────────
+    46→
+    47→interface DashboardData {
+    48→  todayPnl?: number;
+    49→  yesterdayPnl?: number;
+    50→  todayPnlPercent?: number;
+    51→  activePositions?: number;
+    52→  longPositions?: number;
+    53→  shortPositions?: number;
+    54→  dayWinRate?: number;
+    55→  dayTrades?: number;
+    56→  dayWins?: number;
+    57→  dayLosses?: number;
+    58→  riskUsed?: number;
+    59→  totalCapital?: number;
+    60→  capitalUsed?: number;
+    61→  maxCapital?: number;
+    62→  freeCapital?: number;
+    63→  dayPnlAmount?: number;
+    64→  totalPnlInception?: number;
+    65→  positions?: PositionRow[];
+    66→  recentTrades?: TradeRow[];
+    67→  signalsGenerated?: number;
+    68→  signalsConfirmed?: number;
+    69→  signalsSkipped?: number;
+    70→  regime?: string;
+    71→  regimeConfidence?: number;
+    72→  activeStrategies?: string[];
+    73→  pausedStrategies?: string[];
+    74→}
+    75→
+    76→interface PositionRow {
+    77→  symbol: string;
+    78→  direction: 'BUY' | 'SELL';
+    79→  entry: number;
+    80→  current: number;
+    81→  qty: number;
+    82→  pnl: number;
+    83→  bookedLevels: number;
+    84→}
+    85→
+    86→interface TradeRow {
+    87→  time: string;
+    88→  symbol: string;
+    89→  direction: 'BUY' | 'SELL';
+    90→  pnl: number;
+    91→}
+    92→
+    93→// ─────────────────────────────────────────────
+    94→// Helpers
+    95→// ─────────────────────────────────────────────
+    96→
+    97→/** Indian number formatting: ₹1,23,456.78 */
+    98→function formatINR(amount: number, showSign = false): string {
+    99→  const sign = showSign && amount > 0 ? '+' : '';
+   100→  const formatted = new Intl.NumberFormat('en-IN', {
+   101→    minimumFractionDigits: 2,
+   102→    maximumFractionDigits: 2,
+   103→  }).format(Math.abs(amount));
+   104→  return `${sign}₹${formatted}`;
+   105→}
+   106→
+   107→function formatINRCompact(amount: number, showSign = false): string {
+   108→  const sign = showSign && amount > 0 ? '+' : '';
+   109→  const formatted = new Intl.NumberFormat('en-IN', {
+   110→    minimumFractionDigits: 0,
+   111→    maximumFractionDigits: 0,
+   112→  }).format(Math.abs(amount));
+   113→  return `${sign}₹${formatted}`;
+   114→}
+   115→
+   116→function pnlColor(value: number): string {
+   117→  return value >= 0 ? theme.colors.profit : theme.colors.loss;
+   118→}
+   119→
+   120→function pnlSign(value: number): string {
+   121→  return value >= 0 ? '+' : '';
+   122→}
+   123→
+   124→const regimeColors: Record<string, string> = {
+   125→  bull: theme.colors.bull,
+   126→  bear: theme.colors.bear,
+   127→  sideways: theme.colors.sideways,
+   128→  volatile: theme.colors.volatile,
+   129→};
+   130→
+   131→const regimeLabels: Record<string, string> = {
+   132→  bull: 'Bullish',
+   133→  bear: 'Bearish',
+   134→  sideways: 'Sideways',
+   135→  volatile: 'Volatile',
+   136→};
+   137→
+   138→// ─────────────────────────────────────────────
+   139→// Circular Progress Indicator
+   140→// ─────────────────────────────────────────────
+   141→
+   142→function CircularProgress({ value, size = 48, strokeWidth = 4 }: { value: number; size?: number; strokeWidth?: number }) {
+   143→  const radius = (size - strokeWidth) / 2;
+   144→  const circumference = 2 * Math.PI * radius;
+   145→  const offset = circumference - (value / 100) * circumference;
+   146→
+   147→  return (
+   148→    <svg width={size} height={size} className="-rotate-90">
+   149→      <circle
+   150→        cx={size / 2}
+   151→        cy={size / 2}
+   152→        r={radius}
+   153→        fill="none"
+   154→        stroke={theme.colors.surfaceActive}
+   155→        strokeWidth={strokeWidth}
+   156→      />
+   157→      <circle
+   158→        cx={size / 2}
+   159→        cy={size / 2}
+   160→        r={radius}
+   161→        fill="none"
+   162→        stroke={value >= 50 ? theme.colors.profit : theme.colors.warning}
+   163→        strokeWidth={strokeWidth}
+   164→        strokeDasharray={circumference}
+   165→        strokeDashoffset={offset}
+   166→        strokeLinecap="round"
+   167→        className="transition-all duration-700 ease-out"
+   168→      />
+   169→    </svg>
+   170→  );
+   171→}
+   172→
+   173→// ─────────────────────────────────────────────
+   174→// Stat Card Skeleton
+   175→// ─────────────────────────────────────────────
+   176→
+   177→function StatCardSkeleton() {
+   178→  return (
+   179→    <Card style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+   180→      <CardContent className="p-4 space-y-3">
+   181→        <Skeleton className="h-3 w-24" style={{ backgroundColor: theme.colors.surfaceActive }} />
+   182→        <Skeleton className="h-8 w-32" style={{ backgroundColor: theme.colors.surfaceActive }} />
+   183→        <Skeleton className="h-3 w-20" style={{ backgroundColor: theme.colors.surfaceActive }} />
+   184→      </CardContent>
+   185→    </Card>
+   186→  );
+   187→}
+   188→
+   189→// ─────────────────────────────────────────────
+   190→// Card wrapper helper
+   191→// ─────────────────────────────────────────────
+   192→
+   193→function PanelCard({
+   194→  children,
+   195→  className,
+   196→}: {
+   197→  children: React.ReactNode;
+   198→  className?: string;
+   199→}) {
+   200→  return (
+   201→    <Card
+   202→      className={className}
+   203→      style={{
+   204→        backgroundColor: theme.colors.surface,
+   205→        border: `1px solid ${theme.colors.border}`,
+   206→      }}
+   207→    >
+   208→      {children}
+   209→    </Card>
+   210→  );
+   211→}
+   212→
+   213→function PanelHeader({
+   214→  icon: Icon,
+   215→  title,
+   216→  badge,
+   217→}: {
+   218→  icon: React.ElementType;
+   219→  title: string;
+   220→  badge?: React.ReactNode;
+   221→}) {
+   222→  return (
+   223→    <CardHeader className="pb-3 pt-4 px-4">
+   224→      <div className="flex items-center justify-between">
+   225→        <div className="flex items-center gap-2">
+   226→          <Icon size={15} style={{ color: theme.colors.accent }} />
+   227→          <CardTitle className="text-sm font-semibold" style={{ color: theme.colors.textPrimary }}>
+   228→            {title}
+   229→          </CardTitle>
+   230→        </div>
+   231→        {badge}
+   232→      </div>
+   233→    </CardHeader>
+   234→  );
+   235→}
+   236→
+   237→// ─────────────────────────────────────────────
+   238→// Section 1 — Stat Cards
+   239→// ─────────────────────────────────────────────
+   240→
+   241→function StatCardPnL({ data }: { data: DashboardData }) {
+   242→  const pnl = data.todayPnl ?? 0;
+   243→  const pct = data.todayPnlPercent ?? 0;
+   244→  const isProfit = pnl >= 0;
+   245→
+   246→  return (
+   247→    <PanelCard>
+   248→      <CardContent className="p-4">
+   249→        <div className="flex items-start justify-between">
+   250→          <div className="space-y-1.5 min-w-0">
+   251→            <p className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
+   252→              Today&apos;s P&L
+   253→            </p>
+   254→            <p
+   255→              className="text-2xl font-bold tabular-nums truncate"
+   256→              style={{ color: pnlColor(pnl) }}
+   257→            >
+   258→              {formatINRCompact(pnl, true)}
+   259→            </p>
+   260→            <p className="text-xs" style={{ color: pnlColor(pct) }}>
+   261→              {pnlSign(pct)}{pct.toFixed(2)}% vs yesterday
+   262→            </p>
+   263→          </div>
+   264→          <div
+   265→            className="flex items-center justify-center rounded-lg p-2.5 shrink-0"
+   266→            style={{ backgroundColor: `${pnlColor(pnl)}15` }}
+   267→          >
+   268→            {isProfit ? (
+   269→              <TrendingUp size={18} style={{ color: pnlColor(pnl) }} />
+   270→            ) : (
+   271→              <TrendingDown size={18} style={{ color: pnlColor(pnl) }} />
+   272→            )}
+   273→          </div>
+   274→        </div>
+   275→      </CardContent>
+   276→    </PanelCard>
+   277→  );
+   278→}
+   279→
+   280→function StatCardPositions({ data }: { data: DashboardData }) {
+   281→  const active = data.activePositions ?? 0;
+   282→  const longs = data.longPositions ?? 0;
+   283→  const shorts = data.shortPositions ?? 0;
+   284→
+   285→  return (
+   286→    <PanelCard>
+   287→      <CardContent className="p-4">
+   288→        <div className="flex items-start justify-between">
+   289→          <div className="space-y-1.5">
+   290→            <p className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
+   291→              Active Positions
+   292→            </p>
+   293→            <p className="text-2xl font-bold tabular-nums" style={{ color: theme.colors.textPrimary }}>
+   294→              {active}
+   295→            </p>
+   296→            <div className="flex items-center gap-2 text-xs">
+   297→              <span style={{ color: theme.colors.profit }}>
+   298→                Long {longs}
+   299→              </span>
+   300→              <span style={{ color: theme.colors.textDisabled }}>·</span>
+   301→              <span style={{ color: theme.colors.loss }}>
+   302→                Short {shorts}
+   303→              </span>
+   304→            </div>
+   305→          </div>
+   306→          <div
+   307→            className="flex items-center justify-center rounded-lg p-2.5 shrink-0"
+   308→            style={{ backgroundColor: `${theme.colors.accent}15` }}
+   309→          >
+   310→            <ArrowLeftRight size={18} style={{ color: theme.colors.accent }} />
+   311→          </div>
+   312→        </div>
+   313→      </CardContent>
+   314→    </PanelCard>
+   315→  );
+   316→}
+   317→
+   318→function StatCardWinRate({ data }: { data: DashboardData }) {
+   319→  const rate = data.dayWinRate ?? 0;
+   320→  const wins = data.dayWins ?? 0;
+   321→  const losses = data.dayLosses ?? 0;
+   322→  const total = data.dayTrades ?? wins + losses;
+   323→
+   324→  return (
+   325→    <PanelCard>
+   326→      <CardContent className="p-4">
+   327→        <div className="flex items-start justify-between">
+   328→          <div className="space-y-1.5">
+   329→            <p className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
+   330→              Day Win Rate
+   331→            </p>
+   332→            <p className="text-2xl font-bold tabular-nums" style={{ color: theme.colors.textPrimary }}>
+   333→              {rate.toFixed(1)}%
+   334→            </p>
+   335→            <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+   336→              {wins}W / {losses}L of {total}
+   337→            </p>
+   338→          </div>
+   339→          <div className="relative flex items-center justify-center shrink-0">
+   340→            <CircularProgress value={rate} size={44} strokeWidth={3.5} />
+   341→            <span
+   342→              className="absolute text-[10px] font-bold tabular-nums"
+   343→              style={{ color: theme.colors.textPrimary }}
+   344→            >
+   345→              {Math.round(rate)}
+   346→            </span>
+   347→          </div>
+   348→        </div>
+   349→      </CardContent>
+   350→    </PanelCard>
+   351→  );
+   352→}
+   353→
+   354→function StatCardRisk({ data }: { data: DashboardData }) {
+   355→  const risk = data.riskUsed ?? 0;
+   356→  const barColor =
+   357→    risk < 50 ? theme.colors.profit : risk < 80 ? theme.colors.warning : theme.colors.loss;
+   358→
+   359→  return (
+   360→    <PanelCard>
+   361→      <CardContent className="p-4">
+   362→        <div className="flex items-start justify-between">
+   363→          <div className="space-y-1.5 flex-1 min-w-0">
+   364→            <p className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
+   365→              Risk Used
+   366→            </p>
+   367→            <p className="text-2xl font-bold tabular-nums" style={{ color: barColor }}>
+   368→              {risk.toFixed(1)}%
+   369→            </p>
+   370→            <div className="w-full pt-1">
+   371→              <div
+   372→                className="h-1.5 w-full rounded-full overflow-hidden"
+   373→                style={{ backgroundColor: theme.colors.surfaceActive }}
+   374→              >
+   375→                <div
+   376→                  className="h-full rounded-full transition-all duration-500"
+   377→                  style={{ width: `${Math.min(risk, 100)}%`, backgroundColor: barColor }}
+   378→                />
+   379→              </div>
+   380→            </div>
+   381→          </div>
+   382→          <div
+   383→            className="flex items-center justify-center rounded-lg p-2.5 shrink-0 ml-3"
+   384→            style={{ backgroundColor: `${barColor}15` }}
+   385→          >
+   386→            <ShieldAlert size={18} style={{ color: barColor }} />
+   387→          </div>
+   388→        </div>
+   389→      </CardContent>
+   390→    </PanelCard>
+   391→  );
+   392→}
+   393→
+   394→// ─────────────────────────────────────────────
+   395→// Section 2 — Capital Panel
+   396→// ─────────────────────────────────────────────
+   397→
+   398→function CapitalPanel({ data }: { data: DashboardData }) {
+   399→  const total = data.totalCapital ?? 100000;
+   400→  const used = data.capitalUsed ?? 65000;
+   401→  const maxCapital = data.maxCapital ?? 90000;
+   402→  const free = total - used;
+   403→  const dayPnl = data.dayPnlAmount ?? 2340;
+   404→  const dayPnlPct = total > 0 ? (dayPnl / total) * 100 : 0;
+   405→  const inceptionPnl = data.totalPnlInception ?? 18420;
+   406→  const usedPercent = maxCapital > 0 ? (used / maxCapital) * 100 : 0;
+   407→
+   408→  const rows = [
+   409→    {
+   410→      label: 'Total Capital',
+   411→      value: formatINRCompact(total),
+   412→      color: theme.colors.textPrimary,
+   413→    },
+   414→    {
+   415→      label: 'Capital Used',
+   416→      value: `${formatINRCompact(used)} / ${formatINRCompact(maxCapital)}`,
+   417→      color: theme.colors.textPrimary,
+   418→      progress: usedPercent,
+   419→    },
+   420→    {
+   421→      label: 'Free Capital',
+   422→      value: formatINRCompact(free),
+   423→      color: theme.colors.accent,
+   424→    },
+   425→    {
+   426→      label: 'Day P&L',
+   427→      value: `${formatINR(dayPnl, true)} / ${pnlSign(dayPnlPct)}${dayPnlPct.toFixed(2)}%`,
+   428→      color: pnlColor(dayPnl),
+   429→    },
+   430→    {
+   431→      label: 'Total P&L (Inception)',
+   432→      value: formatINR(inceptionPnl, true),
+   433→      color: pnlColor(inceptionPnl),
+   434→    },
+   435→  ];
+   436→
+   437→  return (
+   438→    <PanelCard>
+   439→      <PanelHeader icon={BarChart3} title="Capital Overview" />
+   440→      <CardContent className="px-4 pb-4 pt-0">
+   441→        <div className="space-y-0">
+   442→          {rows.map((row, i) => (
+   443→            <div key={row.label}>
+   444→              <div className="flex items-center justify-between py-2.5">
+   445→                <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   446→                  {row.label}
+   447→                </span>
+   448→                <span
+   449→                  className="text-sm font-medium tabular-nums"
+   450→                  style={{ color: row.color }}
+   451→                >
+   452→                  {row.value}
+   453→                </span>
+   454→              </div>
+   455→              {row.progress !== undefined && (
+   456→                <div className="-mt-1 mb-1">
+   457→                  <Progress
+   458→                    value={row.progress}
+   459→                    className="h-1.5"
+   460→                    style={{
+   461→                      ['--progress-color' as string]: theme.colors.accent,
+   462→                    }}
+   463→                  />
+   464→                </div>
+   465→              )}
+   466→              {i < rows.length - 1 && <Separator className="opacity-50" />}
+   467→            </div>
+   468→          ))}
+   469→        </div>
+   470→      </CardContent>
+   471→    </PanelCard>
+   472→  );
+   473→}
+   474→
+   475→// ─────────────────────────────────────────────
+   476→// Section 2 — Open Positions Table
+   477→// ─────────────────────────────────────────────
+   478→
+   479→function OpenPositionsTable({ positions }: { positions: PositionRow[] }) {
+   480→  if (!positions.length) {
+   481→    return (
+   482→      <PanelCard>
+   483→        <PanelHeader icon={ArrowLeftRight} title="Open Positions" />
+   484→        <CardContent className="px-4 pb-4 pt-0">
+   485→          <div className="flex flex-col items-center justify-center py-8 text-center">
+   486→            <ArrowLeftRight
+   487→              size={28}
+   488→              className="mb-2"
+   489→              style={{ color: theme.colors.textDisabled }}
+   490→            />
+   491→            <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+   492→              No open positions
+   493→            </p>
+   494→            <p className="text-xs mt-1" style={{ color: theme.colors.textDisabled }}>
+   495→              Positions will appear here when trades are executed
+   496→            </p>
+   497→          </div>
+   498→        </CardContent>
+   499→      </PanelCard>
+   500→    );
+   501→  }
+   502→
+   503→  return (
+   504→    <PanelCard>
+   505→      <PanelHeader
+   506→        icon={ArrowLeftRight}
+   507→        title="Open Positions"
+   508→        badge={
+   509→          <Badge
+   510→            className="text-[10px] font-semibold border-0"
+   511→            style={{
+   512→              backgroundColor: theme.colors.accentMuted,
+   513→              color: theme.colors.accent,
+   514→            }}
+   515→          >
+   516→            {positions.length} open
+   517→          </Badge>
+   518→        }
+   519→      />
+   520→      <CardContent className="px-4 pb-4 pt-0">
+   521→        <ScrollArea className="max-h-[300px]">
+   522→          <Table>
+   523→            <TableHeader>
+   524→              <TableRow style={{ borderColor: theme.colors.border }}>
+   525→                <TableHead className="text-[11px] font-medium h-8" style={{ color: theme.colors.textMuted }}>
+   526→                  Symbol
+   527→                </TableHead>
+   528→                <TableHead className="text-[11px] font-medium h-8 text-center" style={{ color: theme.colors.textMuted }}>
+   529→                  Direction
+   530→                </TableHead>
+   531→                <TableHead className="text-[11px] font-medium h-8 text-right" style={{ color: theme.colors.textMuted }}>
+   532→                  Entry
+   533→                </TableHead>
+   534→                <TableHead className="text-[11px] font-medium h-8 text-right" style={{ color: theme.colors.textMuted }}>
+   535→                  Current
+   536→                </TableHead>
+   537→                <TableHead className="text-[11px] font-medium h-8 text-right" style={{ color: theme.colors.textMuted }}>
+   538→                  Qty
+   539→                </TableHead>
+   540→                <TableHead className="text-[11px] font-medium h-8 text-right" style={{ color: theme.colors.textMuted }}>
+   541→                  P&L
+   542→                </TableHead>
+   543→                <TableHead className="text-[11px] font-medium h-8 text-center" style={{ color: theme.colors.textMuted }}>
+   544→                  Booked
+   545→                </TableHead>
+   546→              </TableRow>
+   547→            </TableHeader>
+   548→            <TableBody>
+   549→              {positions.map((pos) => (
+   550→                <TableRow
+   551→                  key={pos.symbol + pos.direction}
+   552→                  className="hover:brightness-110 transition-colors"
+   553→                  style={{ borderColor: theme.colors.border }}
+   554→                >
+   555→                  <TableCell
+   556→                    className="text-xs font-medium py-2.5"
+   557→                    style={{ color: theme.colors.textPrimary }}
+   558→                  >
+   559→                    {pos.symbol}
+   560→                  </TableCell>
+   561→                  <TableCell className="text-center py-2.5">
+   562→                    <Badge
+   563→                      className="text-[10px] font-bold border-0 px-1.5 py-0"
+   564→                      style={{
+   565→                        backgroundColor:
+   566→                          pos.direction === 'BUY'
+   567→                            ? `${theme.colors.profit}20`
+   568→                            : `${theme.colors.loss}20`,
+   569→                        color:
+   570→                          pos.direction === 'BUY'
+   571→                            ? theme.colors.profit
+   572→                            : theme.colors.loss,
+   573→                      }}
+   574→                    >
+   575→                      {pos.direction}
+   576→                    </Badge>
+   577→                  </TableCell>
+   578→                  <TableCell
+   579→                    className="text-xs text-right tabular-nums py-2.5"
+   580→                    style={{ color: theme.colors.textMuted }}
+   581→                  >
+   582→                    {pos.entry.toFixed(2)}
+   583→                  </TableCell>
+   584→                  <TableCell
+   585→                    className="text-xs text-right tabular-nums py-2.5"
+   586→                    style={{ color: theme.colors.textPrimary }}
+   587→                  >
+   588→                    {pos.current.toFixed(2)}
+   589→                  </TableCell>
+   590→                  <TableCell
+   591→                    className="text-xs text-right tabular-nums py-2.5"
+   592→                    style={{ color: theme.colors.textMuted }}
+   593→                  >
+   594→                    {pos.qty}
+   595→                  </TableCell>
+   596→                  <TableCell
+   597→                    className="text-xs text-right tabular-nums font-medium py-2.5"
+   598→                    style={{ color: pnlColor(pos.pnl) }}
+   599→                  >
+   600→                    {formatINR(pos.pnl, true)}
+   601→                  </TableCell>
+   602→                  <TableCell
+   603→                    className="text-xs text-center tabular-nums py-2.5"
+   604→                    style={{ color: theme.colors.textMuted }}
+   605→                  >
+   606→                    {pos.bookedLevels}/{pos.qty}
+   607→                  </TableCell>
+   608→                </TableRow>
+   609→              ))}
+   610→            </TableBody>
+   611→          </Table>
+   612→        </ScrollArea>
+   613→      </CardContent>
+   614→    </PanelCard>
+   615→  );
+   616→}
+   617→
+   618→// ─────────────────────────────────────────────
+   619→// Section 2 — Engine Status Card
+   620→// ─────────────────────────────────────────────
+   621→
+   622→function EngineStatusCard() {
+   623→  const engine = useEngine();
+   624→  const engineData = engine.data as Record<string, unknown> | undefined;
+   625→
+   626→  const status = (engineData?.status as string) ?? 'stopped';
+   627→  const mode = (engineData?.mode as string) ?? 'paper';
+   628→  const broker = (engineData?.broker as string) ?? 'Zerodha';
+   629→
+   630→  const isRunning = status === 'running';
+   631→  const isPaused = status === 'paused';
+   632→
+   633→  const statusColor = isRunning
+   634→    ? theme.colors.profit
+   635→    : isPaused
+   636→      ? theme.colors.warning
+   637→      : theme.colors.loss;
+   638→
+   639→  const statusLabel = isRunning ? 'Running' : isPaused ? 'Paused' : 'Stopped';
+   640→
+   641→  return (
+   642→    <PanelCard>
+   643→      <PanelHeader icon={Activity} title="Engine Status" />
+   644→      <CardContent className="px-4 pb-4 pt-0 space-y-3">
+   645→        <div className="flex items-center justify-between">
+   646→          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   647→            Status
+   648→          </span>
+   649→          <Badge
+   650→            className="text-[10px] font-semibold border-0 gap-1.5"
+   651→            style={{
+   652→              backgroundColor: `${statusColor}20`,
+   653→              color: statusColor,
+   654→            }}
+   655→          >
+   656→            <span
+   657→              className="inline-block h-1.5 w-1.5 rounded-full"
+   658→              style={{ backgroundColor: statusColor }}
+   659→            />
+   660→            {statusLabel}
+   661→          </Badge>
+   662→        </div>
+   663→        <Separator className="opacity-50" />
+   664→        <div className="flex items-center justify-between">
+   665→          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   666→            Mode
+   667→          </span>
+   668→          <Badge
+   669→            className="text-[10px] font-semibold border-0"
+   670→            style={{
+   671→              backgroundColor:
+   672→                mode === 'paper'
+   673→                  ? `${theme.colors.warning}20`
+   674→                  : `${theme.colors.loss}20`,
+   675→              color:
+   676→                mode === 'paper' ? theme.colors.warning : theme.colors.loss,
+   677→            }}
+   678→          >
+   679→            {mode === 'paper' ? 'Paper' : 'Live'}
+   680→          </Badge>
+   681→        </div>
+   682→        <Separator className="opacity-50" />
+   683→        <div className="flex items-center justify-between">
+   684→          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   685→            Broker
+   686→          </span>
+   687→          <span className="text-xs font-medium" style={{ color: theme.colors.textPrimary }}>
+   688→            {broker}
+   689→          </span>
+   690→        </div>
+   691→        <Separator className="opacity-50" />
+   692→        <div className="flex gap-2 pt-1">
+   693→          <Button
+   694→            size="sm"
+   695→            disabled={isRunning || engine.isStarting}
+   696→            onClick={() => engine.start()}
+   697→            className="flex-1 h-8 text-xs font-medium transition-all"
+   698→            style={{
+   699→              backgroundColor: isRunning ? theme.colors.surfaceActive : theme.colors.profit,
+   700→              color: isRunning ? theme.colors.textDisabled : theme.colors.background,
+   701→            }}
+   702→          >
+   703→            {engine.isStarting ? (
+   704→              <span className="flex items-center gap-1">
+   705→                <Activity size={12} className="animate-spin" />
+   706→                Starting…
+   707→              </span>
+   708→            ) : (
+   709→              <span className="flex items-center gap-1">
+   710→                <Play size={12} />
+   711→                Start
+   712→              </span>
+   713→            )}
+   714→          </Button>
+   715→          <Button
+   716→            size="sm"
+   717→            disabled={!isRunning || engine.isStopping}
+   718→            onClick={() => engine.stop()}
+   719→            className="flex-1 h-8 text-xs font-medium transition-all"
+   720→            style={{
+   721→              backgroundColor: !isRunning ? theme.colors.surfaceActive : theme.colors.loss,
+   722→              color: !isRunning ? theme.colors.textDisabled : '#ffffff',
+   723→            }}
+   724→          >
+   725→            {engine.isStopping ? (
+   726→              <span className="flex items-center gap-1">
+   727→                <Activity size={12} className="animate-spin" />
+   728→                Stopping…
+   729→              </span>
+   730→            ) : (
+   731→              <span className="flex items-center gap-1">
+   732→                <Square size={12} />
+   733→                Stop
+   734→              </span>
+   735→            )}
+   736→          </Button>
+   737→        </div>
+   738→      </CardContent>
+   739→    </PanelCard>
+   740→  );
+   741→}
+   742→
+   743→// ─────────────────────────────────────────────
+   744→// Section 2 — Market Regime Card
+   745→// ─────────────────────────────────────────────
+   746→
+   747→function MarketRegimeCard({ data }: { data: DashboardData }) {
+   748→  const regime = data.regime ?? 'sideways';
+   749→  const confidence = data.regimeConfidence ?? 72;
+   750→  const active = data.activeStrategies ?? ['Momentum Breakout', 'VWAP Bounce'];
+   751→  const paused = data.pausedStrategies ?? ['Mean Reversion'];
+   752→
+   753→  const color = regimeColors[regime] ?? theme.colors.sideways;
+   754→  const label = regimeLabels[regime] ?? regime.charAt(0).toUpperCase() + regime.slice(1);
+   755→
+   756→  return (
+   757→    <PanelCard>
+   758→      <PanelHeader icon={TrendingUpIcon} title="Market Regime" />
+   759→      <CardContent className="px-4 pb-4 pt-0 space-y-3">
+   760→        <div className="flex items-center justify-between">
+   761→          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   762→            Current Regime
+   763→          </span>
+   764→          <Badge
+   765→            className="text-[10px] font-semibold border-0"
+   766→            style={{ backgroundColor: `${color}20`, color }}
+   767→          >
+   768→            {label}
+   769→          </Badge>
+   770→        </div>
+   771→        <Separator className="opacity-50" />
+   772→        <div className="flex items-center justify-between">
+   773→          <span className="text-xs" style={{ color: theme.colors.textMuted }}>
+   774→            Confidence
+   775→          </span>
+   776→          <span className="text-xs font-medium tabular-nums" style={{ color }}>
+   777→            {confidence.toFixed(0)}%
+   778→          </span>
+   779→        </div>
+   780→        <div className="w-full">
+   781→          <div
+   782→            className="h-1 w-full rounded-full overflow-hidden"
+   783→            style={{ backgroundColor: theme.colors.surfaceActive }}
+   784→          >
+   785→            <div
+   786→              className="h-full rounded-full transition-all duration-500"
+   787→              style={{ width: `${confidence}%`, backgroundColor: color }}
+   788→            />
+   789→          </div>
+   790→        </div>
+   791→        <Separator className="opacity-50" />
+   792→        <div>
+   793→          <p className="text-xs mb-1.5" style={{ color: theme.colors.textMuted }}>
+   794→            Active Strategies ({active.length})
+   795→          </p>
+   796→          <div className="flex flex-wrap gap-1">
+   797→            {active.map((s) => (
+   798→              <Badge
+   799→                key={s}
+   800→                className="text-[10px] font-medium border-0"
+   801→                style={{
+   802→                  backgroundColor: `${theme.colors.profit}15`,
+   803→                  color: theme.colors.profit,
+   804→                }}
+   805→              >
+   806→                {s}
+   807→              </Badge>
+   808→            ))}
+   809→          </div>
+   810→        </div>
+   811→        <div>
+   812→          <p className="text-xs mb-1.5" style={{ color: theme.colors.textMuted }}>
+   813→            Paused Strategies ({paused.length})
+   814→          </p>
+   815→          <div className="flex flex-wrap gap-1">
+   816→            {paused.length === 0 ? (
+   817→              <span className="text-xs" style={{ color: theme.colors.textDisabled }}>
+   818→                None
+   819→              </span>
+   820→            ) : (
+   821→              paused.map((s) => (
+   822→                <Badge
+   823→                  key={s}
+   824→                  className="text-[10px] font-medium border-0"
+   825→                  style={{
+   826→                    backgroundColor: `${theme.colors.textDisabled}15`,
+   827→                    color: theme.colors.textDisabled,
+   828→                  }}
+   829→                >
+   830→                  {s}
+   831→                </Badge>
+   832→              ))
+   833→            )}
+   834→          </div>
+   835→        </div>
+   836→      </CardContent>
+   837→    </PanelCard>
+   838→  );
+   839→}
+   840→
+   841→// ─────────────────────────────────────────────
+   842→// Section 2 — Quick Signals Card
+   843→// ─────────────────────────────────────────────
+   844→
+   845→function QuickSignalsCard({ data }: { data: DashboardData }) {
+   846→  const generated = data.signalsGenerated ?? 12;
+   847→  const confirmed = data.signalsConfirmed ?? 7;
+   848→  const skipped = data.signalsSkipped ?? 3;
+   849→
+   850→  const items = [
+   851→    {
+   852→      label: 'Generated',
+   853→      value: generated,
+   854→      icon: Zap,
+   855→      color: theme.colors.accent,
+   856→    },
+   857→    {
+   858→      label: 'Confirmed',
+   859→      value: confirmed,
+   860→      icon: CircleCheck,
+   861→      color: theme.colors.profit,
+   862→    },
+   863→    {
+   864→      label: 'Skipped',
+   865→      value: skipped,
+   866→      icon: CircleX,
+   867→      color: theme.colors.warning,
+   868→    },
+   869→  ];
+   870→
+   871→  return (
+   872→    <PanelCard>
+   873→      <PanelHeader icon={Radio} title="Quick Signals" />
+   874→      <CardContent className="px-4 pb-4 pt-0">
+   875→        <div className="grid grid-cols-3 gap-3">
+   876→          {items.map((item) => (
+   877→            <div
+   878→              key={item.label}
+   879→              className="flex flex-col items-center gap-1 rounded-lg p-3"
+   880→              style={{ backgroundColor: theme.colors.surfaceActive }}
+   881→            >
+   882→              <item.icon size={14} style={{ color: item.color }} />
+   883→              <span
+   884→                className="text-lg font-bold tabular-nums"
+   885→                style={{ color: item.color }}
+   886→              >
+   887→                {item.value}
+   888→              </span>
+   889→              <span className="text-[10px]" style={{ color: theme.colors.textMuted }}>
+   890→                {item.label}
+   891→              </span>
+   892→            </div>
+   893→          ))}
+   894→        </div>
+   895→      </CardContent>
+   896→    </PanelCard>
+   897→  );
+   898→}
+   899→
+   900→// ─────────────────────────────────────────────
+   901→// Section 2 — Market Timer Card
+   902→// ─────────────────────────────────────────────
+   903→
+   904→function MarketTimerCard() {
+   905→  const [now, setNow] = useState(new Date());
+   906→
+   907→  useEffect(() => {
+   908→    const interval = setInterval(() => setNow(new Date()), 1000);
+   909→    return () => clearInterval(interval);
+   910→  }, []);
+   911→
+   912→  // NSE closes at 15:30 IST
+   913→  const istHours = now.getUTCHours() + 5; // Approximate IST (ignoring 30min for simplicity in display)
+   914→  const istMinutes = now.getUTCMinutes() + 30;
+   915→  const totalIstMinutes = istHours * 60 + istMinutes;
+   916→  const closeMinutes = 15 * 60 + 30; // 15:30
+   917→  const openMinutes = 9 * 60 + 15; // 09:15
+   918→
+   919→  let timeToClose = closeMinutes - totalIstMinutes;
+   920→  let marketStatus: 'open' | 'closed' | 'pre-market' = 'closed';
+   921→
+   922→  if (totalIstMinutes >= openMinutes && totalIstMinutes <= closeMinutes) {
+   923→    marketStatus = 'open';
+   924→  } else if (totalIstMinutes < openMinutes) {
+   925→    marketStatus = 'pre-market';
+   926→    timeToClose = openMinutes - totalIstMinutes;
+   927→  }
+   928→
+   929→  const hours = Math.floor(Math.max(timeToClose, 0) / 60);
+   930→  const minutes = Math.max(timeToClose, 0) % 60;
+   931→
+   932→  const istTimeString = now.toLocaleTimeString('en-IN', {
+   933→    timeZone: 'Asia/Kolkata',
+   934→    hour: '2-digit',
+   935→    minute: '2-digit',
+   936→    second: '2-digit',
+   937→    hour12: false,
+   938→  });
+   939→
+   940→  return (
+   941→    <PanelCard>
+   942→      <CardContent className="p-4">
+   943→        <div className="flex items-center gap-3">
+   944→          <div
+   945→            className="flex items-center justify-center rounded-lg p-2.5 shrink-0"
+   946→            style={{ backgroundColor: `${theme.colors.accent}15` }}
+   947→          >
+   948→            <Clock size={18} style={{ color: theme.colors.accent }} />
+   949→          </div>
+   950→          <div className="flex-1 min-w-0">
+   951→            <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+   952→              {marketStatus === 'open'
+   953→                ? 'Market Closes In'
+   954→                : marketStatus === 'pre-market'
+   955→                  ? 'Market Opens In'
+   956→                  : 'Market Closed'}
+   957→            </p>
+   958→            <p
+   959→              className="text-lg font-bold tabular-nums"
+   960→              style={{ color: theme.colors.textPrimary }}
+   961→            >
+   962→              {marketStatus === 'closed'
+   963→                ? '—'
+   964→                : `${hours}h ${String(minutes).padStart(2, '0')}m`}
+   965→            </p>
+   966→          </div>
+   967→          <div className="text-right">
+   968→            <p className="text-[10px]" style={{ color: theme.colors.textDisabled }}>
+   969→              IST
+   970→            </p>
+   971→            <p
+   972→              className="text-xs font-medium tabular-nums"
+   973→              style={{ color: theme.colors.textMuted }}
+   974→            >
+   975→              {istTimeString}
+   976→            </p>
+   977→          </div>
+   978→        </div>
+   979→      </CardContent>
+   980→    </PanelCard>
+   981→  );
+   982→}
+   983→
+   984→// ─────────────────────────────────────────────
+   985→// Section 3 — Recent Trades Card
+   986→// ─────────────────────────────────────────────
+   987→
+   988→function RecentTradesCard({ trades }: { trades: TradeRow[] }) {
+   989→  if (!trades.length) {
+   990→    return (
+   991→      <PanelCard>
+   992→        <PanelHeader icon={Target} title="Recent Trades" />
+   993→        <CardContent className="px-4 pb-4 pt-0">
+   994→          <div className="flex flex-col items-center justify-center py-8 text-center">
+   995→            <Target
+   996→              size={28}
+   997→              className="mb-2"
+   998→              style={{ color: theme.colors.textDisabled }}
+   999→            />
+  1000→            <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+  1001→              No trades today
+  1002→            </p>
+  1003→            <p className="text-xs mt-1" style={{ color: theme.colors.textDisabled }}>
+  1004→              Trades will appear here once the engine executes orders
+  1005→            </p>
+  1006→          </div>
+  1007→        </CardContent>
+  1008→      </PanelCard>
+  1009→    );
+  1010→  }
+  1011→
+  1012→  return (
+  1013→    <PanelCard>
+  1014→      <PanelHeader
+  1015→        icon={Target}
+  1016→        title="Recent Trades"
+  1017→        badge={
+  1018→          <span className="text-xs font-medium flex items-center gap-1 cursor-pointer transition-colors hover:brightness-125"
+  1019→            style={{ color: theme.colors.accent }}
+  1020→          >
+  1021→            View All
+  1022→            <ArrowRight size={12} />
+  1023→          </span>
+  1024→        }
+  1025→      />
+  1026→      <CardContent className="px-4 pb-4 pt-0">
+  1027→        <Table>
+  1028→          <TableHeader>
+  1029→            <TableRow style={{ borderColor: theme.colors.border }}>
+  1030→              <TableHead className="text-[11px] font-medium h-8" style={{ color: theme.colors.textMuted }}>
+  1031→                Time
+  1032→              </TableHead>
+  1033→              <TableHead className="text-[11px] font-medium h-8" style={{ color: theme.colors.textMuted }}>
+  1034→                Symbol
+  1035→              </TableHead>
+  1036→              <TableHead className="text-[11px] font-medium h-8 text-center" style={{ color: theme.colors.textMuted }}>
+  1037→                Direction
+  1038→              </TableHead>
+  1039→              <TableHead className="text-[11px] font-medium h-8 text-right" style={{ color: theme.colors.textMuted }}>
+  1040→                P&L
+  1041→              </TableHead>
+  1042→            </TableRow>
+  1043→          </TableHeader>
+  1044→          <TableBody>
+  1045→            {trades.slice(0, 5).map((trade, i) => (
+  1046→              <TableRow
+  1047→                key={`${trade.time}-${trade.symbol}-${i}`}
+  1048→                className="hover:brightness-110 transition-colors"
+  1049→                style={{ borderColor: theme.colors.border }}
+  1050→              >
+  1051→                <TableCell
+  1052→                  className="text-xs tabular-nums py-2.5"
+  1053→                  style={{ color: theme.colors.textMuted }}
+  1054→                >
+  1055→                  {trade.time}
+  1056→                </TableCell>
+  1057→                <TableCell
+  1058→                  className="text-xs font-medium py-2.5"
+  1059→                  style={{ color: theme.colors.textPrimary }}
+  1060→                >
+  1061→                  {trade.symbol}
+  1062→                </TableCell>
+  1063→                <TableCell className="text-center py-2.5">
+  1064→                  <Badge
+  1065→                    className="text-[10px] font-bold border-0 px-1.5 py-0"
+  1066→                    style={{
+  1067→                      backgroundColor:
+  1068→                        trade.direction === 'BUY'
+  1069→                          ? `${theme.colors.profit}20`
+  1070→                          : `${theme.colors.loss}20`,
+  1071→                      color:
+  1072→                        trade.direction === 'BUY'
+  1073→                          ? theme.colors.profit
+  1074→                          : theme.colors.loss,
+  1075→                    }}
+  1076→                  >
+  1077→                    {trade.direction}
+  1078→                  </Badge>
+  1079→                </TableCell>
+  1080→                <TableCell
+  1081→                  className="text-xs text-right tabular-nums font-medium py-2.5"
+  1082→                  style={{ color: pnlColor(trade.pnl) }}
+  1083→                >
+  1084→                  {formatINR(trade.pnl, true)}
+  1085→                </TableCell>
+  1086→              </TableRow>
+  1087→            ))}
+  1088→          </TableBody>
+  1089→        </Table>
+  1090→      </CardContent>
+  1091→    </PanelCard>
+  1092→  );
+  1093→}
+  1094→
+  1095→// ─────────────────────────────────────────────
+  1096→// Dashboard Skeletons
+  1097→// ─────────────────────────────────────────────
+  1098→
+  1099→function DashboardSkeleton() {
+  1100→  return (
+  1101→    <div className="space-y-4">
+  1102→      {/* Top stats skeleton */}
+  1103→      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1104→        {Array.from({ length: 4 }).map((_, i) => (
+  1105→          <StatCardSkeleton key={i} />
+  1106→        ))}
+  1107→      </div>
+  1108→      {/* Main content skeleton */}
+  1109→      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+  1110→        <div className="lg:col-span-3 space-y-4">
+  1111→          <Card style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+  1112→            <CardContent className="p-4 space-y-4">
+  1113→              {Array.from({ length: 5 }).map((_, i) => (
+  1114→                <div key={i} className="flex justify-between">
+  1115→                  <Skeleton className="h-3 w-28" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1116→                  <Skeleton className="h-3 w-32" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1117→                </div>
+  1118→              ))}
+  1119→            </CardContent>
+  1120→          </Card>
+  1121→          <Card style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+  1122→            <CardContent className="p-4 space-y-3">
+  1123→              {Array.from({ length: 3 }).map((_, i) => (
+  1124→                <Skeleton key={i} className="h-10 w-full rounded" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1125→              ))}
+  1126→            </CardContent>
+  1127→          </Card>
+  1128→        </div>
+  1129→        <div className="lg:col-span-2 space-y-4">
+  1130→          {Array.from({ length: 4 }).map((_, i) => (
+  1131→            <Card key={i} style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+  1132→              <CardContent className="p-4 space-y-3">
+  1133→                <Skeleton className="h-3 w-24" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1134→                {Array.from({ length: 3 }).map((_, j) => (
+  1135→                  <div key={j} className="flex justify-between">
+  1136→                    <Skeleton className="h-3 w-20" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1137→                    <Skeleton className="h-3 w-16" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1138→                  </div>
+  1139→                ))}
+  1140→              </CardContent>
+  1141→            </Card>
+  1142→          ))}
+  1143→        </div>
+  1144→      </div>
+  1145→      {/* Bottom skeleton */}
+  1146→      <Card style={{ backgroundColor: theme.colors.surface, border: `1px solid ${theme.colors.border}` }}>
+  1147→        <CardContent className="p-4 space-y-3">
+  1148→          <Skeleton className="h-3 w-28" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1149→          {Array.from({ length: 3 }).map((_, i) => (
+  1150→            <Skeleton key={i} className="h-10 w-full rounded" style={{ backgroundColor: theme.colors.surfaceActive }} />
+  1151→          ))}
+  1152→        </CardContent>
+  1153→      </Card>
+  1154→    </div>
+  1155→  );
+  1156→}
+  1157→
+  1158→// ─────────────────────────────────────────────
+  1159→// Default / Fallback Data
+  1160→// ─────────────────────────────────────────────
+  1161→
+  1162→const FALLBACK_DATA: DashboardData = {
+  1163→  todayPnl: 2340,
+  1164→  yesterdayPnl: 1850,
+  1165→  todayPnlPercent: 2.34,
+  1166→  activePositions: 3,
+  1167→  longPositions: 2,
+  1168→  shortPositions: 1,
+  1169→  dayWinRate: 71.4,
+  1170→  dayTrades: 7,
+  1171→  dayWins: 5,
+  1172→  dayLosses: 2,
+  1173→  riskUsed: 62.3,
+  1174→  totalCapital: 100000,
+  1175→  capitalUsed: 65000,
+  1176→  maxCapital: 90000,
+  1177→  freeCapital: 35000,
+  1178→  dayPnlAmount: 2340,
+  1179→  totalPnlInception: 18420,
+  1180→  positions: [
+  1181→    { symbol: 'NIFTY 24500 CE', direction: 'BUY', entry: 245.50, current: 268.30, qty: 50, pnl: 1140, bookedLevels: 1 },
+  1182→    { symbol: 'BANKNIFTY 52000 PE', direction: 'SELL', entry: 180.00, current: 195.60, qty: 25, pnl: -390, bookedLevels: 0 },
+  1183→    { symbol: 'RELIANCE 2950 CE', direction: 'BUY', entry: 42.75, current: 48.90, qty: 100, pnl: 615, bookedLevels: 2 },
+  1184→  ],
+  1185→  recentTrades: [
+  1186→    { time: '14:22:10', symbol: 'NIFTY 24500 CE', direction: 'BUY', pnl: 890 },
+  1187→    { time: '13:45:32', symbol: 'HDFCBANK 1680 PE', direction: 'SELL', pnl: -420 },
+  1188→    { time: '12:18:05', symbol: 'RELIANCE 2950 CE', direction: 'BUY', pnl: 1250 },
+  1189→    { time: '11:32:48', symbol: 'NIFTY 24400 PE', direction: 'SELL', pnl: 620 },
+  1190→    { time: '10:55:19', symbol: 'TCS 4200 CE', direction: 'BUY', pnl: -180 },
+  1191→  ],
+  1192→  signalsGenerated: 12,
+  1193→  signalsConfirmed: 7,
+  1194→  signalsSkipped: 3,
+  1195→  regime: 'bull',
+  1196→  regimeConfidence: 72,
+  1197→  activeStrategies: ['Momentum Breakout', 'VWAP Bounce'],
+  1198→  pausedStrategies: ['Mean Reversion'],
+  1199→};
+  1200→
+  1201→// ─────────────────────────────────────────────
+  1202→// Main Dashboard Page
+  1203→// ─────────────────────────────────────────────
+  1204→
+  1205→export default function DashboardPage() {
+  1206→  const { data: dashboardData, isLoading: dashLoading } = useDashboard();
+  1207→
+  1208→  const data: DashboardData = {
+  1209→    ...FALLBACK_DATA,
+  1210→    ...(typeof dashboardData === 'object' && dashboardData !== null ? dashboardData as Partial<DashboardData> : {}),
+  1211→  };
+  1212→
+  1213→  const positions: PositionRow[] = data.positions ?? [];
+  1214→  const recentTrades: TradeRow[] = data.recentTrades ?? [];
+  1215→
+  1216→  if (dashLoading) {
+  1217→    return <DashboardSkeleton />;
+  1218→  }
+  1219→
+  1220→  return (
+  1221→    <motion.div
+  1222→      initial={{ opacity: 0, y: 8 }}
+  1223→      animate={{ opacity: 1, y: 0 }}
+  1224→      transition={{ duration: 0.35, ease: 'easeOut' }}
+  1225→      className="space-y-4"
+  1226→    >
+  1227→      {/* ── Section 1: Top Stats Row ── */}
+  1228→      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1229→        <StatCardPnL data={data} />
+  1230→        <StatCardPositions data={data} />
+  1231→        <StatCardWinRate data={data} />
+  1232→        <StatCardRisk data={data} />
+  1233→      </section>
+  1234→
+  1235→      {/* ── Section 2: Main Content ── */}
+  1236→      <section className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+  1237→        {/* Left Column (~60%) */}
+  1238→        <div className="lg:col-span-3 space-y-4">
+  1239→          <CapitalPanel data={data} />
+  1240→          <OpenPositionsTable positions={positions} />
+  1241→        </div>
+  1242→
+  1243→        {/* Right Column (~40%) */}
+  1244→        <div className="lg:col-span-2 space-y-4">
+  1245→          <EngineStatusCard />
+  1246→          <MarketRegimeCard data={data} />
+  1247→          <QuickSignalsCard data={data} />
+  1248→          <MarketTimerCard />
+  1249→        </div>
+  1250→      </section>
+  1251→
+  1252→      {/* ── Section 3: Bottom Row ── */}
+  1253→      <section>
+  1254→        <RecentTradesCard trades={recentTrades} />
+  1255→      </section>
+  1256→    </motion.div>
+  1257→  );
+  1258→}
+  1259→
