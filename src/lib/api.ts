@@ -11,7 +11,7 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15_000,
+  timeout: typeof window !== 'undefined' && localStorage.getItem('ultrabot_token') === 'demo-token' ? 2_000 : 15_000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -41,6 +41,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    // In demo mode (no backend), don't redirect on 401 or network errors
+    if (typeof window !== 'undefined') {
+      const isDemo = localStorage.getItem('ultrabot_token') === 'demo-token';
+      if (isDemo) return Promise.reject(error);
+    }
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('ultrabot_token');

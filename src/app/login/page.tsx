@@ -3,7 +3,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Bot, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Bot, Loader2, MonitorPlay } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,14 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Demo mode — skip backend, go straight to app with mock data
+  const handleDemoLogin = () => {
+    localStorage.setItem('ultrabot_token', 'demo-token');
+    localStorage.setItem('ultrabot_username', 'demo');
+    storeLogin('demo-token', 'demo');
+    router.push('/');
+  };
 
   // Pre-fill from saved credentials if remembered
   useEffect(() => {
@@ -217,6 +225,36 @@ export default function LoginPage() {
               ) : (
                 'Sign In'
               )}
+            </Button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px" style={{ backgroundColor: theme.colors.border }} />
+              <span className="text-xs" style={{ color: theme.colors.textDisabled }}>or</span>
+              <div className="flex-1 h-px" style={{ backgroundColor: theme.colors.border }} />
+            </div>
+
+            {/* Demo Mode button */}
+            <Button
+              type="button"
+              onClick={handleDemoLogin}
+              className="w-full h-11 text-sm font-semibold transition-all duration-200 hover:brightness-110"
+              style={{
+                backgroundColor: 'transparent',
+                border: `1px solid ${theme.colors.border}`,
+                color: theme.colors.textMuted,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = theme.colors.accent;
+                e.currentTarget.style.color = theme.colors.accent;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = theme.colors.border;
+                e.currentTarget.style.color = theme.colors.textMuted;
+              }}
+            >
+              <MonitorPlay size={16} className="mr-2" />
+              Demo Mode — Explore with Mock Data
             </Button>
           </form>
         </div>
