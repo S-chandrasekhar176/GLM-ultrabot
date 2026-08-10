@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Zap,
@@ -72,6 +72,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggle, setMobileOpen } = useSidebar();
   const logout = useAuth((s) => s.logout);
+  const router = useRouter();
 
   const isActive = (path: string) => {
     if (path === '/') return pathname === '/';
@@ -136,7 +137,10 @@ export default function Sidebar() {
             const navButton = (
               <button
                 key={item.path}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => {
+                  setMobileOpen(false);
+                  router.push(item.path);
+                }}
                 className={cn(
                   'flex items-center w-full rounded-md transition-colors duration-150',
                   collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2',
