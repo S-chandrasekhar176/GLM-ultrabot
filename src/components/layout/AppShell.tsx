@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { useSidebar } from '@/lib/store';
+import { useSidebar, useStore } from '@/lib/store';
 import { theme } from '@/styles/theme';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -14,7 +14,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Close mobile sidebar on route change
   useEffect(() => {
-    useSidebar.getState().setMobileOpen(false);
+    useStore.getState().sidebar.setMobileOpen(false);
   }, [pathname]);
 
   // Skip shell for login page
