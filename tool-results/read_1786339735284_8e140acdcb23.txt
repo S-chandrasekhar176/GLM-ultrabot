@@ -1,0 +1,702 @@
+   500→   500→  direction       TEXT                 (BUY / SELL)
+   501→   501→  strategy        TEXT                 (ORB, VWAP...)
+   502→   502→  entry_price     REAL
+   503→   503→  exit_price      REAL
+   504→   504→  sl_price        REAL
+   505→   505→  target_price    REAL
+   506→   506→  quantity        INTEGER
+   507→   507→  entry_time      DATETIME
+   508→   508→  exit_time       DATETIME
+   509→   509→  status          TEXT                 (open / partial_closed / closed / sl_hit / target_hit)
+   510→   510→  gross_pnl       REAL
+   511→   511→  fees            REAL                 (STT + GST + Exchange + Brokerage)
+   512→   512→  net_pnl         REAL
+   513→   513→  kronos_score    REAL                 (0-1)
+   514→   514→  market_regime   TEXT                 (bull / bear / sideways / volatile)
+   515→   515→  partial_bookings TEXT               (JSON - levels booked)
+   516→   516→  error_log       TEXT                 (JSON - any errors during this trade)
+   517→   517→
+   518→   518→
+   519→   519→TABLE: signals
+   520→   520→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   521→   521→  id              TEXT PRIMARY KEY
+   522→   522→  session_id      TEXT FK → sessions
+   523→   523→  symbol          TEXT
+   524→   524→  strategy        TEXT
+   525→   525→  direction       TEXT
+   526→   526→  entry_price     REAL
+   527→   527→  sl_price        REAL
+   528→   528→  target_price    REAL
+   529→   529→  confidence      REAL                 (Kronos score 0-1)
+   530→   530→  risk_reward     REAL
+   531→   531→  signal_time     DATETIME
+   532→   532→  status          TEXT                 (pending / confirmed / skipped / expired / rejected)
+   533→   533→  rejection_reason TEXT               (which gate failed, why)
+   534→   534→  confirmation_time DATETIME
+   535→   535→  expiry_time     DATETIME
+   536→   536→
+   537→   537→
+   538→   538→TABLE: positions
+   539→   539→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   540→   540→  id              TEXT PRIMARY KEY
+   541→   541→  trade_id        TEXT FK → trades
+   542→   542→  symbol          TEXT
+   543→   543→  direction       TEXT
+   544→   544→  entry_price     REAL
+   545→   545→  current_price   REAL
+   546→   546→  sl_price        REAL                 (moves with trailing)
+   547→   547→  target_price    REAL
+   548→   548→  total_quantity  INTEGER
+   549→   549→  remaining_qty   INTEGER
+   550→   550→  booked_levels   TEXT                 (JSON - which partial levels booked)
+   551→   551→  unrealized_pnl  REAL
+   552→   552→  market_regime   TEXT
+   553→   553→  last_updated    DATETIME
+   554→   554→
+   555→   555→
+   556→   556→TABLE: watchlist
+   557→   557→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   558→   558→  id              TEXT PRIMARY KEY
+   559→   559→  symbol          TEXT
+   560→   560→  source          TEXT                 (news / technical / kronos / manual)
+   561→   561→  reason          TEXT                 (why it's on watchlist)
+   562→   562→  score           REAL                 (hotness score 0-1)
+   563→   563→  added_at        DATETIME
+   564→   564→  expires_at      DATETIME
+   565→   565→  is_active       BOOLEAN
+   566→   566→
+   567→   567→
+   568→   568→TABLE: strategy_performance
+   569→   569→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   570→   570→  id              TEXT PRIMARY KEY
+   571→   571→  strategy_name   TEXT
+   572→   572→  market_regime   TEXT
+   573→   573→  total_signals   INTEGER
+   574→   574→  total_trades    INTEGER
+   575→   575→  wins            INTEGER
+   576→   576→  losses          INTEGER
+   577→   577→  win_rate        REAL
+   578→   578→  avg_pnl         REAL
+   579→   579→  total_pnl       REAL
+   580→   580→  avg_hold_time   TEXT
+   581→   581→  period_start    DATE
+   582→   582→  period_end      DATE
+   583→   583→
+   584→   584→
+   585→   585→TABLE: risk_events
+   586→   586→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   587→   587→  id              TEXT PRIMARY KEY
+   588→   588→  event_type      TEXT                 (gate_rejection / daily_limit / cooloff / price_mismatch)
+   589→   589→  gate_number     INTEGER              (1-13, if gate rejection)
+   590→   590→  details         TEXT                 (JSON - full context)
+   591→   591→  signal_id       TEXT FK → signals    (if related to a signal)
+   592→   592→  timestamp       DATETIME
+   593→   593→
+   594→   594→
+   595→   595→TABLE: broker_credentials
+   596→   596→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   597→   597→  id              TEXT PRIMARY KEY
+   598→   598→  broker_name     TEXT                 (angel_one / shoonya)
+   599→   599→  encrypted_data  BLOB                 (encrypted credentials)
+   600→   600→  is_connected    BOOLEAN
+   601→   601→  last_auth_time  DATETIME
+   602→   602→  token_expires   DATETIME
+   603→   603→  last_error      TEXT
+   604→   604→  updated_at      DATETIME
+   605→   605→
+   606→   606→
+   607→   607→TABLE: error_logs
+   608→   608→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   609→   609→  id              TEXT PRIMARY KEY
+   610→   610→  error_code      TEXT                 (ERR-2025-0115-0042)
+   611→   611→  error_type      TEXT                 (broker / feed / strategy / risk / engine)
+   612→   612→  severity        TEXT                 (critical / warning / info)
+   613→   613→  what_happened   TEXT                 (plain English)
+   614→   614→  why_happened    TEXT                 (plain English)
+   615→   615→  how_to_fix      TEXT                 (plain English)
+   616→   616→  context         TEXT                 (JSON - what was happening)
+   617→   617→  stack_trace     TEXT
+   618→   618→  auto_recovery   TEXT                 (attempted + result)
+   619→   619→  is_resolved     BOOLEAN
+   620→   620→  resolved_at     DATETIME
+   621→   621→  resolved_how    TEXT                 (auto / manual)
+   622→   622→  timestamp       DATETIME
+   623→   623→
+   624→   624→
+   625→   625→TABLE: backtest_runs
+   626→   626→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   627→   627→  id              TEXT PRIMARY KEY
+   628→   628→  strategy_name   TEXT
+   629→   629→  symbols         TEXT                 (JSON array)
+   630→   630→  start_date      DATE
+   631→   631→  end_date        DATE
+   632→   632→  timeframe       TEXT
+   633→   633→  initial_capital REAL
+   634→   634→  total_return    REAL
+   635→   635→  annualized_return REAL
+   636→   636→  max_drawdown    REAL
+   637→   637→  sharpe_ratio    REAL
+   638→   638→  sortino_ratio   REAL
+   639→   639→  win_rate        REAL
+   640→   640→  profit_factor   REAL
+   641→   641→  total_trades    INTEGER
+   642→   642→  total_fees      REAL
+   643→   643→  equity_curve    TEXT                 (JSON array)
+   644→   644→  monthly_returns TEXT                 (JSON)
+   645→   645→  trades_detail   TEXT                 (JSON - all trades)
+   646→   646→  risk_gate_stats TEXT                 (JSON)
+   647→   647→  run_at          DATETIME
+   648→   648→
+   649→   649→
+   650→   650→TABLE: daily_summary
+   651→   651→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   652→   652→  id              TEXT PRIMARY KEY
+   653→   653→  date            DATE
+   654→   654→  mode            TEXT
+   655→   655→  starting_capital REAL
+   656→   656→  ending_capital  REAL
+   657→   657→  day_pnl         REAL
+   658→   658→  day_pnl_pct     REAL
+   659→   659→  total_trades    INTEGER
+   660→   660→  wins            INTEGER
+   661→   661→  losses          INTEGER
+   662→   662→  win_rate        REAL
+   663→   663→  total_fees      REAL
+   664→   664→  max_drawdown    REAL
+   665→   665→  regime          TEXT
+   666→   666→  telegram_sent   BOOLEAN
+   667→   667→```
+   668→   668→
+   669→   669→---
+   670→   670→
+   671→   671→## 3.3 API Endpoints — Complete List
+   672→   672→
+   673→   673→```
+   674→   674→AUTHENTICATION
+   675→   675→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   676→   676→POST   /api/auth/login              { username, password } → { token }
+   677→   677→POST   /api/auth/logout             { token } → { ok }
+   678→   678→
+   679→   679→
+   680→   680→ENGINE
+   681→   681→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   682→   682→POST   /api/engine/start            { mode, broker, strategies[] } → { status }
+   683→   683→POST   /api/engine/stop             {} → { status }
+   684→   684→POST   /api/engine/pause            {} → { status }
+   685→   685→POST   /api/engine/resume           {} → { status }
+   686→   686→GET    /api/engine/status            → { status, mode, broker, uptime, positions_count, trades_count }
+   687→   687→
+   688→   688→
+   689→   689→DASHBOARD
+   690→   690→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   691→   691→GET    /api/dashboard                → { capital, positions, pnl_today, regime, active_strategies, watchlist_count, trades_today, risk_status }
+   692→   692→
+   693→   693→
+   694→   694→OPPORTUNITIES
+   695→   695→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   696→   696→GET    /api/opportunities            → { opportunities[] } (pending confirmation)
+   697→   697→POST   /api/opportunities/{id}/confirm  { segment: "eq"|"opt" } → { trade_id }
+   698→   698→POST   /api/opportunities/{id}/skip     { reason? } → { ok }
+   699→   699→POST   /api/opportunities/{id}/remind   { minutes } → { ok }
+   700→   700→
+   701→   701→
+   702→   702→TRADES
+   703→   703→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   704→   704→GET    /api/trades                   { status?, date?, strategy? } → { trades[] }
+   705→   705→GET    /api/trades/{id}              → { trade_detail }
+   706→   706→GET    /api/positions                 → { positions[] } (currently open)
+   707→   707→POST   /api/positions/{id}/close     { qty? } → { ok } (manual close)
+   708→   708→POST   /api/positions/{id}/modify-sl { new_sl } → { ok }
+   709→   709→POST   /api/positions/{id}/modify-target { new_target } → { ok }
+   710→   710→
+   711→   711→
+   712→   712→STRATEGIES
+   713→   713→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   714→   714→GET    /api/strategies               → { strategies[] } (all discovered)
+   715→   715→PUT    /api/strategies/{name}/toggle  { enabled } → { ok }
+   716→   716→PUT    /api/strategies/{name}/params  { params } → { ok }
+   717→   717→GET    /api/strategies/{name}/performance { regime? } → { stats }
+   718→   718→POST   /api/strategies/upload         { file } → { name, discovered }
+   719→   719→
+   720→   720→
+   721→   721→WATCHLIST
+   722→   722→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   723→   723→GET    /api/watchlist                 → { items[] }
+   724→   724→POST   /api/watchlist/add             { symbol, reason? } → { ok }
+   725→   725→DELETE  /api/watchlist/{symbol}       → { ok }
+   726→   726→GET    /api/watchlist/universe        → { fno_stocks[] } (all F&O stocks)
+   727→   727→POST   /api/watchlist/scan            → { hot_items[] } (force scan)
+   728→   728→
+   729→   729→
+   730→   730→RISK
+   731→   731→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   732→   732→GET    /api/risk/status               → { daily_pnl, daily_loss_limit, pct_used, daily_trades, max_daily_trades, consec_losses, capital_used }
+   733→   733→GET    /api/risk/gates                → { gates[] } (all 13 gate configs + last results)
+   734→   734→PUT    /api/risk/limits               { max_daily_loss, max_daily_trades, max_consec_losses, max_capital_pct } → { ok }
+   735→   735→GET    /api/risk/events               { date? } → { events[] }
+   736→   736→
+   737→   737→
+   738→   738→BROKERS
+   739→   739→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   740→   740→GET    /api/brokers                   → { brokers[] } (status of each)
+   741→   741→POST   /api/brokers/angel-one/credentials  { api_key, client_code, pin } → { ok }
+   742→   742→POST   /api/brokers/shoonya/credentials    { user_id, password, vendor_code } → { ok }
+   743→   743→POST   /api/brokers/angel-one/test         → { status, error? }
+   744→   744→POST   /api/brokers/shoonya/test           → { status, error? }
+   745→   745→POST   /api/brokers/angel-one/connect      → { status }
+   746→   746→POST   /api/brokers/shoonya/connect        → { status }
+   747→   747→PUT    /api/brokers/active             { broker, mode } → { ok }
+   748→   748→
+   749→   749→
+   750→   750→BACKTEST
+   751→   751→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   752→   752→POST   /api/backtest/run              { strategy, symbols[], start_date, end_date, timeframe, capital, include_fees } → { backtest_id, status }
+   753→   753→GET    /api/backtest/{id}/status      → { status, progress_pct }
+   754→   754→GET    /api/backtest/{id}/results     → { metrics, equity_curve, trades, risk_gate_stats }
+   755→   755→GET    /api/backtest/history          → { runs[] } (previous backtests)
+   756→   756→DELETE  /api/backtest/{id}            → { ok }
+   757→   757→
+   758→   758→
+   759→   759→NOTIFICATIONS
+   760→   760→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   761→   761→GET    /api/notifications/history     { limit? } → { notifications[] }
+   762→   762→PUT    /api/notifications/settings    { telegram_enabled, telegram_chat_id, alert_types[] } → { ok }
+   763→   763→POST   /api/notifications/test        → { ok } (send test telegram)
+   764→   764→
+   765→   765→
+   766→   766→SETTINGS
+   767→   767→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   768→   768→GET    /api/settings                  → { all_settings }
+   769→   769→PUT    /api/settings                  { partial_settings } → { ok }
+   770→   770→GET    /api/settings/capital          → { total, used, free, tradable }
+   771→   771→PUT    /api/settings/capital          { virtual_capital? } → { ok } (for paper mode)
+   772→   772→
+   773→   773→
+   774→   774→ERRORS
+   775→   775→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   776→   776→GET    /api/errors                    { severity?, resolved?, limit? } → { errors[] }
+   777→   777→GET    /api/errors/{id}               → { error_detail }
+   778→   778→PUT    /api/errors/{id}/resolve       { resolution_note } → { ok }
+   779→   779→GET    /api/errors/stats              → { by_type, by_severity, recurring }
+   780→   780→
+   781→   781→
+   782→   782→WEBSOCKET
+   783→   783→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   784→   784→WS     /ws                            → streams:
+   785→   785→                                      - live_price_updates
+   786→   786→                                      - new_opportunity
+   787→   787→                                      - trade_fill
+   788→   788→                                      - trade_exit
+   789→   789→                                      - partial_booking
+   790→   790→                                      - risk_event
+   791→   791→                                      - error_alert
+   792→   792→                                      - engine_status_change
+   793→   793→                                      - regime_change
+   794→   794→                                      - scan_complete
+   795→   795→```
+   796→   796→
+   797→   797→---
+   798→   798→
+   799→   799→## 3.4 Risk Gates — Detailed Specification
+   800→   800→
+   801→   801→```
+   802→   802→GATE 1: MAX OPEN POSITIONS
+   803→   803→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   804→   804→  Check:    current_open_positions >= max_positions
+   805→   805→  Default:  max_positions = 5
+   806→   806→  Action:   REJECT if limit reached
+   807→   807→  Config:   User can change max_positions
+   808→   808→
+   809→   809→
+   810→   810→GATE 2: SECTOR CONCENTRATION
+   811→   811→━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   812→   812→  Check:    How many positions already in same sector as new signal
+   813→   813→  Default:  max_per_sector = 2
+   814→   814→  Action:   REJECT if sector limit reached
+   815→   815→  Why:      Don't put all money in banking if you already have 2 bank stocks
+   816→   816→  Sectors:  Banking, IT, Energy, Pharma, Auto, FMCG, Infra, Metal, etc.
+   817→   817→
+   818→   818→
+   819→   819→GATE 3: MAX POSITION SIZE
+   820→   820→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   821→   821→  Check:    position_value > max_position_pct × total_capital
+   822→   822→  Default:  max_position_pct = 25%
+   823→   823→  Action:   REJECT if exceeds (or resize if possible)
+   824→   824→  Also:     Check available capital (balance aware)
+   825→   825→
+   826→   826→
+   827→   827→GATE 4: MAX DAILY TRADES
+   828→   828→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   829→   829→  Check:    trades_today >= max_daily_trades
+   830→   830→  Default:  max_daily_trades = 10
+   831→   831→  Action:   REJECT new signals for rest of day
+   832→   832→
+   833→   833→
+   834→   834→GATE 5: MAX DAILY LOSS
+   835→   835→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   836→   836→  Check:    daily_pnl <= -max_daily_loss
+   837→   837→  Default:  max_daily_loss = 3% of capital
+   838→   838→  Action:   REJECT new trades + tighten existing SLs
+   839→   839→  Warning:  At 67% usage → reduce new position sizes by 50%
+   840→   840→
+   841→   841→
+   842→   842→GATE 6: CORRELATION CHECK
+   843→   843→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   844→   844→  Check:    Is new signal highly correlated with existing positions?
+   845→   845→  Default:  max_correlated = 2
+   846→   846→  Action:   REJECT if too many correlated positions
+   847→   847→  Example:  Already have SBI + HDFCBANK → reject PNB (all banking)
+   848→   848→
+   849→   849→
+   850→   850→GATE 7: VIX FILTER
+   851→   851→━━━━━━━━━━━━━━━━━━
+   852→   852→  Check:    current_vix > vix_threshold
+   853→   853→  Default:  vix_threshold = 20
+   854→   854→  Action:   REJECT new trades when VIX too high
+   855→   855→  Why:      High VIX = high volatility = unpredictable = dangerous
+   856→   856→
+   857→   857→
+   858→   858→GATE 8: TIME OF DAY
+   859→   859→━━━━━━━━━━━━━━━━━━━━━
+   860→   860→  Check:    Current time outside preferred trading window
+   861→   861→  Default:  New trades: 9:30 AM - 2:30 PM only
+   862→   862→  Action:   REJECT new trades outside window
+   863→   863→  Why:      First 15 min = ORB formation. Last hour = squaring off.
+   864→   864→  Note:     Can configure different windows per strategy
+   865→   865→
+   866→   866→
+   867→   867→GATE 9: PRICE MISMATCH GUARD
+   868→   868→━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   869→   869→  Check:    |signal_entry_price - broker_live_ltp| / broker_live_ltp > threshold
+   870→   870→  Default:  threshold = 0.5%
+   871→   871→  Action:   REJECT + refresh feed + alert
+   872→   872→  Why:      Prevents trading on stale/hallucinated prices
+   873→   873→  Critical: This is the P0 bug guard
+   874→   874→
+   875→   875→
+   876→   876→GATE 10: MINIMUM SIGNAL CONFIDENCE
+   877→   877→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   878→   878→  Check:    kronos_score < min_confidence
+   879→   879→  Default:  min_confidence = 0.6
+   880→   880→  Action:   REJECT low-confidence signals
+   881→   881→  Why:      Don't trade weak signals. Wait for strong ones.
+   882→   882→
+   883→   883→
+   884→   884→GATE 11: MAX DRAWDOWN
+   885→   885→━━━━━━━━━━━━━━━━━━━━━━━
+   886→   886→  Check:    current_drawdown > max_drawdown_pct
+   887→   887→  Default:  max_drawdown_pct = 5% (per day)
+   888→   888→  Action:   PAUSE engine + alert
+   889→   889→  Different: From G5 (daily loss). This tracks peak-to-trough.
+   890→   890→
+   891→   891→
+   892→   892→GATE 12: MARGIN CHECK
+   893→   893→━━━━━━━━━━━━━━━━━━━━━━━
+   894→   894→  Check:    required_margin > available_margin
+   895→   895→  Action:   REJECT or RESIZE to fit available margin
+   896→   896→  Live mode: Check actual broker margin
+   897→   897→  Paper mode: Check virtual capital
+   898→   898→
+   899→   899→
+   900→   900→GATE 13: DUPLICATE SIGNAL
+   901→   901→━━━━━━━━━━━━━━━━━━━━━━━━━━
+   902→   902→  Check:    Same symbol + same direction signal in last X minutes?
+   903→   903→  Default:  X = 15 minutes
+   904→   904→  Action:   REJECT duplicate (keep first one)
+   905→   905→  Why:      Multiple strategies may fire same signal. Take only first.
+   906→   906→```
+   907→   907→
+   908→   908→---
+   909→   909→
+   910→   910→## 3.5 Dynamic Position Sizing — Detailed Logic
+   911→   911→
+   912→   912→```
+   913→   913→STEP 1: BASE KELLY FRACTION
+   914→   914→━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   915→   915→  win_rate     = from strategy_performance table (historical)
+   916→   916→  avg_win      = average winning trade pnl
+   917→   917→  avg_loss     = average losing trade pnl
+   918→   918→  kelly_f      = (win_rate × avg_win - (1 - win_rate) × avg_loss) / avg_win
+   919→   919→  kelly_f      = clamp(kelly_f, 0.02, 0.25)  // Never below 2%, never above 25%
+   920→   920→  
+   921→   921→  base_size    = total_capital × kelly_f
+   922→   922→
+   923→   923→
+   924→   924→STEP 2: CONFIDENCE ADJUSTMENT
+   925→   925→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   926→   926→  kronos_score = signal.confidence  (0 to 1)
+   927→   927→  
+   928→   928→  if kronos_score >= 0.8:   confidence_mult = 1.0    (strong signal)
+   929→   929→  if kronos_score >= 0.6:   confidence_mult = 0.8    (decent signal)
+   930→   930→  if kronos_score >= 0.4:   confidence_mult = 0.5    (weak signal)
+   931→   931→  if kronos_score <  0.4:   REJECT by G10           (too weak)
+   932→   932→  
+   933→   933→  adjusted_size = base_size × confidence_mult
+   934→   934→
+   935→   935→
+   936→   936→STEP 3: VOLATILITY ADJUSTMENT
+   937→   937→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   938→   938→  vix = current_vix
+   939→   939→  
+   940→   940→  if vix <= 14:   vol_mult = 1.0    (calm market, normal size)
+   941→   941→  if vix <= 18:   vol_mult = 0.85   (slightly nervous)
+   942→   942→  if vix <= 22:   vol_mult = 0.65   (worried, reduce)
+   943→   943→  if vix >  22:   vol_mult = 0.4    (fearful, much smaller)
+   944→   944→  
+   945→   945→  adjusted_size = adjusted_size × vol_mult
+   946→   946→
+   947→   947→
+   948→   948→STEP 4: DRAWDOWN ADJUSTMENT
+   949→   949→━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   950→   950→  daily_pnl_pct = day_pnl / total_capital
+   951→   951→  
+   952→   952→  if daily_pnl_pct >= 0:      dd_mult = 1.0    (profitable day, normal)
+   953→   953→  if daily_pnl_pct >= -1%:    dd_mult = 0.9    (small loss, slight reduce)
+   954→   954→  if daily_pnl_pct >= -2%:    dd_mult = 0.7    (moderate loss, reduce)
+   955→   955→  if daily_pnl_pct >= -3%:    dd_mult = 0.4    (approaching limit, heavy reduce)
+   956→   956→  if daily_pnl_pct <  -3%:    STOP new trades  (limit hit)
+   957→   957→  
+   958→   958→  adjusted_size = adjusted_size × dd_mult
+   959→   959→
+   960→   960→
+   961→   961→STEP 5: CAPITAL AVAILABILITY
+   962→   962→━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   963→   963→  available = free_capital × 0.9   (never use 100%)
+   964→   964→  
+   965→   965→  if adjusted_size <= available:
+   966→   966→      final_size = adjusted_size   (we can afford it)
+   967→   967→  else:
+   968→   968→      final_size = available       (cap at what we can afford)
+   969→   969→  
+   970→   970→  if final_size < min_position_size (e.g., ₹5,000):
+   971→   971→      REJECT: "Position too small after adjustments"
+   972→   972→
+   973→   973→
+   974→   974→STEP 6: CONVERT TO QUANTITY
+   975→   975→━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   976→   976→  qty = floor(final_size / entry_price)
+   977→   977→  
+   978→   978→  if segment == "OPT":
+   979→   979→      lot_size = option_lot_size[symbol]  (e.g., RELIANCE lot = 250)
+   980→   980→      qty = floor(final_size / (premium × lot_size)) × lot_size
+   981→   981→  
+   982→   982→  final_capital_required = qty × entry_price  (or qty × premium × lot_size for options)
+   983→   983→```
+   984→   984→
+   985→   985→---
+   986→   986→
+   987→   987→## 3.6 Partial Profit Booking — Detailed Logic
+   988→   988→
+   989→   989→```
+   990→   990→WHEN POSITION IS OPENED:
+   991→   991→━━━━━━━━━━━━━━━━━━━━━━━━
+   992→   992→  entry  = position.entry_price
+   993→   993→  sl     = position.sl_price
+   994→   994→  target = position.target_price
+   995→   995→  qty    = position.total_quantity
+   996→   996→  
+   997→   997→  risk   = |entry - sl|                          (risk per share)
+   998→   998→  
+   999→   999→  level1_target = entry + (risk × 1.0)          (1:1 R:R)
+  1000→  1000→  level2_target = entry + (risk × 1.5)          (1.5:1 R:R)
+  1001→  1001→  level3_target = entry + (risk × 2.0)          (2:1 R:R) = original target
+  1002→  1002→  
+  1003→  1003→  (For SELL positions, subtract instead of add)
+  1004→  1004→
+  1005→  1005→
+  1006→  1006→LEVEL 1 HIT: price reaches level1_target
+  1007→  1007→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1008→  1008→  book_qty    = ceil(qty × 0.50)                (book 50%)
+  1009→  1009→  remaining   = qty - book_qty
+  1010→  1010→  book_pnl    = book_qty × |level1_target - entry|
+  1011→  1011→  
+  1012→  1012→  Action:
+  1013→  1013→    → Exit book_qty shares at level1_target
+  1014→  1014→    → Move SL to entry price (risk-free now)
+  1015→  1015→    → Record partial booking in position.booked_levels
+  1016→  1016→    → Telegram: "Partial booking L1: {symbol} {book_qty} shares @ {level1_target}"
+  1017→  1017→    → WebSocket: push updated position to browser
+  1018→  1018→
+  1019→  1019→
+  1020→  1020→LEVEL 2 HIT: price reaches level2_target
+  1021→  1021→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1022→  1022→  book_qty    = ceil(remaining × 0.50)          (book 50% of remaining = 25% of original)
+  1023→  1023→  remaining   = remaining - book_qty
+  1024→  1024→  book_pnl    = book_qty × |level2_target - entry|
+  1025→  1025→  
+  1026→  1026→  Action:
+  1027→  1027→    → Exit book_qty shares at level2_target
+  1028→  1028→    → Trail SL to level1_target (locked L1 profit)
+  1029→  1029→    → Record partial booking
+  1030→  1030→    → Telegram: "Partial booking L2: {symbol} {book_qty} shares @ {level2_target}"
+  1031→  1031→
+  1032→  1032→
+  1033→  1033→LEVEL 3 HIT: price reaches level3_target (original target)
+  1034→  1034→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1035→  1035→  Option A: Exit remaining shares at target
+  1036→  1036→  Option B: Trail SL with Supertrend and let it run (if momentum is strong)
+  1037→  1037→  
+  1038→  1038→  Default: Option A (exit at target)
+  1039→  1039→  Config:  User can choose Option B per strategy
+  1040→  1040→
+  1041→  1041→
+  1042→  1042→TRAILING STOP LOSS
+  1043→  1043→━━━━━━━━━━━━━━━━━━━
+  1044→  1044→  After Level 1 booked (risk-free):
+  1045→  1045→    → Trail SL method: Step trail or Supertrend trail
+  1046→  1046→    
+  1047→  1047→    Step Trail:
+  1048→  1048→      → Every time price moves +1% from last SL, move SL up by 0.5%
+  1049→  1049→      → SL never moves down
+  1050→  1050→    
+  1051→  1051→    Supertrend Trail:
+  1052→  1052→      → Use Supertrend indicator as trailing SL
+  1053→  1053→      → More adaptive, follows price action
+  1054→  1054→```
+  1055→  1055→
+  1056→  1056→---
+  1057→  1057→
+  1058→  1058→## 3.7 Market Regime Detector — Detailed Logic
+  1059→  1059→
+  1060→  1060→```
+  1061→  1061→INPUT DATA (updated every 15 minutes):
+  1062→  1062→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1063→  1063→  • Nifty 50: price, 5min change, day change, 5-day change
+  1064→  1064→  • VIX: current value, 5-day average, trend (rising/falling)
+  1065→  1065→  • Advance-Decline ratio: advancing stocks vs declining
+  1066→  1066→  • Sector performance: which sectors up, which down
+  1067→  1067→  • India VIX percentile: where is VIX in its 1-year range
+  1068→  1068→
+  1069→  1069→CLASSIFICATION RULES:
+  1070→  1070→━━━━━━━━━━━━━━━━━━━━━
+  1071→  1071→
+  1072→  1072→  BULL TREND:
+  1073→  1073→    • Nifty day change > +0.3%
+  1074→  1074→    • Nifty 5-day change > +1%
+  1075→  1075→    • Advance-Decline ratio > 1.5
+  1076→  1076→    • VIX < 18
+  1077→  1077→    → Confidence: based on how many conditions met
+  1078→  1078→
+  1079→  1079→  BEAR TREND:
+  1080→  1080→    • Nifty day change < -0.3%
+  1081→  1081→    • Nifty 5-day change < -1%
+  1082→  1082→    • Advance-Decline ratio < 0.67
+  1083→  1083→    • VIX > 18
+  1084→  1084→    → Confidence: based on how many conditions met
+  1085→  1085→
+  1086→  1086→  SIDEWAYS / RANGE-BOUND:
+  1087→  1087→    • Nifty day change between -0.3% and +0.3%
+  1088→  1088→    • VIX between 12 and 18
+  1089→  1089→    • No clear sector trend
+  1090→  1090→    → Confidence: based on how stable the range is
+  1091→  1091→
+  1092→  1092→  HIGH VOLATILITY:
+  1093→  1093→    • VIX > 22
+  1094→  1094→    • OR Nifty 5-min move > 0.5%
+  1095→  1095→    → Override other regimes. High VIX = caution.
+  1096→  1096→
+  1097→  1097→STRATEGY ACTIVATION MAP:
+  1098→  1098→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1099→  1099→  Strategy              Bull    Bear    Sideways  HighVol
+  1100→  1100→  ──────────────────────────────────────────────────────────────────
+  1101→  1101→  Breakout              ✅      ✅*     ❌        ⚠️
+  1102→  1102→  Mean Reversion        ❌      ❌      ✅        ❌
+  1103→  1103→  Momentum              ✅      ✅*     ❌        ⚠️
+  1104→  1104→  ORB                   ✅      ✅      ✅        ✅
+  1105→  1105→  RSI Divergence        ⚠️      ✅      ✅        ❌
+  1106→  1106→  Supertrend            ✅      ✅      ❌        ⚠️
+  1107→  1107→  VWAP Reversion        ❌      ❌      ✅        ❌
+  1108→  1108→  Gap Fill              ✅      ✅      ❌        ✅
+  1109→  1109→  Sector Rotation       ✅      ✅      ❌        ⚠️
+  1110→  1110→  Multi-Timeframe       ✅      ✅      ✅        ⚠️
+  1111→  1111→  ORB + Volume          ✅      ✅      ❌        ✅
+  1112→  1112→  Trend Exhaustion      ❌      ✅      ⚠️        ❌
+  1113→  1113→  News Momentum         ✅      ✅      ⚠️        ⚠️
+  1114→  1114→  Adaptive Supertrend   ✅      ✅      ✅        ✅
+  1115→  1115→  
+  1116→  1116→  ✅  = Active    ❌ = Paused    ⚠️ = Active with reduced size
+  1117→  1117→  ✅* = Short direction only
+  1118→  1118→```
+  1119→  1119→
+  1120→  1120→---
+  1121→  1121→
+  1122→  1122→## 3.8 News Engine — Detailed Specification
+  1123→  1123→
+  1124→  1124→```
+  1125→  1125→NEWS SOURCES + FREQUENCY:
+  1126→  1126→━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1127→  1127→
+  1128→  1128→  NSE Corporate Actions
+  1129→  1129→  ├── URL: https://www.nseindia.com/corporates/corporate-actions
+  1130→  1130→  ├── Fetch: Every 30 minutes
+  1131→  1131→  ├── Data: Dividends, splits, bonus, rights issues
+  1132→  1132→  ├── Impact: Stock added to watchlist on ex-date
+  1133→  1133→  └── Cost: FREE
+  1134→  1134→
+  1135→  1135→  NSE Bulk/Block Deals
+  1136→  1136→  ├── URL: https://www.nseindia.com/market-data/bulk-deals
+  1137→  1137→  ├── Fetch: Every 30 minutes during market hours
+  1138→  1138→  ├── Data: Large institutional trades
+  1139→  1139→  ├── Impact: Stock added to watchlist. Direction indicates smart money flow.
+  1140→  1140→  └── Cost: FREE
+  1141→  1141→
+  1142→  1142→  Moneycontrol RSS
+  1143→  1143→  ├── URL: https://www.moneycontrol.com/rss/MCtopnews.xml
+  1144→  1144→  ├── Fetch: Every 15 minutes
+  1145→  1145→  ├── Data: Breaking market news, stock-specific news
+  1146→  1146→  ├── Impact: Parse stock names → add to watchlist
+  1147→  1147→  └── Cost: FREE
+  1148→  1148→
+  1149→  1149→  Economic Times RSS
+  1150→  1150→  ├── URL: https://economictimes.indiatimes.com/rssfeeds/defaultrss.cms
+  1151→  1151→  ├── Fetch: Every 15 minutes
+  1152→  1152→  ├── Data: Market news, policy changes, global cues
+  1153→  1153→  ├── Impact: Sector-level impact → add sector leaders to watchlist
+  1154→  1154→  └── Cost: FREE
+  1155→  1155→
+  1156→  1156→  Result Calendar
+  1157→  1157→  ├── URL: Moneycontrol/NSE result calendar page
+  1158→  1158→  ├── Fetch: Once at 8:00 AM daily
+  1159→  1159→  ├── Data: Companies announcing results today/this week
+  1160→  1160→  ├── Impact: Add to watchlist. Pre-result positioning.
+  1161→  1161→  └── Cost: FREE
+  1162→  1162→
+  1163→  1163→  Google Finance Trending
+  1164→  1164→  ├── URL: Google Finance trending stocks
+  1165→  1165→  ├── Fetch: Every 30 minutes
+  1166→  1166→  ├── Data: Stocks trending in searches
+  1167→  1167→  ├── Impact: Retail interest → potential momentum
+  1168→  1168→  └── Cost: FREE
+  1169→  1169→
+  1170→  1170→
+  1171→  1171→NEWS CLASSIFICATION:
+  1172→  1172→━━━━━━━━━━━━━━━━━━━━━━
+  1173→  1173→  Each news item is classified:
+  1174→  1174→
+  1175→  1175→  Category:
+  1176→  1176→    • Earnings / Results
+  1177→  1177→    • Corporate Action (dividend, split, buyback)
+  1178→  1178→    • Insider Trading (promoter buy/sell)
+  1179→  1179→    • Government Policy
+  1180→  1180→    • Sector News
+  1181→  1181→    • Global Cues
+  1182→  1182→    • Bulk/Block Deal
+  1183→  1183→    • Management Change
+  1184→  1184→    • Rating Upgrade/Downgrade
+  1185→  1185→
+  1186→  1186→  Sentiment:
+  1187→  1187→    • Positive   (good results, promoter buying, upgrade)
+  1188→  1188→    • Negative   (bad results, promoter selling, downgrade)
+  1189→  1189→    • Neutral    (routine corporate actions)
+  1190→  1190→
+  1191→  1191→  Impact Level:
+  1192→  1192→    • High    → Immediate watchlist addition
+  1193→  1193→    • Medium  → Add if technical also supports
+  1194→  1194→    • Low     → Log only, no watchlist action
+  1195→  1195→
+  1196→  1196→  Relevant Stocks:
+  1197→  1197→    • Parse stock names/symbols from news text
+  1198→  1198→    • Map to NSE symbols
+  1199→  1199→    • Check if in F&O universe
+
+[showing lines 500-1199 of 2002; use offset=1200 with limit to continue reading]
