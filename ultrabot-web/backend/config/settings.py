@@ -2,6 +2,7 @@ import os
 import yaml
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Any, Dict
 
 
@@ -19,15 +20,18 @@ class Settings(BaseSettings):
     auth_username: str = "admin"
     auth_password_hash: str = ""
 
-    # Store full nested config
+    # Store full nested config (not a Pydantic field — set in __init__)
     _raw_config: Dict[str, Any] = {}
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(
+        extra="ignore",
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._raw_config = {}
         self._load_yaml()
 
     def _load_yaml(self):
