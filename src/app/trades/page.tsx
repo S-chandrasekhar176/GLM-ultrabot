@@ -1308,7 +1308,7 @@ function HistoryTab() {
 
 export default function TradesPage() {
   return (
-    <main className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <ArrowLeftRight className="h-6 w-6 text-ub-accent" />
@@ -1340,6 +1340,6 @@ export default function TradesPage() {
           <HistoryTab />
         </TabsContent>
       </Tabs>
-    </main>
+    </div>
   );
 }

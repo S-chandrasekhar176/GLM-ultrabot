@@ -506,41 +506,6 @@ export default function DashboardPage() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <main className="min-h-screen p-4 md:p-6">
-        {/* Header */}
-        <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-ub-text-primary flex items-center gap-2">
-              <Zap className="h-6 w-6 text-ub-accent" />
-              UltraBot Web
-            </h1>
-            <p className="text-xs text-ub-text-muted mt-0.5">NSE Algorithmic Trading Terminal</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {engineStore.niftyValue > 0 && (
-              <Badge
-                variant="outline"
-                className={`text-xs font-mono ${
-                  engineStore.niftyChange >= 0
-                    ? 'border-ub-profit/30 text-ub-profit'
-                    : 'border-ub-loss/30 text-ub-loss'
-                }`}
-              >
-                NIFTY {engineStore.niftyValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                <span className="ml-1">
-                  {engineStore.niftyChange >= 0 ? '▲' : '▼'}
-                  {Math.abs(engineStore.niftyChange).toFixed(2)}%
-                </span>
-              </Badge>
-            )}
-            {engineStore.vix > 0 && (
-              <Badge variant="outline" className="text-xs font-mono border-ub-border text-ub-text-muted">
-                VIX {engineStore.vix.toFixed(2)}
-              </Badge>
-            )}
-          </div>
-        </header>
-
         {isLoading ? (
           <div className="space-y-4">
             <StatsRowSkeleton />
@@ -1026,7 +991,6 @@ export default function DashboardPage() {
             </SectionCard>
           </div>
         )}
-      </main>
     </TooltipProvider>
   );
 }

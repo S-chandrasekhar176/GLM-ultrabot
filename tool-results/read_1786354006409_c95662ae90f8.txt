@@ -1,0 +1,896 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useMemo, useCallback } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  Clock,
+     8→  TrendingUp,
+     9→  TrendingDown,
+    10→  CheckCircle2,
+    11→  XCircle,
+    12→  ChevronDown,
+    13→  ChevronUp,
+    14→  Zap,
+    15→  ShieldCheck,
+    16→  Timer,
+    17→  BarChart3,
+    18→  Bell,
+    19→  SkipForward,
+    20→  AlertTriangle,
+    21→  Activity,
+    22→  Target,
+    23→  Layers,
+    24→  Gauge,
+    25→} from 'lucide-react';
+    26→import { Badge } from '@/components/ui/badge';
+    27→import { Button } from '@/components/ui/button';
+    28→import { Card, CardContent } from '@/components/ui/card';
+    29→import { Skeleton } from '@/components/ui/skeleton';
+    30→import { Progress } from '@/components/ui/progress';
+    31→import { Separator } from '@/components/ui/separator';
+    32→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    33→import {
+    34→  Dialog,
+    35→  DialogContent,
+    36→  DialogHeader,
+    37→  DialogTitle,
+    38→  DialogDescription,
+    39→  DialogFooter,
+    40→} from '@/components/ui/dialog';
+    41→import {
+    42→  AlertDialog,
+    43→  AlertDialogAction,
+    44→  AlertDialogCancel,
+    45→  AlertDialogContent,
+    46→  AlertDialogDescription,
+    47→  AlertDialogFooter,
+    48→  AlertDialogHeader,
+    49→  AlertDialogTitle,
+    50→} from '@/components/ui/alert-dialog';
+    51→import { ScrollArea } from '@/components/ui/scroll-area';
+    52→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    53→
+    54→// ─────────────────────────────────────────────
+    55→// Types
+    56→// ─────────────────────────────────────────────
+    57→
+    58→type OppStatus = 'pending' | 'confirmed' | 'skipped' | 'expired';
+    59→type Direction = 'BUY' | 'SELL';
+    60→type NiftyTrend = 'Bullish' | 'Bearish' | 'Sideways';
+    61→
+    62→interface RiskGate {
+    63→  name: string;
+    64→  passed: boolean;
+    65→  detail: string;
+    66→}
+    67→
+    68→interface OpportunityData {
+    69→  id: string;
+    70→  symbol: string;
+    71→  direction: Direction;
+    72→  strategy: string;
+    73→  kronosScore: number;
+    74→  entry: number;
+    75→  stopLoss: number;
+    76→  target: number;
+    77→  riskReward: number;
+    78→  capitalRequired: number;
+    79→  expiryAt: string;
+    80→  riskGates: RiskGate[];
+    81→  vix: number;
+    82→  niftyTrend: NiftyTrend;
+    83→  sector: string;
+    84→  winRate: number;
+    85→  status: OppStatus;
+    86→  type: string;
+    87→  lotSize: number;
+    88→  quantity: number;
+    89→  margin: number;
+    90→  strike?: string;
+    91→  optionExpiry?: string;
+    92→  premium?: number;
+    93→  createdAt: string;
+    94→}
+    95→
+    96→// ─────────────────────────────────────────────
+    97→// Mock Data
+    98→// ─────────────────────────────────────────────
+    99→
+   100→const MOCK_OPPORTUNITIES: OpportunityData[] = [
+   101→  {
+   102→    id: 'opp-001',
+   103→    symbol: 'RELIANCE',
+   104→    direction: 'BUY',
+   105→    strategy: 'Momentum Breakout',
+   106→    kronosScore: 0.87,
+   107→    entry: 2945.50,
+   108→    stopLoss: 2910.00,
+   109→    target: 3020.00,
+   110→    riskReward: 2.0,
+   111→    capitalRequired: 147275,
+   112→    expiryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+   113→    riskGates: [
+   114→      { name: 'Trend Align', passed: true, detail: 'RELIANCE is in a strong uptrend, 20 EMA above 50 EMA, ADX > 25' },
+   115→      { name: 'Volume Confirm', passed: true, detail: 'Volume surge 2.3x above 20-day average' },
+   116→      { name: 'RSI Check', passed: true, detail: 'RSI at 58.2, not overbought, room for upside' },
+   117→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, below 16 threshold, low volatility environment' },
+   118→      { name: 'Sector Flow', passed: true, detail: 'Energy sector seeing net positive fund flow of ₹420 Cr' },
+   119→      { name: 'Max Drawdown', passed: true, detail: 'Max portfolio drawdown at 3.2%, well within 8% limit' },
+   120→      { name: 'Correlation', passed: true, detail: 'Low correlation (0.23) with existing positions' },
+   121→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹4,200 Cr, easily fills market order' },
+   122→      { name: 'Spread Check', passed: false, detail: 'Bid-ask spread at 0.08%, slightly above 0.05% ideal' },
+   123→      { name: 'News Filter', passed: true, detail: 'No negative news events in last 24 hours' },
+   124→      { name: 'Time Window', passed: true, detail: 'Within active trading hours (9:30 AM - 2:30 PM)' },
+   125→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹1.47L capital' },
+   126→      { name: 'Daily Limit', passed: false, detail: 'Already 3 trades today, limit is 5 but risk budget tight' },
+   127→    ],
+   128→    vix: 13.2,
+   129→    niftyTrend: 'Bullish',
+   130→    sector: 'Energy',
+   131→    winRate: 72.5,
+   132→    status: 'pending',
+   133→    type: 'EQUITY',
+   134→    lotSize: 250,
+   135→    quantity: 50,
+   136→    margin: 147275,
+   137→    createdAt: new Date(Date.now() - 120_000).toISOString(),
+   138→  },
+   139→  {
+   140→    id: 'opp-002',
+   141→    symbol: 'INFY',
+   142→    direction: 'SELL',
+   143→    strategy: 'Mean Reversion',
+   144→    kronosScore: 0.74,
+   145→    entry: 1872.30,
+   146→    stopLoss: 1905.00,
+   147→    target: 1810.00,
+   148→    riskReward: 1.7,
+   149→    capitalRequired: 93615,
+   150→    expiryAt: new Date(Date.now() + 8 * 60 * 1000).toISOString(),
+   151→    riskGates: [
+   152→      { name: 'Trend Align', passed: true, detail: 'INFY showing bearish divergence on RSI, price failing at resistance' },
+   153→      { name: 'Volume Confirm', passed: true, detail: 'Selling volume increasing on red candles' },
+   154→      { name: 'RSI Check', passed: true, detail: 'RSI at 68.4, approaching overbought zone' },
+   155→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, favorable for short positions' },
+   156→      { name: 'Sector Flow', passed: false, detail: 'IT sector mixed signals, some buying in large caps' },
+   157→      { name: 'Max Drawdown', passed: true, detail: 'Max portfolio drawdown at 3.2%, within limits' },
+   158→      { name: 'Correlation', passed: true, detail: 'Negative correlation with energy positions provides hedging' },
+   159→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹2,800 Cr' },
+   160→      { name: 'Spread Check', passed: true, detail: 'Bid-ask spread at 0.03%, excellent liquidity' },
+   161→      { name: 'News Filter', passed: true, detail: 'No significant news, quarterly results already priced in' },
+   162→      { name: 'Time Window', passed: true, detail: 'Within active trading hours' },
+   163→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹93.6K' },
+   164→      { name: 'Daily Limit', passed: true, detail: 'Within daily trade limit and risk budget' },
+   165→    ],
+   166→    vix: 13.2,
+   167→    niftyTrend: 'Bullish',
+   168→    sector: 'IT',
+   169→    winRate: 65.8,
+   170→    status: 'pending',
+   171→    type: 'EQUITY',
+   172→    lotSize: 300,
+   173→    quantity: 50,
+   174→    margin: 93615,
+   175→    createdAt: new Date(Date.now() - 300_000).toISOString(),
+   176→  },
+   177→  {
+   178→    id: 'opp-003',
+   179→    symbol: 'HDFCBANK',
+   180→    direction: 'BUY',
+   181→    strategy: 'VWAP Bounce',
+   182→    kronosScore: 0.91,
+   183→    entry: 1685.75,
+   184→    stopLoss: 1665.00,
+   185→    target: 1735.00,
+   186→    riskReward: 2.5,
+   187→    capitalRequired: 84288,
+   188→    expiryAt: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+   189→    riskGates: [
+   190→      { name: 'Trend Align', passed: true, detail: 'HDFCBANK bouncing off VWAP with bullish hammer candle' },
+   191→      { name: 'Volume Confirm', passed: true, detail: 'Volume spike 3.1x at VWAP support level' },
+   192→      { name: 'RSI Check', passed: true, detail: 'RSI at 45.3, oversold bounce setup' },
+   193→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, favorable environment' },
+   194→      { name: 'Sector Flow', passed: true, detail: 'Banking sector strong with RBI dovish stance' },
+   195→      { name: 'Max Drawdown', passed: true, detail: 'Drawdown at 3.2%, well within limits' },
+   196→      { name: 'Correlation', passed: true, detail: 'Moderate correlation (0.41) with financial holdings' },
+   197→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹5,100 Cr, highest in NSE' },
+   198→      { name: 'Spread Check', passed: true, detail: 'Bid-ask spread at 0.02%, extremely liquid' },
+   199→      { name: 'News Filter', passed: true, detail: 'Positive regulatory environment for banks' },
+   200→      { name: 'Time Window', passed: true, detail: 'Within active trading hours' },
+   201→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹84.3K' },
+   202→      { name: 'Daily Limit', passed: true, detail: 'Within all risk and capital limits' },
+   203→    ],
+   204→    vix: 13.2,
+   205→    niftyTrend: 'Bullish',
+   206→    sector: 'Banking',
+   207→    winRate: 78.2,
+   208→    status: 'pending',
+   209→    type: 'EQUITY',
+   210→    lotSize: 550,
+   211→    quantity: 50,
+   212→    margin: 84288,
+   213→    createdAt: new Date(Date.now() - 60_000).toISOString(),
+   214→  },
+   215→];
+   216→
+   217→// ─────────────────────────────────────────────
+   218→// Helpers
+   219→// ─────────────────────────────────────────────
+   220→
+   221→const INR = (n: number) =>
+   222→  new Intl.NumberFormat('en-IN', {
+   223→    style: 'currency',
+   224→    currency: 'INR',
+   225→    minimumFractionDigits: 2,
+   226→    maximumFractionDigits: 2,
+   227→  }).format(n);
+   228→
+   229→const INR_SHORT = (n: number) =>
+   230→  new Intl.NumberFormat('en-IN', {
+   231→    style: 'currency',
+   232→    currency: 'INR',
+   233→    minimumFractionDigits: 0,
+   234→    maximumFractionDigits: 0,
+   235→  }).format(n);
+   236→
+   237→function getScoreColor(score: number): string {
+   238→  if (score >= 0.8) return 'text-ub-profit';
+   239→  if (score >= 0.6) return 'text-ub-warning';
+   240→  return 'text-ub-loss';
+   241→}
+   242→
+   243→function getProgressColor(score: number): string {
+   244→  if (score >= 0.8) return 'bg-ub-profit';
+   245→  if (score >= 0.6) return 'bg-ub-warning';
+   246→  return 'bg-ub-loss';
+   247→}
+   248→
+   249→function getWinRateColor(rate: number): string {
+   250→  if (rate >= 70) return 'text-ub-profit';
+   251→  if (rate >= 55) return 'text-ub-warning';
+   252→  return 'text-ub-loss';
+   253→}
+   254→
+   255→// ─────────────────────────────────────────────
+   256→// TimerCountdown Component
+   257→// ─────────────────────────────────────────────
+   258→
+   259→function TimerCountdown({ expiryAt }: { expiryAt: string }) {
+   260→  const [timeLeft, setTimeLeft] = useState('');
+   261→  const [isExpired, setIsExpired] = useState(false);
+   262→
+   263→  useEffect(() => {
+   264→    const update = () => {
+   265→      const diff = new Date(expiryAt).getTime() - Date.now();
+   266→      if (diff <= 0) {
+   267→        setIsExpired(true);
+   268→        setTimeLeft('Expired');
+   269→        return;
+   270→      }
+   271→      const mins = Math.floor(diff / 60_000);
+   272→      const secs = Math.floor((diff % 60_000) / 1000);
+   273→      setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
+   274→    };
+   275→    update();
+   276→    const interval = setInterval(update, 1000);
+   277→    return () => clearInterval(interval);
+   278→  }, [expiryAt]);
+   279→
+   280→  return (
+   281→    <span
+   282→      className={`flex items-center gap-1 text-xs font-mono font-medium ${
+   283→        isExpired ? 'text-ub-loss' : timeLeft.includes('0:') || timeLeft.includes('1:') ? 'text-ub-warning' : 'text-ub-text-muted'
+   284→      }`}
+   285→    >
+   286→      <Timer className="h-3 w-3" />
+   287→      {timeLeft}
+   288→    </span>
+   289→  );
+   290→}
+   291→
+   292→// ─────────────────────────────────────────────
+   293→// RiskGatesPanel Component
+   294→// ─────────────────────────────────────────────
+   295→
+   296→function RiskGatesPanel({ gates }: { gates: RiskGate[] }) {
+   297→  const [expandedGate, setExpandedGate] = useState<number | null>(null);
+   298→  const passedCount = gates.filter((g) => g.passed).length;
+   299→
+   300→  return (
+   301→    <div>
+   302→      <div className="flex items-center gap-2 mb-2">
+   303→        <ShieldCheck className="h-3.5 w-3.5 text-ub-text-muted" />
+   304→        <span className="text-xs font-medium text-ub-text-muted">
+   305→          Risk Gates ({passedCount}/{gates.length})
+   306→        </span>
+   307→        <div className="ml-auto flex items-center gap-1">
+   308→          <span className="text-xs font-semibold text-ub-profit">{passedCount} PASS</span>
+   309→          <span className="text-ub-border">|</span>
+   310→          <span className="text-xs font-semibold text-ub-loss">{gates.length - passedCount} FAIL</span>
+   311→        </div>
+   312→      </div>
+   313→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+   314→        {gates.map((gate, idx) => (
+   315→          <button
+   316→            key={gate.name}
+   317→            onClick={() => setExpandedGate(expandedGate === idx ? null : idx)}
+   318→            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-ub-background/50 border border-ub-border/50 hover:border-ub-border-hover transition-colors text-left"
+   319→          >
+   320→            <span
+   321→              className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+   322→                gate.passed ? 'bg-ub-profit' : 'bg-ub-loss'
+   323→              }`}
+   324→            />
+   325→            <span className="text-[11px] text-ub-text-muted truncate">{gate.name}</span>
+   326→            {expandedGate === idx ? (
+   327→              <ChevronUp className="h-2.5 w-2.5 text-ub-text-muted ml-auto flex-shrink-0" />
+   328→            ) : (
+   329→              <ChevronDown className="h-2.5 w-2.5 text-ub-text-muted ml-auto flex-shrink-0" />
+   330→            )}
+   331→          </button>
+   332→        ))}
+   333→      </div>
+   334→      <AnimatePresence>
+   335→        {expandedGate !== null && (
+   336→          <motion.div
+   337→            initial={{ height: 0, opacity: 0 }}
+   338→            animate={{ height: 'auto', opacity: 1 }}
+   339→            exit={{ height: 0, opacity: 0 }}
+   340→            transition={{ duration: 0.2 }}
+   341→            className="overflow-hidden"
+   342→          >
+   343→            <div className="mt-2 p-2.5 rounded-md bg-ub-background/70 border border-ub-border/50">
+   344→              <div className="flex items-center gap-2 mb-1">
+   345→                <span
+   346→                  className={`h-2 w-2 rounded-full ${
+   347→                    gates[expandedGate].passed ? 'bg-ub-profit' : 'bg-ub-loss'
+   348→                  }`}
+   349→                />
+   350→                <span className="text-xs font-medium text-ub-text-primary">
+   351→                  {gates[expandedGate].name}
+   352→                </span>
+   353→                <Badge
+   354→                  variant="outline"
+   355→                  className={`text-[10px] px-1.5 py-0 h-4 ${
+   356→                    gates[expandedGate].passed
+   357→                      ? 'text-ub-profit border-ub-profit/30'
+   358→                      : 'text-ub-loss border-ub-loss/30'
+   359→                  }`}
+   360→                >
+   361→                  {gates[expandedGate].passed ? 'PASS' : 'FAIL'}
+   362→                </Badge>
+   363→              </div>
+   364→              <p className="text-[11px] text-ub-text-muted leading-relaxed">
+   365→                {gates[expandedGate].detail}
+   366→              </p>
+   367→            </div>
+   368→          </motion.div>
+   369→        )}
+   370→      </AnimatePresence>
+   371→    </div>
+   372→  );
+   373→}
+   374→
+   375→// ─────────────────────────────────────────────
+   376→// OpportunityCard Component
+   377→// ─────────────────────────────────────────────
+   378→
+   379→function OpportunityCard({
+   380→  opp,
+   381→  onConfirm,
+   382→  onSkip,
+   383→  isConfirming,
+   384→  isSkipping,
+   385→}: {
+   386→  opp: OpportunityData;
+   387→  onConfirm: (id: string) => void;
+   388→  onSkip: (id: string) => void;
+   389→  isConfirming: boolean;
+   390→  isSkipping: boolean;
+   391→}) {
+   392→  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+   393→  const [remindDialogOpen, setRemindDialogOpen] = useState(false);
+   394→
+   395→  const handleConfirm = () => {
+   396→    onConfirm(opp.id);
+   397→    setConfirmDialogOpen(false);
+   398→  };
+   399→
+   400→  const handleSkip = () => {
+   401→    onSkip(opp.id);
+   402→  };
+   403→
+   404→  const handleRemindLater = () => {
+   405→    setRemindDialogOpen(false);
+   406→    toast.info(`Reminder set for ${opp.symbol}`, {
+   407→      description: 'You\'ll be notified again in 15 minutes.',
+   408→    });
+   409→  };
+   410→
+   411→  const riskPerTrade = Math.abs(opp.entry - opp.stopLoss) * opp.quantity;
+   412→  const potentialProfit = Math.abs(opp.target - opp.entry) * opp.quantity;
+   413→
+   414→  return (
+   415→    <>
+   416→      <motion.div
+   417→        initial={{ opacity: 0, y: 12 }}
+   418→        animate={{ opacity: 1, y: 0 }}
+   419→        transition={{ duration: 0.3 }}
+   420→      >
+   421→        <Card className="bg-ub-surface border-ub-border rounded-lg overflow-hidden hover:border-ub-border-hover transition-colors">
+   422→          <CardContent className="p-5 space-y-4">
+   423→            {/* Top row: Symbol, Direction, Strategy, Kronos Score, Expiry */}
+   424→            <div className="flex flex-wrap items-center gap-3">
+   425→              <h3 className="text-lg font-bold text-ub-text-primary tracking-tight">{opp.symbol}</h3>
+   426→              <Badge
+   427→                className={`text-[11px] font-semibold px-2 py-0.5 ${
+   428→                  opp.direction === 'BUY'
+   429→                    ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30 hover:bg-ub-profit/25'
+   430→                    : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30 hover:bg-ub-loss/25'
+   431→                }`}
+   432→                variant="outline"
+   433→              >
+   434→                {opp.direction === 'BUY' ? (
+   435→                  <TrendingUp className="h-3 w-3 mr-1" />
+   436→                ) : (
+   437→                  <TrendingDown className="h-3 w-3 mr-1" />
+   438→                )}
+   439→                {opp.direction}
+   440→              </Badge>
+   441→              <Badge variant="outline" className="text-[11px] text-ub-text-muted border-ub-border">
+   442→                <Zap className="h-3 w-3 mr-1" />
+   443→                {opp.strategy}
+   444→              </Badge>
+   445→              <div className="flex items-center gap-2 ml-auto">
+   446→                <TooltipProvider>
+   447→                  <Tooltip>
+   448→                    <TooltipTrigger asChild>
+   449→                      <div className="flex items-center gap-1.5">
+   450→                        <Gauge className="h-3 w-3 text-ub-text-muted" />
+   451→                        <span className={`text-xs font-semibold ${getScoreColor(opp.kronosScore)}`}>
+   452→                          {(opp.kronosScore * 100).toFixed(0)}%
+   453→                        </span>
+   454→                      </div>
+   455→                    </TooltipTrigger>
+   456→                    <TooltipContent>
+   457→                      <p>Kronos Confidence Score</p>
+   458→                    </TooltipContent>
+   459→                  </Tooltip>
+   460→                </TooltipProvider>
+   461→                <div className="w-16 h-1.5 bg-ub-background rounded-full overflow-hidden">
+   462→                  <div
+   463→                    className={`h-full rounded-full transition-all ${getProgressColor(opp.kronosScore)}`}
+   464→                    style={{ width: `${opp.kronosScore * 100}%` }}
+   465→                  />
+   466→                </div>
+   467→              </div>
+   468→              <TimerCountdown expiryAt={opp.expiryAt} />
+   469→            </div>
+   470→
+   471→            {/* Price details row */}
+   472→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+   473→              <div>
+   474→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Entry</p>
+   475→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{INR(opp.entry)}</p>
+   476→              </div>
+   477→              <div>
+   478→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Stop Loss</p>
+   479→                <p className="text-sm font-semibold text-ub-loss font-mono">{INR(opp.stopLoss)}</p>
+   480→              </div>
+   481→              <div>
+   482→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Target</p>
+   483→                <p className="text-sm font-semibold text-ub-profit font-mono">{INR(opp.target)}</p>
+   484→              </div>
+   485→              <div>
+   486→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Risk:Reward</p>
+   487→                <p className="text-sm font-semibold text-ub-accent font-mono">1:{opp.riskReward.toFixed(1)}</p>
+   488→              </div>
+   489→              <div>
+   490→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Capital Required</p>
+   491→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{INR_SHORT(opp.capitalRequired)}</p>
+   492→              </div>
+   493→              <div>
+   494→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Qty</p>
+   495→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{opp.quantity}</p>
+   496→              </div>
+   497→            </div>
+   498→
+   499→            <Separator className="bg-ub-border/50" />
+   500→
+   501→            {/* Risk Gates Panel */}
+   502→            <RiskGatesPanel gates={opp.riskGates} />
+   503→
+   504→            <Separator className="bg-ub-border/50" />
+   505→
+   506→            {/* Market context + Win rate */}
+   507→            <div className="flex flex-wrap items-center gap-2">
+   508→              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   509→                <Activity className="h-3 w-3 text-ub-warning" />
+   510→                <span className="text-[11px] text-ub-text-muted">VIX</span>
+   511→                <span className="text-xs font-semibold text-ub-text-primary font-mono">{opp.vix.toFixed(1)}</span>
+   512→              </div>
+   513→              <div
+   514→                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50 ${
+   515→                  opp.niftyTrend === 'Bullish'
+   516→                    ? 'border-ub-profit/30'
+   517→                    : opp.niftyTrend === 'Bearish'
+   518→                    ? 'border-ub-loss/30'
+   519→                    : 'border-ub-warning/30'
+   520→                }`}
+   521→              >
+   522→                {opp.niftyTrend === 'Bullish' ? (
+   523→                  <TrendingUp className="h-3 w-3 text-ub-profit" />
+   524→                ) : opp.niftyTrend === 'Bearish' ? (
+   525→                  <TrendingDown className="h-3 w-3 text-ub-loss" />
+   526→                ) : (
+   527→                  <Activity className="h-3 w-3 text-ub-warning" />
+   528→                )}
+   529→                <span className="text-[11px] text-ub-text-muted">Nifty</span>
+   530→                <span
+   531→                  className={`text-xs font-semibold ${
+   532→                    opp.niftyTrend === 'Bullish'
+   533→                      ? 'text-ub-profit'
+   534→                      : opp.niftyTrend === 'Bearish'
+   535→                      ? 'text-ub-loss'
+   536→                      : 'text-ub-warning'
+   537→                  }`}
+   538→                >
+   539→                  {opp.niftyTrend}
+   540→                </span>
+   541→              </div>
+   542→              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   543→                <Layers className="h-3 w-3 text-ub-text-muted" />
+   544→                <span className="text-[11px] text-ub-text-muted">Sector</span>
+   545→                <span className="text-xs font-semibold text-ub-text-primary">{opp.sector}</span>
+   546→              </div>
+   547→              <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   548→                <BarChart3 className="h-3 w-3 text-ub-accent" />
+   549→                <span className="text-[11px] text-ub-text-muted">Win Rate</span>
+   550→                <span className={`text-xs font-bold ${getWinRateColor(opp.winRate)}`}>
+   551→                  {opp.winRate.toFixed(1)}%
+   552→                </span>
+   553→              </div>
+   554→            </div>
+   555→
+   556→            {/* Action buttons */}
+   557→            <div className="flex items-center gap-2 pt-1">
+   558→              <Button
+   559→                size="sm"
+   560→                className="bg-ub-profit hover:bg-ub-profit/90 text-white font-semibold text-xs h-9 px-5"
+   561→                onClick={() => setConfirmDialogOpen(true)}
+   562→                disabled={isConfirming || isSkipping}
+   563→              >
+   564→                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+   565→                {isConfirming ? 'Confirming...' : 'CONFIRM'}
+   566→              </Button>
+   567→              <Button
+   568→                size="sm"
+   569→                variant="outline"
+   570→                className="border-ub-border text-ub-text-muted hover:text-ub-text-primary hover:border-ub-border-hover font-medium text-xs h-9 px-5"
+   571→                onClick={handleSkip}
+   572→                disabled={isConfirming || isSkipping}
+   573→              >
+   574→                <SkipForward className="h-3.5 w-3.5 mr-1.5" />
+   575→                {isSkipping ? 'Skipping...' : 'SKIP'}
+   576→              </Button>
+   577→              <Button
+   578→                size="sm"
+   579→                variant="outline"
+   580→                className="border-ub-warning/40 text-ub-warning hover:bg-ub-warning/10 hover:border-ub-warning/60 font-medium text-xs h-9 px-5"
+   581→                onClick={() => setRemindDialogOpen(true)}
+   582→                disabled={isConfirming || isSkipping}
+   583→              >
+   584→                <Bell className="h-3.5 w-3.5 mr-1.5" />
+   585→                REMIND LATER
+   586→              </Button>
+   587→            </div>
+   588→          </CardContent>
+   589→        </Card>
+   590→      </motion.div>
+   591→
+   592→      {/* Confirm Dialog */}
+   593→      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+   594→        <DialogContent className="bg-ub-surface border-ub-border max-w-md">
+   595→          <DialogHeader>
+   596→            <DialogTitle className="text-ub-text-primary">Confirm Opportunity</DialogTitle>
+   597→            <DialogDescription className="text-ub-text-muted">
+   598→              Review the details before confirming this trade.
+   599→            </DialogDescription>
+   600→          </DialogHeader>
+   601→          <div className="space-y-3 py-2">
+   602→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   603→              <span className="text-sm text-ub-text-muted">Symbol</span>
+   604→              <span className="text-sm font-bold text-ub-text-primary">{opp.symbol}</span>
+   605→            </div>
+   606→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   607→              <span className="text-sm text-ub-text-muted">Direction</span>
+   608→              <Badge
+   609→                className={`text-[11px] font-semibold ${
+   610→                  opp.direction === 'BUY'
+   611→                    ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30'
+   612→                    : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30'
+   613→                }`}
+   614→                variant="outline"
+   615→              >
+   616→                {opp.direction}
+   617→              </Badge>
+   618→            </div>
+   619→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   620→              <span className="text-sm text-ub-text-muted">Type</span>
+   621→              <span className="text-sm font-semibold text-ub-text-primary">{opp.type}</span>
+   622→            </div>
+   623→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   624→              <span className="text-sm text-ub-text-muted">Lot Size / Qty</span>
+   625→              <span className="text-sm font-semibold text-ub-text-primary">
+   626→                {opp.lotSize} / {opp.quantity}
+   627→              </span>
+   628→            </div>
+   629→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   630→              <span className="text-sm text-ub-text-muted">Entry Price</span>
+   631→              <span className="text-sm font-semibold text-ub-text-primary font-mono">{INR(opp.entry)}</span>
+   632→            </div>
+   633→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   634→              <span className="text-sm text-ub-text-muted">Stop Loss</span>
+   635→              <span className="text-sm font-semibold text-ub-loss font-mono">{INR(opp.stopLoss)}</span>
+   636→            </div>
+   637→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   638→              <span className="text-sm text-ub-text-muted">Target</span>
+   639→              <span className="text-sm font-semibold text-ub-profit font-mono">{INR(opp.target)}</span>
+   640→            </div>
+   641→            {opp.strike && (
+   642→              <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   643→                <span className="text-sm text-ub-text-muted">Strike / Expiry</span>
+   644→                <span className="text-sm font-semibold text-ub-text-primary font-mono">
+   645→                  {opp.strike} / {opp.optionExpiry}
+   646→                </span>
+   647→              </div>
+   648→            )}
+   649→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   650→              <span className="text-sm text-ub-text-muted">Risk per Trade</span>
+   651→              <span className="text-sm font-semibold text-ub-loss font-mono">{INR(riskPerTrade)}</span>
+   652→            </div>
+   653→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   654→              <span className="text-sm text-ub-text-muted">Potential Profit</span>
+   655→              <span className="text-sm font-semibold text-ub-profit font-mono">{INR(potentialProfit)}</span>
+   656→            </div>
+   657→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   658→              <span className="text-sm text-ub-text-muted">Margin Required</span>
+   659→              <span className="text-sm font-bold text-ub-warning font-mono">{INR(opp.margin)}</span>
+   660→            </div>
+   661→          </div>
+   662→          <DialogFooter className="gap-2">
+   663→            <Button
+   664→              variant="outline"
+   665→              className="border-ub-border text-ub-text-muted hover:text-ub-text-primary"
+   666→              onClick={() => setConfirmDialogOpen(false)}
+   667→            >
+   668→              Cancel
+   669→            </Button>
+   670→            <Button
+   671→              className="bg-ub-profit hover:bg-ub-profit/90 text-white font-semibold"
+   672→              onClick={handleConfirm}
+   673→            >
+   674→              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+   675→              Confirm Trade
+   676→            </Button>
+   677→          </DialogFooter>
+   678→        </DialogContent>
+   679→      </Dialog>
+   680→
+   681→      {/* Remind Later Dialog */}
+   682→      <Dialog open={remindDialogOpen} onOpenChange={setRemindDialogOpen}>
+   683→        <DialogContent className="bg-ub-surface border-ub-border max-w-sm">
+   684→          <DialogHeader>
+   685→            <DialogTitle className="text-ub-text-primary">Set Reminder</DialogTitle>
+   686→            <DialogDescription className="text-ub-text-muted">
+   687→              We\'ll notify you about this opportunity again.
+   688→            </DialogDescription>
+   689→          </DialogHeader>
+   690→          <p className="text-sm text-ub-text-primary">
+   691→            <span className="font-bold">{opp.symbol}</span> — {opp.strategy}
+   692→          </p>
+   693→          <DialogFooter>
+   694→            <Button
+   695→              variant="outline"
+   696→              className="border-ub-border text-ub-text-muted"
+   697→              onClick={() => setRemindDialogOpen(false)}
+   698→            >
+   699→              Cancel
+   700→            </Button>
+   701→            <Button
+   702→              className="bg-ub-warning hover:bg-ub-warning/90 text-ub-background font-semibold"
+   703→              onClick={handleRemindLater}
+   704→            >
+   705→              <Bell className="h-4 w-4 mr-1.5" />
+   706→              Remind in 15 min
+   707→            </Button>
+   708→          </DialogFooter>
+   709→        </DialogContent>
+   710→      </Dialog>
+   711→    </>
+   712→  );
+   713→}
+   714→
+   715→// ─────────────────────────────────────────────
+   716→// Loading Skeleton
+   717→// ─────────────────────────────────────────────
+   718→
+   719→function OpportunityCardSkeleton() {
+   720→  return (
+   721→    <Card className="bg-ub-surface border-ub-border rounded-lg">
+   722→      <CardContent className="p-5 space-y-4">
+   723→        <div className="flex items-center gap-3">
+   724→          <Skeleton className="h-6 w-28 bg-ub-surface-active" />
+   725→          <Skeleton className="h-5 w-14 bg-ub-surface-active" />
+   726→          <Skeleton className="h-5 w-32 bg-ub-surface-active" />
+   727→          <div className="ml-auto flex items-center gap-2">
+   728→            <Skeleton className="h-4 w-10 bg-ub-surface-active" />
+   729→            <Skeleton className="h-1.5 w-16 bg-ub-surface-active" />
+   730→          </div>
+   731→          <Skeleton className="h-4 w-12 bg-ub-surface-active" />
+   732→        </div>
+   733→        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+   734→          {Array.from({ length: 6 }).map((_, i) => (
+   735→            <div key={i} className="space-y-1">
+   736→              <Skeleton className="h-3 w-16 bg-ub-surface-active" />
+   737→              <Skeleton className="h-4 w-20 bg-ub-surface-active" />
+   738→            </div>
+   739→          ))}
+   740→        </div>
+   741→        <Skeleton className="h-px w-full bg-ub-surface-active" />
+   742→        <div className="grid grid-cols-4 gap-1.5">
+   743→          {Array.from({ length: 12 }).map((_, i) => (
+   744→            <Skeleton key={i} className="h-7 w-full bg-ub-surface-active" />
+   745→          ))}
+   746→        </div>
+   747→        <Skeleton className="h-px w-full bg-ub-surface-active" />
+   748→        <div className="flex gap-2">
+   749→          <Skeleton className="h-9 w-28 bg-ub-surface-active" />
+   750→          <Skeleton className="h-9 w-20 bg-ub-surface-active" />
+   751→          <Skeleton className="h-9 w-32 bg-ub-surface-active" />
+   752→        </div>
+   753→      </CardContent>
+   754→    </Card>
+   755→  );
+   756→}
+   757→
+   758→// ─────────────────────────────────────────────
+   759→// Main Page
+   760→// ─────────────────────────────────────────────
+   761→
+   762→type FilterTab = 'all' | 'pending' | 'confirmed' | 'skipped' | 'expired';
+   763→
+   764→export default function OpportunitiesPage() {
+   765→  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+   766→  const [opportunities, setOpportunities] = useState<OpportunityData[]>(MOCK_OPPORTUNITIES);
+   767→  const [isLoading] = useState(false);
+   768→  const [isConfirming, setIsConfirming] = useState(false);
+   769→  const [isSkipping, setIsSkipping] = useState(false);
+   770→
+   771→  const filtered = useMemo(() => {
+   772→    if (activeTab === 'all') return opportunities;
+   773→    return opportunities.filter((o) => o.status === activeTab);
+   774→  }, [opportunities, activeTab]);
+   775→
+   776→  const pendingCount = opportunities.filter((o) => o.status === 'pending').length;
+   777→
+   778→  const handleConfirm = useCallback((id: string) => {
+   779→    setIsConfirming(true);
+   780→    const opp = opportunities.find((o) => o.id === id);
+   781→    // Simulate API call
+   782→    setTimeout(() => {
+   783→      setOpportunities((prev) =>
+   784→        prev.map((o) => (o.id === id ? { ...o, status: 'confirmed' as OppStatus } : o))
+   785→      );
+   786→      setIsConfirming(false);
+   787→      toast.success(`${opp?.symbol} confirmed`, {
+   788→        description: `${opp?.strategy} trade has been placed successfully.`,
+   789→      });
+   790→    }, 800);
+   791→  }, [opportunities]);
+   792→
+   793→  const handleSkip = useCallback((id: string) => {
+   794→    setIsSkipping(true);
+   795→    const opp = opportunities.find((o) => o.id === id);
+   796→    setTimeout(() => {
+   797→      setOpportunities((prev) =>
+   798→        prev.map((o) => (o.id === id ? { ...o, status: 'skipped' as OppStatus } : o))
+   799→      );
+   800→      setIsSkipping(false);
+   801→      toast.info(`${opp?.symbol} skipped`, {
+   802→        description: 'Opportunity has been moved to skipped list.',
+   803→      });
+   804→    }, 500);
+   805→  }, [opportunities]);
+   806→
+   807→  return (
+   808→    <main className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6">
+   809→      {/* Header */}
+   810→      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+   811→        <div className="flex items-center gap-3">
+   812→          <Target className="h-6 w-6 text-ub-accent" />
+   813→          <h1 className="text-2xl font-bold text-ub-text-primary">Opportunities</h1>
+   814→          {pendingCount > 0 && (
+   815→            <Badge className="bg-ub-accent/15 text-ub-accent border-ub-accent/30 font-semibold">
+   816→              {pendingCount}
+   817→            </Badge>
+   818→          )}
+   819→        </div>
+   820→        <Tabs
+   821→          value={activeTab}
+   822→          onValueChange={(v) => setActiveTab(v as FilterTab)}
+   823→          className="ml-auto"
+   824→        >
+   825→          <TabsList className="bg-ub-background border border-ub-border">
+   826→            <TabsTrigger
+   827→              value="all"
+   828→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+   829→            >
+   830→              All ({opportunities.length})
+   831→            </TabsTrigger>
+   832→            <TabsTrigger
+   833→              value="pending"
+   834→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+   835→            >
+   836→              Pending ({pendingCount})
+   837→            </TabsTrigger>
+   838→            <TabsTrigger
+   839→              value="confirmed"
+   840→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+   841→            >
+   842→              Confirmed ({opportunities.filter((o) => o.status === 'confirmed').length})
+   843→            </TabsTrigger>
+   844→            <TabsTrigger
+   845→              value="skipped"
+   846→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+   847→            >
+   848→              Skipped ({opportunities.filter((o) => o.status === 'skipped').length})
+   849→            </TabsTrigger>
+   850→            <TabsTrigger
+   851→              value="expired"
+   852→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+   853→            >
+   854→              Expired ({opportunities.filter((o) => o.status === 'expired').length})
+   855→            </TabsTrigger>
+   856→          </TabsList>
+   857→        </Tabs>
+   858→      </div>
+   859→
+   860→      {/* Content */}
+   861→      {isLoading ? (
+   862→        <div className="space-y-4">
+   863→          {Array.from({ length: 3 }).map((_, i) => (
+   864→            <OpportunityCardSkeleton key={i} />
+   865→          ))}
+   866→        </div>
+   867→      ) : filtered.length === 0 ? (
+   868→        <div className="flex flex-col items-center justify-center py-20 text-center">
+   869→          <div className="h-16 w-16 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-4">
+   870→            <Clock className="h-7 w-7 text-ub-text-muted" />
+   871→          </div>
+   872→          <h3 className="text-lg font-semibold text-ub-text-primary mb-1">No {activeTab === 'all' ? 'pending' : activeTab} opportunities</h3>
+   873→          <p className="text-sm text-ub-text-muted max-w-md">
+   874→            Engine will push new ones when found. Make sure the engine is running and strategies are enabled.
+   875→          </p>
+   876→        </div>
+   877→      ) : (
+   878→        <div className="space-y-4">
+   879→          <AnimatePresence mode="popLayout">
+   880→            {filtered.map((opp) => (
+   881→              <OpportunityCard
+   882→                key={opp.id}
+   883→                opp={opp}
+   884→                onConfirm={handleConfirm}
+   885→                onSkip={handleSkip}
+   886→                isConfirming={isConfirming}
+   887→                isSkipping={isSkipping}
+   888→              />
+   889→            ))}
+   890→          </AnimatePresence>
+   891→        </div>
+   892→      )}
+   893→    </main>
+   894→  );
+   895→}
+   896→

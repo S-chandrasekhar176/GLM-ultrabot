@@ -188,7 +188,6 @@ export default function RiskDashboardPage() {
   const maxRejectionCount = Math.max(...REJECTIONS.map((r) => r.count));
 
   return (
-    <main className="min-h-screen bg-ub-background p-4 md:p-6">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* ── Left Column (60%) ── */}
         <div className="lg:col-span-3 space-y-6">
@@ -457,6 +456,5 @@ export default function RiskDashboardPage() {
           </Card>
         </div>
       </div>
-    </main>
   );
 }

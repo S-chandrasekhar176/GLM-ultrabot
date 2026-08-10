@@ -420,7 +420,7 @@ export default function StrategiesPage() {
   };
 
   return (
-    <main className="min-h-screen bg-ub-background p-4 md:p-6 space-y-6">
+    <div className="space-y-6">
       {/* ── Market Regime Panel ── */}
       <Card className="bg-ub-surface border-ub-border">
         <CardHeader className="p-4 pb-3">
@@ -516,6 +516,6 @@ export default function StrategiesPage() {
           ))}
         </div>
       </section>
-    </main>
+    </div>
   );
 }

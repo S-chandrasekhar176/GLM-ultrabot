@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import { useSidebar, useStore } from '@/lib/store';
 import { theme } from '@/styles/theme';
 import Sidebar from './Sidebar';
@@ -11,6 +10,16 @@ import Header from './Header';
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { collapsed } = useSidebar();
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // Detect desktop viewport
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -28,17 +37,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen" style={{ backgroundColor: theme.colors.background }}>
       <Sidebar />
 
-      {/* Main wrapper offset by sidebar width on desktop */}
+      {/* Main content area — offset by sidebar width on desktop only */}
       <div
-        className="flex flex-col min-h-screen transition-all duration-300 ease-in-out"
-        style={{ marginLeft: 0 }} // sidebar is fixed/overlay
+        className="flex flex-col min-h-screen"
+        style={{ marginLeft: isDesktop ? sidebarWidth : 0 }}
       >
         <Header />
 
-        <main className={cn('flex-1 p-4 md:p-6')}>
-          <div className="mx-auto max-w-7xl">
-            {children}
-          </div>
+        <main className="flex-1 p-4 md:p-6">
+          {children}
         </main>
 
         {/* Footer */}

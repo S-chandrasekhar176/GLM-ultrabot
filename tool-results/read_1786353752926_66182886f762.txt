@@ -1,0 +1,1033 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useMemo, useCallback } from 'react';
+     4→import {
+     5→  TrendingUp,
+     6→  TrendingDown,
+     7→  Activity,
+     8→  ShieldAlert,
+     9→  Play,
+    10→  Square,
+    11→  Clock,
+    12→  Zap,
+    13→  ArrowUpRight,
+    14→  ArrowDownRight,
+    15→  BarChart3,
+    16→  Radio,
+    17→  SignalHigh,
+    18→  Eye,
+    19→  AlertTriangle,
+    20→} from 'lucide-react';
+    21→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Button } from '@/components/ui/button';
+    24→import { Skeleton } from '@/components/ui/skeleton';
+    25→import { Separator } from '@/components/ui/separator';
+    26→import {
+    27→  Table,
+    28→  TableBody,
+    29→  TableCell,
+    30→  TableHead,
+    31→  TableHeader,
+    32→  TableRow,
+    33→} from '@/components/ui/table';
+    34→import { Progress } from '@/components/ui/progress';
+    35→import { ScrollArea } from '@/components/ui/scroll-area';
+    36→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    37→import { useDashboard } from '@/hooks/useApi';
+    38→import { useEngine } from '@/hooks/useEngine';
+    39→import { useEngine as useEngineStore, type MarketRegime } from '@/lib/store';
+    40→
+    41→// ─────────────────────────────────────────────
+    42→// Types
+    43→// ─────────────────────────────────────────────
+    44→
+    45→interface Position {
+    46→  id: string;
+    47→  symbol: string;
+    48→  direction: 'BUY' | 'SELL';
+    49→  entry: number;
+    50→  current: number;
+    51→  qty: number;
+    52→  pnl: number;
+    53→  bookedLevels: number[];
+    54→}
+    55→
+    56→interface Trade {
+    57→  id: string;
+    58→  time: string;
+    59→  symbol: string;
+    60→  direction: 'BUY' | 'SELL';
+    61→  pnl: number;
+    62→}
+    63→
+    64→interface DashboardData {
+    65→  todayPnl: number;
+    66→  todayPnlPercent: number;
+    67→  activePositions: number;
+    68→  longCount: number;
+    69→  shortCount: number;
+    70→  winRate: number;
+    71→  riskUsed: number;
+    72→  totalCapital: number;
+    73→  capitalUsed: number;
+    74→  freeCapital: number;
+    75→  dayPnl: number;
+    76→  totalPnl: number;
+    77→  positions: Position[];
+    78→  recentTrades: Trade[];
+    79→  engineStatus: string;
+    80→  engineMode: string;
+    81→  regime: MarketRegime;
+    82→  regimeConfidence: number;
+    83→  activeStrategies: string[];
+    84→  signalsGenerated: number;
+    85→  signalsConfirmed: number;
+    86→  signalsSkipped: number;
+    87→}
+    88→
+    89→// ─────────────────────────────────────────────
+    90→// Mock / Fallback Data
+    91→// ─────────────────────────────────────────────
+    92→
+    93→const MOCK_DATA: DashboardData = {
+    94→  todayPnl: 3_842.5,
+    95→  todayPnlPercent: 3.84,
+    96→  activePositions: 5,
+    97→  longCount: 3,
+    98→  shortCount: 2,
+    99→  winRate: 72.5,
+   100→  riskUsed: 38,
+   101→  totalCapital: 1_00_000,
+   102→  capitalUsed: 38_000,
+   103→  freeCapital: 62_000,
+   104→  dayPnl: 3_842.5,
+   105→  totalPnl: 18_640.75,
+   106→  positions: [
+   107→    {
+   108→      id: '1',
+   109→      symbol: 'NIFTY 24700 CE',
+   110→      direction: 'BUY',
+   111→      entry: 245.50,
+   112→      current: 268.30,
+   113→      qty: 50,
+   114→      pnl: 1_140.0,
+   115→      bookedLevels: [258.0, 262.5],
+   116→    },
+   117→    {
+   118→      id: '2',
+   119→      symbol: 'BANKNIFTY 52000 PE',
+   120→      direction: 'BUY',
+   121→      entry: 180.25,
+   122→      current: 195.80,
+   123→      qty: 30,
+   124→      pnl: 466.5,
+   125→      bookedLevels: [],
+   126→    },
+   127→    {
+   128→      id: '3',
+   129→      symbol: 'RELIANCE 2950 CE',
+   130→      direction: 'SELL',
+   131→      entry: 32.40,
+   132→      current: 28.90,
+   133→      qty: 250,
+   134→      pnl: 875.0,
+   135→      bookedLevels: [30.5],
+   136→    },
+   137→    {
+   138→      id: '4',
+   139→      symbol: 'TCS 3800 PE',
+   140→      direction: 'BUY',
+   141→      entry: 45.60,
+   142→      current: 52.15,
+   143→      qty: 150,
+   144→      pnl: 982.5,
+   145→      bookedLevels: [49.0],
+   146→    },
+   147→    {
+   148→      id: '5',
+   149→      symbol: 'HDFCBANK 1650 CE',
+   150→      direction: 'SELL',
+   151→      entry: 38.75,
+   152→      current: 41.20,
+   153→      qty: 200,
+   154→      pnl: -490.0,
+   155→      bookedLevels: [],
+   156→    },
+   157→  ],
+   158→  recentTrades: [
+   159→    { id: 't1', time: '14:32:05', symbol: 'NIFTY 24650 CE', direction: 'BUY', pnl: 2_340.0 },
+   160→    { id: 't2', time: '13:18:42', symbol: 'BANKNIFTY 52100 PE', direction: 'BUY', pnl: 890.0 },
+   161→    { id: 't3', time: '12:45:10', symbol: 'INFY 1800 CE', direction: 'SELL', pnl: -520.0 },
+   162→    { id: 't4', time: '11:22:33', symbol: 'WIPRO 520 PE', direction: 'BUY', pnl: 1_150.0 },
+   163→    { id: 't5', time: '10:05:18', symbol: 'SBIN 820 CE', direction: 'BUY', pnl: -380.0 },
+   164→  ],
+   165→  engineStatus: 'running',
+   166→  engineMode: 'paper',
+   167→  regime: 'bull',
+   168→  regimeConfidence: 78,
+   169→  activeStrategies: ['Momentum Breakout', 'VWAP Reversion', 'RSI Divergence'],
+   170→  signalsGenerated: 24,
+   171→  signalsConfirmed: 12,
+   172→  signalsSkipped: 8,
+   173→};
+   174→
+   175→// ─────────────────────────────────────────────
+   176→// Indian Number Formatting
+   177→// ─────────────────────────────────────────────
+   178→
+   179→function formatINR(value: number): string {
+   180→  const sign = value < 0 ? '-' : '';
+   181→  const abs = Math.abs(value);
+   182→  const parts = abs.toFixed(2).split('.');
+   183→  const intPart = parts[0];
+   184→  const decPart = parts[1];
+   185→  let formatted = '';
+   186→  if (intPart.length <= 3) {
+   187→    formatted = intPart;
+   188→  } else {
+   189→    const last3 = intPart.slice(-3);
+   190→    const rest = intPart.slice(0, -3);
+   191→    formatted = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + last3;
+   192→  }
+   193→  return `₹${sign}${formatted}.${decPart}`;
+   194→}
+   195→
+   196→function formatPercent(value: number): string {
+   197→  const sign = value >= 0 ? '+' : '';
+   198→  return `${sign}${value.toFixed(2)}%`;
+   199→}
+   200→
+   201→// ─────────────────────────────────────────────
+   202→// Circular Progress (SVG)
+   203→// ─────────────────────────────────────────────
+   204→
+   205→function CircularProgress({ value, size = 64, strokeWidth = 5, color = '#00d09c' }: {
+   206→  value: number;
+   207→  size?: number;
+   208→  strokeWidth?: number;
+   209→  color?: string;
+   210→}) {
+   211→  const radius = (size - strokeWidth) / 2;
+   212→  const circumference = 2 * Math.PI * radius;
+   213→  const offset = circumference - (value / 100) * circumference;
+   214→
+   215→  return (
+   216→    <svg width={size} height={size} className="-rotate-90">
+   217→      <circle
+   218→        cx={size / 2}
+   219→        cy={size / 2}
+   220→        r={radius}
+   221→        fill="none"
+   222→        stroke="#1e293b"
+   223→        strokeWidth={strokeWidth}
+   224→      />
+   225→      <circle
+   226→        cx={size / 2}
+   227→        cy={size / 2}
+   228→        r={radius}
+   229→        fill="none"
+   230→        stroke={color}
+   231→        strokeWidth={strokeWidth}
+   232→        strokeDasharray={circumference}
+   233→        strokeDashoffset={offset}
+   234→        strokeLinecap="round"
+   235→        className="transition-all duration-700 ease-out"
+   236→      />
+   237→      <text
+   238→        x={size / 2}
+   239→        y={size / 2}
+   240→        className="fill-ub-text-primary text-xs font-bold"
+   241→        textAnchor="middle"
+   242→        dominantBaseline="central"
+   243→        transform={`rotate(90, ${size / 2}, ${size / 2})`}
+   244→      >
+   245→        {value.toFixed(0)}%
+   246→      </text>
+   247→    </svg>
+   248→  );
+   249→}
+   250→
+   251→// ─────────────────────────────────────────────
+   252→// Risk Bar Color Helper
+   253→// ─────────────────────────────────────────────
+   254→
+   255→function getRiskColor(pct: number): string {
+   256→  if (pct < 50) return '#22c55e';
+   257→  if (pct <= 80) return '#f59e0b';
+   258→  return '#ef4444';
+   259→}
+   260→
+   261→function getRiskLabel(pct: number): string {
+   262→  if (pct < 50) return 'Low';
+   263→  if (pct <= 80) return 'Medium';
+   264→  return 'High';
+   265→}
+   266→
+   267→// ─────────────────────────────────────────────
+   268→// Regime Config
+   269→// ─────────────────────────────────────────────
+   270→
+   271→const REGIME_CONFIG: Record<MarketRegime, { label: string; colorClass: string; bgClass: string; borderClass: string }> = {
+   272→  bull: {
+   273→    label: 'Bull',
+   274→    colorClass: 'text-ub-bull',
+   275→    bgClass: 'bg-ub-bull/15',
+   276→    borderClass: 'border-ub-bull/30',
+   277→  },
+   278→  bear: {
+   279→    label: 'Bear',
+   280→    colorClass: 'text-ub-bear',
+   281→    bgClass: 'bg-ub-bear/15',
+   282→    borderClass: 'border-ub-bear/30',
+   283→  },
+   284→  sideways: {
+   285→    label: 'Sideways',
+   286→    colorClass: 'text-ub-sideways',
+   287→    bgClass: 'bg-ub-sideways/15',
+   288→    borderClass: 'border-ub-sideways/30',
+   289→  },
+   290→  volatile: {
+   291→    label: 'Volatile',
+   292→    colorClass: 'text-ub-volatile',
+   293→    bgClass: 'bg-ub-volatile/15',
+   294→    borderClass: 'border-ub-volatile/30',
+   295→  },
+   296→};
+   297→
+   298→// ─────────────────────────────────────────────
+   299→// Skeleton Loaders
+   300→// ─────────────────────────────────────────────
+   301→
+   302→function StatsRowSkeleton() {
+   303→  return (
+   304→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   305→      {Array.from({ length: 4 }).map((_, i) => (
+   306→        <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   307→          <CardContent className="p-4 space-y-3">
+   308→            <Skeleton className="h-4 w-28 bg-ub-border" />
+   309→            <Skeleton className="h-8 w-32 bg-ub-border" />
+   310→            <Skeleton className="h-3 w-20 bg-ub-border" />
+   311→          </CardContent>
+   312→        </Card>
+   313→      ))}
+   314→    </div>
+   315→  );
+   316→}
+   317→
+   318→function MainContentSkeleton() {
+   319→  return (
+   320→    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+   321→      <div className="lg:col-span-3 space-y-4">
+   322→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   323→          <CardContent className="p-4 space-y-3">
+   324→            <Skeleton className="h-5 w-32 bg-ub-border" />
+   325→            {Array.from({ length: 4 }).map((_, i) => (
+   326→              <Skeleton key={i} className="h-4 w-full bg-ub-border" />
+   327→            ))}
+   328→          </CardContent>
+   329→        </Card>
+   330→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   331→          <CardContent className="p-4 space-y-3">
+   332→            <Skeleton className="h-5 w-36 bg-ub-border" />
+   333→            {Array.from({ length: 5 }).map((_, i) => (
+   334→              <Skeleton key={i} className="h-10 w-full bg-ub-border" />
+   335→            ))}
+   336→          </CardContent>
+   337→        </Card>
+   338→      </div>
+   339→      <div className="lg:col-span-2 space-y-4">
+   340→        {Array.from({ length: 4 }).map((_, i) => (
+   341→          <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   342→            <CardContent className="p-4 space-y-3">
+   343→              <Skeleton className="h-5 w-28 bg-ub-border" />
+   344→              <Skeleton className="h-4 w-20 bg-ub-border" />
+   345→            </CardContent>
+   346→          </Card>
+   347→        ))}
+   348→      </div>
+   349→    </div>
+   350→  );
+   351→}
+   352→
+   353→// ─────────────────────────────────────────────
+   354→// Market Timer Component
+   355→// ─────────────────────────────────────────────
+   356→
+   357→function MarketTimer() {
+   358→  const [now, setNow] = useState(() => new Date());
+   359→  const engine = useEngineStore();
+   360→
+   361→  useEffect(() => {
+   362→    const interval = setInterval(() => setNow(new Date()), 1_000);
+   363→    return () => clearInterval(interval);
+   364→  }, []);
+   365→
+   366→  const istString = now.toLocaleTimeString('en-IN', {
+   367→    timeZone: 'Asia/Kolkata',
+   368→    hour12: false,
+   369→    hour: '2-digit',
+   370→    minute: '2-digit',
+   371→    second: '2-digit',
+   372→  });
+   373→
+   374→  const marketCloseSeconds = engine.marketCloseSeconds;
+   375→  const hours = Math.floor(marketCloseSeconds / 3600);
+   376→  const minutes = Math.floor((marketCloseSeconds % 3600) / 60);
+   377→  const seconds = Math.floor(marketCloseSeconds % 60);
+   378→  const pad = (n: number) => String(n).padStart(2, '0');
+   379→  const timeToClose = marketCloseSeconds > 0
+   380→    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+   381→    : 'Market Closed';
+   382→
+   383→  const isUrgent = marketCloseSeconds > 0 && marketCloseSeconds < 1800;
+   384→
+   385→  return (
+   386→    <div className="flex flex-col gap-2">
+   387→      <div className="flex items-center gap-2">
+   388→        <Clock className="h-4 w-4 text-ub-text-muted" />
+   389→        <span className="text-lg font-mono font-bold text-ub-text-primary tracking-wider">
+   390→          {istString}
+   391→        </span>
+   392→        <Badge variant="outline" className="text-[10px] font-medium border-ub-border text-ub-text-muted">
+   393→          IST
+   394→        </Badge>
+   395→      </div>
+   396→      <Separator className="bg-ub-border" />
+   397→      <div className="flex items-center justify-between">
+   398→        <span className="text-xs text-ub-text-muted">Time to Close</span>
+   399→        <span className={`text-sm font-mono font-semibold ${isUrgent ? 'text-ub-warning' : 'text-ub-text-primary'}`}>
+   400→          {timeToClose}
+   401→        </span>
+   402→      </div>
+   403→    </div>
+   404→  );
+   405→}
+   406→
+   407→// ─────────────────────────────────────────────
+   408→// Stat Card Component
+   409→// ─────────────────────────────────────────────
+   410→
+   411→function StatCard({ title, children }: { title: string; children: React.ReactNode }) {
+   412→  return (
+   413→    <Card className="bg-ub-surface border-ub-border rounded-lg">
+   414→      <CardContent className="p-4">
+   415→        <p className="text-xs font-medium text-ub-text-muted uppercase tracking-wider mb-2">
+   416→          {title}
+   417→        </p>
+   418→        {children}
+   419→      </CardContent>
+   420→    </Card>
+   421→  );
+   422→}
+   423→
+   424→// ─────────────────────────────────────────────
+   425→// Dashboard Section Card
+   426→// ─────────────────────────────────────────────
+   427→
+   428→function SectionCard({ title, icon: Icon, children, className = '' }: {
+   429→  title: string;
+   430→  icon: React.ElementType;
+   431→  children: React.ReactNode;
+   432→  className?: string;
+   433→}) {
+   434→  return (
+   435→    <Card className={`bg-ub-surface border-ub-border rounded-lg ${className}`}>
+   436→      <CardHeader className="pb-3 pt-4 px-4">
+   437→        <CardTitle className="text-sm font-semibold text-ub-text-primary flex items-center gap-2">
+   438→          <Icon className="h-4 w-4 text-ub-accent" />
+   439→          {title}
+   440→        </CardTitle>
+   441→      </CardHeader>
+   442→      <CardContent className="px-4 pb-4 pt-0">
+   443→        {children}
+   444→      </CardContent>
+   445→    </Card>
+   446→  );
+   447→}
+   448→
+   449→// ─────────────────────────────────────────────
+   450→// MAIN DASHBOARD
+   451→// ─────────────────────────────────────────────
+   452→
+   453→export default function DashboardPage() {
+   454→  const { data: apiData, isLoading } = useDashboard();
+   455→  const engine = useEngine();
+   456→  const engineStore = useEngineStore();
+   457→
+   458→  // Merge API data with store state, fall back to mock
+   459→  const data: DashboardData = useMemo(() => {
+   460→    const raw = apiData as Record<string, unknown> | undefined;
+   461→    if (!raw || !raw.todayPnl) return MOCK_DATA;
+   462→    return {
+   463→      todayPnl: (raw.todayPnl as number) ?? MOCK_DATA.todayPnl,
+   464→      todayPnlPercent: (raw.todayPnlPercent as number) ?? MOCK_DATA.todayPnlPercent,
+   465→      activePositions: (raw.activePositions as number) ?? MOCK_DATA.activePositions,
+   466→      longCount: (raw.longCount as number) ?? MOCK_DATA.longCount,
+   467→      shortCount: (raw.shortCount as number) ?? MOCK_DATA.shortCount,
+   468→      winRate: (raw.winRate as number) ?? MOCK_DATA.winRate,
+   469→      riskUsed: (raw.riskUsed as number) ?? MOCK_DATA.riskUsed,
+   470→      totalCapital: (raw.totalCapital as number) ?? MOCK_DATA.totalCapital,
+   471→      capitalUsed: (raw.capitalUsed as number) ?? MOCK_DATA.capitalUsed,
+   472→      freeCapital: (raw.freeCapital as number) ?? MOCK_DATA.freeCapital,
+   473→      dayPnl: (raw.dayPnl as number) ?? MOCK_DATA.dayPnl,
+   474→      totalPnl: (raw.totalPnl as number) ?? MOCK_DATA.totalPnl,
+   475→      positions: (Array.isArray(raw.positions) && raw.positions.length > 0 ? raw.positions : MOCK_DATA.positions) as Position[],
+   476→      recentTrades: (Array.isArray(raw.recentTrades) && raw.recentTrades.length > 0 ? raw.recentTrades : MOCK_DATA.recentTrades) as Trade[],
+   477→      engineStatus: (raw.engineStatus as string) ?? engineStore.status ?? MOCK_DATA.engineStatus,
+   478→      engineMode: (raw.engineMode as string) ?? engineStore.mode ?? MOCK_DATA.engineMode,
+   479→      regime: (raw.regime as MarketRegime) ?? engineStore.regime ?? MOCK_DATA.regime,
+   480→      regimeConfidence: (raw.regimeConfidence as number) ?? MOCK_DATA.regimeConfidence,
+   481→      activeStrategies: (Array.isArray(raw.activeStrategies) && raw.activeStrategies.length > 0 ? raw.activeStrategies : MOCK_DATA.activeStrategies) as string[],
+   482→      signalsGenerated: (raw.signalsGenerated as number) ?? MOCK_DATA.signalsGenerated,
+   483→      signalsConfirmed: (raw.signalsConfirmed as number) ?? MOCK_DATA.signalsConfirmed,
+   484→      signalsSkipped: (raw.signalsSkipped as number) ?? MOCK_DATA.signalsSkipped,
+   485→    };
+   486→  }, [apiData, engineStore.status, engineStore.mode, engineStore.regime]);
+   487→
+   488→  const pnlIsPositive = data.todayPnl >= 0;
+   489→  const pnlColor = data.todayPnl > 0 ? 'text-ub-profit' : data.todayPnl < 0 ? 'text-ub-loss' : 'text-ub-text-muted';
+   490→  const riskColor = getRiskColor(data.riskUsed);
+   491→  const capitalUsedPct = data.totalCapital > 0 ? (data.capitalUsed / data.totalCapital) * 100 : 0;
+   492→
+   493→  const engineStatus = (engineStore.status || data.engineStatus || 'stopped') as 'running' | 'stopped' | 'paused';
+   494→  const engineMode = (engineStore.mode || data.engineMode || 'paper') as 'paper' | 'live';
+   495→  const regime = (engineStore.regime || data.regime || 'sideways') as MarketRegime;
+   496→  const regimeConf = data.regimeConfidence;
+   497→  const regimeCfg = REGIME_CONFIG[regime];
+   498→
+   499→  const handleStartStop = useCallback(() => {
+   500→    if (engineStatus === 'running' || engineStatus === 'paused') {
+   501→      engine.stop();
+   502→    } else {
+   503→      engine.start();
+   504→    }
+   505→  }, [engineStatus, engine]);
+   506→
+   507→  return (
+   508→    <TooltipProvider delayDuration={300}>
+   509→      <main className="min-h-screen p-4 md:p-6">
+   510→        {/* Header */}
+   511→        <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+   512→          <div>
+   513→            <h1 className="text-xl md:text-2xl font-bold text-ub-text-primary flex items-center gap-2">
+   514→              <Zap className="h-6 w-6 text-ub-accent" />
+   515→              UltraBot Web
+   516→            </h1>
+   517→            <p className="text-xs text-ub-text-muted mt-0.5">NSE Algorithmic Trading Terminal</p>
+   518→          </div>
+   519→          <div className="flex items-center gap-3">
+   520→            {engineStore.niftyValue > 0 && (
+   521→              <Badge
+   522→                variant="outline"
+   523→                className={`text-xs font-mono ${
+   524→                  engineStore.niftyChange >= 0
+   525→                    ? 'border-ub-profit/30 text-ub-profit'
+   526→                    : 'border-ub-loss/30 text-ub-loss'
+   527→                }`}
+   528→              >
+   529→                NIFTY {engineStore.niftyValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+   530→                <span className="ml-1">
+   531→                  {engineStore.niftyChange >= 0 ? '▲' : '▼'}
+   532→                  {Math.abs(engineStore.niftyChange).toFixed(2)}%
+   533→                </span>
+   534→              </Badge>
+   535→            )}
+   536→            {engineStore.vix > 0 && (
+   537→              <Badge variant="outline" className="text-xs font-mono border-ub-border text-ub-text-muted">
+   538→                VIX {engineStore.vix.toFixed(2)}
+   539→              </Badge>
+   540→            )}
+   541→          </div>
+   542→        </header>
+   543→
+   544→        {isLoading ? (
+   545→          <div className="space-y-4">
+   546→            <StatsRowSkeleton />
+   547→            <MainContentSkeleton />
+   548→          </div>
+   549→        ) : (
+   550→          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+   551→            {/* ────────────────────────────────────────
+   552→                SECTION 1: TOP STATS ROW
+   553→            ──────────────────────────────────────── */}
+   554→
+   555→            {/* Card 1: Today's P&L */}
+   556→            <StatCard title="Today's P&L">
+   557→              <div className="flex items-center gap-3">
+   558→                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${pnlIsPositive ? 'bg-ub-profit/10' : 'bg-ub-loss/10'}`}>
+   559→                  {pnlIsPositive ? (
+   560→                    <TrendingUp className="h-5 w-5 text-ub-profit" />
+   561→                  ) : (
+   562→                    <TrendingDown className="h-5 w-5 text-ub-loss" />
+   563→                  )}
+   564→                </div>
+   565→                <div>
+   566→                  <p className={`text-xl font-bold font-mono ${pnlColor}`}>
+   567→                    {formatINR(data.todayPnl)}
+   568→                  </p>
+   569→                  <p className={`text-xs font-medium ${pnlColor}`}>
+   570→                    {formatPercent(data.todayPnlPercent)}
+   571→                  </p>
+   572→                </div>
+   573→              </div>
+   574→            </StatCard>
+   575→
+   576→            {/* Card 2: Active Positions */}
+   577→            <StatCard title="Active Positions">
+   578→              <div className="flex items-center gap-3">
+   579→                <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   580→                  <Activity className="h-5 w-5 text-ub-accent" />
+   581→                </div>
+   582→                <div>
+   583→                  <p className="text-xl font-bold text-ub-text-primary font-mono">
+   584→                    {data.activePositions}
+   585→                  </p>
+   586→                  <div className="flex items-center gap-2 mt-0.5">
+   587→                    <span className="text-xs text-ub-profit font-medium">
+   588→                      {data.longCount} Long
+   589→                    </span>
+   590→                    <span className="text-ub-border">|</span>
+   591→                    <span className="text-xs text-ub-loss font-medium">
+   592→                      {data.shortCount} Short
+   593→                    </span>
+   594→                  </div>
+   595→                </div>
+   596→              </div>
+   597→            </StatCard>
+   598→
+   599→            {/* Card 3: Day Win Rate */}
+   600→            <StatCard title="Day Win Rate">
+   601→              <div className="flex items-center gap-4">
+   602→                <CircularProgress
+   603→                  value={data.winRate}
+   604→                  size={68}
+   605→                  strokeWidth={5}
+   606→                  color={data.winRate >= 60 ? '#22c55e' : data.winRate >= 40 ? '#f59e0b' : '#ef4444'}
+   607→                />
+   608→                <div className="flex flex-col">
+   609→                  <span className="text-xs text-ub-text-muted">Trades Won</span>
+   610→                  <span className={`text-sm font-semibold ${data.winRate >= 60 ? 'text-ub-profit' : data.winRate >= 40 ? 'text-ub-warning' : 'text-ub-loss'}`}>
+   611→                    {data.winRate >= 60 ? 'Good' : data.winRate >= 40 ? 'Average' : 'Poor'}
+   612→                  </span>
+   613→                </div>
+   614→              </div>
+   615→            </StatCard>
+   616→
+   617→            {/* Card 4: Risk Used */}
+   618→            <StatCard title="Risk Used">
+   619→              <div className="space-y-3">
+   620→                <div className="flex items-center justify-between">
+   621→                  <div className="flex items-center gap-2">
+   622→                    <ShieldAlert className={`h-5 w-5`} style={{ color: riskColor }} />
+   623→                    <span className="text-xl font-bold font-mono" style={{ color: riskColor }}>
+   624→                      {data.riskUsed}%
+   625→                    </span>
+   626→                  </div>
+   627→                  <Badge
+   628→                    variant="outline"
+   629→                    className="text-[10px] font-semibold"
+   630→                    style={{
+   631→                      color: riskColor,
+   632→                      borderColor: riskColor + '40',
+   633→                      backgroundColor: riskColor + '15',
+   634→                    }}
+   635→                  >
+   636→                    {getRiskLabel(data.riskUsed)}
+   637→                  </Badge>
+   638→                </div>
+   639→                <div className="h-2 w-full rounded-full bg-ub-border overflow-hidden">
+   640→                  <div
+   641→                    className="h-full rounded-full transition-all duration-500"
+   642→                    style={{
+   643→                      width: `${Math.min(data.riskUsed, 100)}%`,
+   644→                      backgroundColor: riskColor,
+   645→                    }}
+   646→                  />
+   647→                </div>
+   648→                <p className="text-[11px] text-ub-text-muted">
+   649→                  {data.riskUsed < 50
+   650→                    ? 'Healthy risk utilization'
+   651→                    : data.riskUsed <= 80
+   652→                      ? 'Approaching limit — exercise caution'
+   653→                      : 'High risk — consider reducing exposure'}
+   654→                </p>
+   655→              </div>
+   656→            </StatCard>
+   657→
+   658→            {/* ────────────────────────────────────────
+   659→                SECTION 2: MAIN CONTENT — LEFT (3/5)
+   660→            ──────────────────────────────────────── */}
+   661→
+   662→            {/* Capital Panel */}
+   663→            <SectionCard title="Capital Overview" icon={BarChart3} className="md:col-span-1 xl:col-span-3">
+   664→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+   665→                <div>
+   666→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Total Capital</p>
+   667→                  <p className="text-sm font-bold text-ub-text-primary font-mono mt-0.5">
+   668→                    {formatINR(data.totalCapital)}
+   669→                  </p>
+   670→                </div>
+   671→                <div>
+   672→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Capital Used</p>
+   673→                  <p className="text-sm font-bold text-ub-warning font-mono mt-0.5">
+   674→                    {formatINR(data.capitalUsed)}
+   675→                  </p>
+   676→                </div>
+   677→                <div>
+   678→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Free Capital</p>
+   679→                  <p className="text-sm font-bold text-ub-profit font-mono mt-0.5">
+   680→                    {formatINR(data.freeCapital)}
+   681→                  </p>
+   682→                </div>
+   683→                <div>
+   684→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Day P&L</p>
+   685→                  <p className={`text-sm font-bold font-mono mt-0.5 ${data.dayPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   686→                    {formatINR(data.dayPnl)}
+   687→                  </p>
+   688→                </div>
+   689→              </div>
+   690→              <div className="space-y-1.5">
+   691→                <div className="flex items-center justify-between text-xs">
+   692→                  <span className="text-ub-text-muted">Capital Utilization</span>
+   693→                  <span className="text-ub-text-primary font-medium font-mono">{capitalUsedPct.toFixed(1)}%</span>
+   694→                </div>
+   695→                <Progress
+   696→                  value={capitalUsedPct}
+   697→                  className="h-2 bg-ub-border [&>div]:bg-ub-accent"
+   698→                />
+   699→              </div>
+   700→              <Separator className="my-3 bg-ub-border" />
+   701→              <div className="flex items-center justify-between">
+   702→                <span className="text-xs text-ub-text-muted">Total P&L (All Time)</span>
+   703→                <span className={`text-base font-bold font-mono ${data.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   704→                  {formatINR(data.totalPnl)}
+   705→                </span>
+   706→              </div>
+   707→            </SectionCard>
+   708→
+   709→            {/* ────────────────────────────────────────
+   710→                SECTION 2: MAIN CONTENT — RIGHT (2/5)
+   711→            ──────────────────────────────────────── */}
+   712→
+   713→            {/* Engine Status */}
+   714→            <SectionCard title="Engine Status" icon={Zap} className="xl:col-span-2">
+   715→              <div className="space-y-3">
+   716→                <div className="flex items-center justify-between">
+   717→                  <div className="flex items-center gap-2">
+   718→                    <div
+   719→                      className={`h-2.5 w-2.5 rounded-full ${
+   720→                        engineStatus === 'running'
+   721→                          ? 'bg-ub-profit animate-pulse'
+   722→                          : engineStatus === 'paused'
+   723→                            ? 'bg-ub-warning'
+   724→                            : 'bg-ub-loss'
+   725→                      }`}
+   726→                    />
+   727→                    <Badge
+   728→                      variant="outline"
+   729→                      className={`text-xs font-semibold ${
+   730→                        engineStatus === 'running'
+   731→                          ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   732→                          : engineStatus === 'paused'
+   733→                            ? 'border-ub-warning/30 text-ub-warning bg-ub-warning/10'
+   734→                            : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   735→                      }`}
+   736→                    >
+   737→                      {engineStatus.charAt(0).toUpperCase() + engineStatus.slice(1)}
+   738→                    </Badge>
+   739→                  </div>
+   740→                  <Badge
+   741→                    variant="outline"
+   742→                    className={`text-[10px] font-semibold ${
+   743→                      engineMode === 'live'
+   744→                        ? 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   745→                        : 'border-ub-accent/30 text-ub-accent bg-ub-accent/10'
+   746→                    }`}
+   747→                  >
+   748→                    {engineMode === 'live' ? '🔴 ' : '🟢 '}
+   749→                    {engineMode.charAt(0).toUpperCase() + engineMode.slice(1)}
+   750→                  </Badge>
+   751→                </div>
+   752→                <div className="flex gap-2">
+   753→                  <Tooltip>
+   754→                    <TooltipTrigger asChild>
+   755→                      <Button
+   756→                        size="sm"
+   757→                        variant="outline"
+   758→                        disabled={engineStatus === 'running'}
+   759→                        onClick={handleStartStop}
+   760→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   761→                          engineStatus !== 'running'
+   762→                            ? 'hover:bg-ub-profit/15 hover:text-ub-profit hover:border-ub-profit/40 text-ub-text-muted'
+   763→                            : 'opacity-40 cursor-not-allowed'
+   764→                        }`}
+   765→                      >
+   766→                        <Play className="h-3.5 w-3.5 mr-1.5" />
+   767→                        Start
+   768→                      </Button>
+   769→                    </TooltipTrigger>
+   770→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   771→                      Start the trading engine
+   772→                    </TooltipContent>
+   773→                  </Tooltip>
+   774→                  <Tooltip>
+   775→                    <TooltipTrigger asChild>
+   776→                      <Button
+   777→                        size="sm"
+   778→                        variant="outline"
+   779→                        disabled={engineStatus === 'stopped'}
+   780→                        onClick={handleStartStop}
+   781→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   782→                          engineStatus !== 'stopped'
+   783→                            ? 'hover:bg-ub-loss/15 hover:text-ub-loss hover:border-ub-loss/40 text-ub-text-muted'
+   784→                            : 'opacity-40 cursor-not-allowed'
+   785→                        }`}
+   786→                      >
+   787→                        <Square className="h-3.5 w-3.5 mr-1.5" />
+   788→                        Stop
+   789→                      </Button>
+   790→                    </TooltipTrigger>
+   791→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   792→                      Stop the trading engine
+   793→                    </TooltipContent>
+   794→                  </Tooltip>
+   795→                </div>
+   796→                {(engine.isStarting || engine.isStopping) && (
+   797→                  <p className="text-[11px] text-ub-text-muted animate-pulse">
+   798→                    {engine.isStarting ? 'Starting engine...' : 'Stopping engine...'}
+   799→                  </p>
+   800→                )}
+   801→              </div>
+   802→            </SectionCard>
+   803→
+   804→            {/* Open Positions Table */}
+   805→            <SectionCard title="Open Positions" icon={Activity} className="md:col-span-1 xl:col-span-3">
+   806→              <ScrollArea className="max-h-[300px]">
+   807→                <Table>
+   808→                  <TableHeader>
+   809→                    <TableRow className="border-ub-border hover:bg-transparent">
+   810→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+   811→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Dir</TableHead>
+   812→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Entry</TableHead>
+   813→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Current</TableHead>
+   814→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Qty</TableHead>
+   815→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+   816→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center hidden sm:table-cell">Booked</TableHead>
+   817→                    </TableRow>
+   818→                  </TableHeader>
+   819→                  <TableBody>
+   820→                    {data.positions.map((pos) => {
+   821→                      const pnlPositive = pos.pnl >= 0;
+   822→                      return (
+   823→                        <TableRow key={pos.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+   824→                          <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+   825→                            {pos.symbol}
+   826→                          </TableCell>
+   827→                          <TableCell className="py-2.5 text-center">
+   828→                            <Badge
+   829→                              variant="outline"
+   830→                              className={`text-[10px] font-bold ${
+   831→                                pos.direction === 'BUY'
+   832→                                  ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   833→                                  : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   834→                              }`}
+   835→                            >
+   836→                              {pos.direction === 'BUY' ? (
+   837→                                <ArrowUpRight className="h-3 w-3 mr-0.5" />
+   838→                              ) : (
+   839→                                <ArrowDownRight className="h-3 w-3 mr-0.5" />
+   840→                              )}
+   841→                              {pos.direction}
+   842→                            </Badge>
+   843→                          </TableCell>
+   844→                          <TableCell className="text-xs font-mono text-ub-text-muted py-2.5 text-right">
+   845→                            {pos.entry.toFixed(2)}
+   846→                          </TableCell>
+   847→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-right">
+   848→                            {pos.current.toFixed(2)}
+   849→                          </TableCell>
+   850→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-center">
+   851→                            {pos.qty}
+   852→                          </TableCell>
+   853→                          <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+   854→                            pnlPositive ? 'text-ub-profit' : 'text-ub-loss'
+   855→                          }`}>
+   856→                            {pnlPositive ? '+' : ''}{formatINR(pos.pnl)}
+   857→                          </TableCell>
+   858→                          <TableCell className="py-2.5 text-center hidden sm:table-cell">
+   859→                            {pos.bookedLevels.length > 0 ? (
+   860→                              <div className="flex flex-wrap gap-1 justify-center">
+   861→                                {pos.bookedLevels.map((level, idx) => (
+   862→                                  <Badge
+   863→                                    key={idx}
+   864→                                    variant="outline"
+   865→                                    className="text-[9px] font-mono border-ub-accent/30 text-ub-accent bg-ub-accent/5"
+   866→                                  >
+   867→                                    {level.toFixed(1)}
+   868→                                  </Badge>
+   869→                                ))}
+   870→                              </div>
+   871→                            ) : (
+   872→                              <span className="text-[11px] text-ub-text-muted">—</span>
+   873→                            )}
+   874→                          </TableCell>
+   875→                        </TableRow>
+   876→                      );
+   877→                    })}
+   878→                  </TableBody>
+   879→                </Table>
+   880→              </ScrollArea>
+   881→              {data.positions.length === 0 && (
+   882→                <div className="flex flex-col items-center justify-center py-8 text-ub-text-muted">
+   883→                  <Activity className="h-8 w-8 mb-2 opacity-30" />
+   884→                  <p className="text-xs">No open positions</p>
+   885→                </div>
+   886→              )}
+   887→            </SectionCard>
+   888→
+   889→            {/* Market Regime */}
+   890→            <SectionCard title="Market Regime" icon={Radio} className="xl:col-span-2">
+   891→              <div className="space-y-3">
+   892→                <div className="flex items-center justify-between">
+   893→                  <Badge
+   894→                    variant="outline"
+   895→                    className={`text-xs font-bold px-3 py-1 ${regimeCfg.colorClass} ${regimeCfg.bgClass} ${regimeCfg.borderClass}`}
+   896→                  >
+   897→                    {regime === 'bull' && <TrendingUp className="h-3.5 w-3.5 mr-1" />}
+   898→                    {regime === 'bear' && <TrendingDown className="h-3.5 w-3.5 mr-1" />}
+   899→                    {regime === 'sideways' && <BarChart3 className="h-3.5 w-3.5 mr-1" />}
+   900→                    {regime === 'volatile' && <AlertTriangle className="h-3.5 w-3.5 mr-1" />}
+   901→                    {regimeCfg.label} Market
+   902→                  </Badge>
+   903→                  <div className="flex items-center gap-1.5">
+   904→                    <span className="text-[11px] text-ub-text-muted">Confidence</span>
+   905→                    <span className="text-xs font-mono font-bold text-ub-text-primary">{regimeConf}%</span>
+   906→                  </div>
+   907→                </div>
+   908→                <Progress
+   909→                  value={regimeConf}
+   910→                  className="h-1.5 bg-ub-border"
+   911→                  style={{ '--progress-color': regimeCfg.colorClass.includes('profit') ? '#22c55e' : regimeCfg.colorClass.includes('loss') ? '#ef4444' : regimeCfg.colorClass.includes('volatile') ? '#a855f7' : '#f59e0b' } as React.CSSProperties}
+   912→                />
+   913→                <Separator className="bg-ub-border" />
+   914→                <div>
+   915→                  <p className="text-[11px] text-ub-text-muted mb-2">Active Strategies</p>
+   916→                  <div className="flex flex-wrap gap-1.5">
+   917→                    {data.activeStrategies.map((strategy, idx) => (
+   918→                      <Badge
+   919→                        key={idx}
+   920→                        variant="outline"
+   921→                        className="text-[10px] font-medium border-ub-accent/20 text-ub-accent bg-ub-accent/5"
+   922→                      >
+   923→                        {strategy}
+   924→                      </Badge>
+   925→                    ))}
+   926→                  </div>
+   927→                </div>
+   928→              </div>
+   929→            </SectionCard>
+   930→
+   931→            {/* Quick Signals */}
+   932→            <SectionCard title="Quick Signals" icon={SignalHigh} className="xl:col-span-2">
+   933→              <div className="grid grid-cols-3 gap-3">
+   934→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   935→                  <p className="text-lg font-bold font-mono text-ub-accent">{data.signalsGenerated}</p>
+   936→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Generated</p>
+   937→                </div>
+   938→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   939→                  <p className="text-lg font-bold font-mono text-ub-profit">{data.signalsConfirmed}</p>
+   940→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Confirmed</p>
+   941→                </div>
+   942→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   943→                  <p className="text-lg font-bold font-mono text-ub-warning">{data.signalsSkipped}</p>
+   944→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Skipped</p>
+   945→                </div>
+   946→              </div>
+   947→              <div className="mt-3 flex items-center gap-1.5 text-[11px] text-ub-text-muted">
+   948→                <SignalHigh className="h-3 w-3" />
+   949→                <span>
+   950→                  {data.signalsGenerated > 0
+   951→                    ? `${((data.signalsConfirmed / data.signalsGenerated) * 100).toFixed(0)}% confirmation rate`
+   952→                    : 'No signals today'}
+   953→                </span>
+   954→              </div>
+   955→            </SectionCard>
+   956→
+   957→            {/* Market Timer */}
+   958→            <SectionCard title="Market Timer" icon={Clock} className="xl:col-span-2">
+   959→              <MarketTimer />
+   960→            </SectionCard>
+   961→
+   962→            {/* ────────────────────────────────────────
+   963→                SECTION 3: RECENT TRADES
+   964→            ──────────────────────────────────────── */}
+   965→
+   966→            {/* Recent Trades - spans full width */}
+   967→            <SectionCard title="Recent Trades" icon={Eye} className="md:col-span-2 xl:col-span-4">
+   968→              <Table>
+   969→                <TableHeader>
+   970→                  <TableRow className="border-ub-border hover:bg-transparent">
+   971→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Time</TableHead>
+   972→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+   973→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Direction</TableHead>
+   974→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+   975→                  </TableRow>
+   976→                </TableHeader>
+   977→                <TableBody>
+   978→                  {data.recentTrades.slice(0, 5).map((trade) => {
+   979→                    const isProfit = trade.pnl >= 0;
+   980→                    return (
+   981→                      <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+   982→                        <TableCell className="text-xs font-mono text-ub-text-muted py-2.5">
+   983→                          {trade.time}
+   984→                        </TableCell>
+   985→                        <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+   986→                          {trade.symbol}
+   987→                        </TableCell>
+   988→                        <TableCell className="py-2.5 text-center">
+   989→                          <Badge
+   990→                            variant="outline"
+   991→                            className={`text-[10px] font-bold ${
+   992→                              trade.direction === 'BUY'
+   993→                                ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   994→                                : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   995→                            }`}
+   996→                          >
+   997→                            {trade.direction}
+   998→                          </Badge>
+   999→                        </TableCell>
+  1000→                        <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+  1001→                          isProfit ? 'text-ub-profit' : 'text-ub-loss'
+  1002→                        }`}>
+  1003→                          {isProfit ? '+' : ''}{formatINR(trade.pnl)}
+  1004→                        </TableCell>
+  1005→                      </TableRow>
+  1006→                    );
+  1007→                  })}
+  1008→                </TableBody>
+  1009→              </Table>
+  1010→              {data.recentTrades.length === 0 && (
+  1011→                <div className="flex flex-col items-center justify-center py-6 text-ub-text-muted">
+  1012→                  <Eye className="h-8 w-8 mb-2 opacity-30" />
+  1013→                  <p className="text-xs">No trades today</p>
+  1014→                </div>
+  1015→              )}
+  1016→              <div className="mt-3 flex justify-end">
+  1017→                <Button
+  1018→                  variant="ghost"
+  1019→                  size="sm"
+  1020→                  className="text-xs text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 h-7"
+  1021→                >
+  1022→                  View All Trades
+  1023→                  <ArrowUpRight className="h-3 w-3 ml-1" />
+  1024→                </Button>
+  1025→              </div>
+  1026→            </SectionCard>
+  1027→          </div>
+  1028→        )}
+  1029→      </main>
+  1030→    </TooltipProvider>
+  1031→  );
+  1032→}
+  1033→

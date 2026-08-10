@@ -156,7 +156,6 @@ export default function WatchlistPage() {
   };
 
   return (
-    <main className="min-h-screen bg-ub-background p-4 md:p-6">
       <Tabs defaultValue="hotlist" className="space-y-4">
         <TabsList className="bg-ub-surface border border-ub-border">
           <TabsTrigger
@@ -396,6 +395,5 @@ export default function WatchlistPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </main>
   );
 }
