@@ -29,7 +29,7 @@ class LiquidityFilter:
         self,
         min_oi: int = _DEFAULT_MIN_OI,
         min_volume: int = _DEFAULT_MIN_VOLUME,
-        max_bid_ask_spread_pct: float = _DEFAULT_MAX_BID_ASK_SPREAD_PCT,
+        max_bid_ask_spread_pct: float = _DEFAULT_MIN_BID_ASK_SPREAD_PCT,
         max_strikes_from_atm: int = _DEFAULT_MAX_STRIKES_FROM_ATM,
     ):
         self.min_oi = min_oi

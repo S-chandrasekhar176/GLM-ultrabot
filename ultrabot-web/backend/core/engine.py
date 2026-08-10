@@ -25,18 +25,21 @@ IST = ZoneInfo("Asia/Kolkata")
 
 # Try to import strategy registry – graceful fallback if not yet built
 try:
-    from strategies.registry import get_active_strategies_for_regime, run_strategy_scan
+    from strategies.registry import StrategyRegistry
     _STRATEGIES_AVAILABLE = True
     logger.info("Strategy registry loaded successfully")
 except ImportError:
     _STRATEGIES_AVAILABLE = False
     logger.warning("strategies.registry not available – engine will run without signal generation")
-    # Provide no-op stubs so all references are safe
-    async def get_active_strategies_for_regime(regime: str, config: dict) -> list:
-        return []
-
-    async def run_strategy_scan(symbol: str, candles: list, strategy_name: str, **kwargs) -> Optional[dict]:
-        return None
+    class StrategyRegistry:
+        def __init__(self):
+            self._strategies = {}
+        def get_all(self):
+            return self._strategies
+        def get(self, name):
+            return None
+        def discover(self):
+            pass
 
 
 class UltraBotEngine:
