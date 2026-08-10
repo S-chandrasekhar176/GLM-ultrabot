@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store';
 
 export function useEngine() {
   const queryClient = useQueryClient();
-  const setEngineStatus = useStore((s) => s.setEngineStatus);
+  const setEngineStatus = useStore((s) => s.engine.setEngineStatus);
 
   const statusQuery = useEngineStatus();
 

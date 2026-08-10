@@ -40,9 +40,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     const unsubPrices = wsManager.on('live_price_updates', (data) => {
       const store = storeRef.current.getState();
       if (Array.isArray(data)) {
-        store.updatePrices(data as LivePrice[]);
+        store.realtime.updatePrices(data as LivePrice[]);
       } else if (data && typeof data === 'object' && 'symbol' in (data as LivePrice)) {
-        store.updatePrice(data as LivePrice);
+        store.realtime.updatePrice(data as LivePrice);
       }
     });
 
@@ -50,7 +50,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     const unsubOpps = wsManager.on('new_opportunity', (data) => {
       const store = storeRef.current.getState();
       if (data && typeof data === 'object') {
-        store.addOpportunity(data as Opportunity);
+        store.realtime.addOpportunity(data as Opportunity);
       }
     });
 
@@ -60,22 +60,22 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       if (data && typeof data === 'object') {
         const engine = data as Record<string, unknown>;
         if (typeof engine.status === 'string') {
-          store.setEngineStatus(engine.status as 'running' | 'stopped' | 'paused');
+          store.engine.setEngineStatus(engine.status as 'running' | 'stopped' | 'paused');
         }
         if (typeof engine.regime === 'string') {
-          store.setRegime(engine.regime as 'bull' | 'bear' | 'sideways' | 'volatile');
+          store.engine.setRegime(engine.regime as 'bull' | 'bear' | 'sideways' | 'volatile');
         }
         if (typeof engine.vix === 'number') {
-          store.setVix(engine.vix);
+          store.engine.setVix(engine.vix);
         }
         if (typeof engine.nifty_value === 'number') {
-          store.setNifty(
+          store.engine.setNifty(
             engine.nifty_value,
             (engine.nifty_change as number) ?? 0,
           );
         }
         if (typeof engine.market_close_seconds === 'number') {
-          store.setMarketCloseSeconds(engine.market_close_seconds);
+          store.engine.setMarketCloseSeconds(engine.market_close_seconds);
         }
       }
     });

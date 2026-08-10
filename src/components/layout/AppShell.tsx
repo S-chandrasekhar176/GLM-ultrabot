@@ -23,7 +23,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Close mobile sidebar on route change
   useEffect(() => {
-    useStore.getState().setMobileOpen(false);
+    useStore.getState().sidebar.setMobileOpen(false);
   }, [pathname]);
 
   // Skip shell for login page
