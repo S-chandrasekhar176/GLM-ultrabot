@@ -14,7 +14,7 @@ import { theme } from '@/styles/theme';
 
 export default function LoginPage() {
   const router = useRouter();
-  const storeLogin = useStore((s) => s.login);
+  const storeLogin = useStore((s) => s.auth.login);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

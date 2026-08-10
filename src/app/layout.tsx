@@ -29,7 +29,7 @@ function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
 
-  const hydrate = useStore((s) => s.hydrate);
+  const hydrate = useStore((s) => s.auth.hydrate);
 
   useEffect(() => {
     hydrate();
