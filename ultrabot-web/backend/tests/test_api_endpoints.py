@@ -17,19 +17,15 @@ async def client():
 
 
 @pytest.fixture
-async def auth_token(client):
-    """Get a valid JWT token for authenticated requests."""
+async def auth_headers(client):
+    """Get valid auth headers by logging in first."""
     resp = await client.post(
         "/api/auth/login",
         data={"username": "admin", "password": "admin"},
     )
     assert resp.status_code == 200
-    return resp.json()["access_token"]
-
-
-@pytest.fixture
-def auth_headers(auth_token):
-    return {"Authorization": f"Bearer {auth_token}"}
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ── Public endpoints ─────────────────────────────

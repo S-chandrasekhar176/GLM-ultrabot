@@ -1,0 +1,629 @@
+     1→(base) PS C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend> python -m venv venv                                                                   
+     2→(base) PS C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend> venv\Scripts\activate                                                                 
+     3→(venv) (base) PS C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend> pip install -r requirements.txt
+     4→Collecting fastapi>=0.110.0 (from -r requirements.txt (line 1))
+     5→  Using cached fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+     6→Collecting uvicorn==0.24.0 (from -r requirements.txt (line 2))
+     7→  Using cached uvicorn-0.24.0-py3-none-any.whl.metadata (6.4 kB)
+     8→Collecting websockets==12.0 (from -r requirements.txt (line 3))
+     9→  Using cached websockets-12.0-py3-none-any.whl.metadata (6.6 kB)
+    10→Collecting pydantic>=2.7.0 (from -r requirements.txt (line 4))
+    11→  Using cached pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+    12→Collecting pydantic-settings>=2.3.0 (from -r requirements.txt (line 5))
+    13→  Using cached pydantic_settings-2.15.0-py3-none-any.whl.metadata (3.9 kB)
+    14→Collecting sqlalchemy>=2.0.30 (from -r requirements.txt (line 6))
+    15→  Using cached sqlalchemy-2.0.51-cp313-cp313-win_amd64.whl.metadata (9.8 kB)
+    16→Collecting aiosqlite==0.19.0 (from -r requirements.txt (line 7))
+    17→  Using cached aiosqlite-0.19.0-py3-none-any.whl.metadata (4.3 kB)
+    18→Collecting httpx==0.25.2 (from -r requirements.txt (line 8))
+    19→  Using cached httpx-0.25.2-py3-none-any.whl.metadata (6.9 kB)
+    20→Collecting yfinance>=0.2.31 (from -r requirements.txt (line 9))
+    21→  Using cached yfinance-1.5.2-py2.py3-none-any.whl.metadata (6.2 kB)
+    22→Collecting pandas>=2.2.0 (from -r requirements.txt (line 10))
+    23→  Using cached pandas-3.0.5-cp313-cp313-win_amd64.whl.metadata (19 kB)
+    24→Collecting numpy>=1.26.4 (from -r requirements.txt (line 11))
+    25→  Using cached numpy-2.5.2-cp313-cp313-win_amd64.whl.metadata (6.6 kB)
+    26→Collecting ta==0.10.2 (from -r requirements.txt (line 12))
+    27→  Using cached ta-0.10.2-py3-none-any.whl
+    28→Collecting python-jose==3.3.0 (from -r requirements.txt (line 13))
+    29→  Using cached python_jose-3.3.0-py2.py3-none-any.whl.metadata (5.4 kB)
+    30→Collecting passlib==1.7.4 (from -r requirements.txt (line 14))
+    31→  Using cached passlib-1.7.4-py2.py3-none-any.whl.metadata (1.7 kB)
+    32→Collecting bcrypt==4.1.2 (from -r requirements.txt (line 15))
+    33→  Using cached bcrypt-4.1.2-cp39-abi3-win_amd64.whl.metadata (9.8 kB)
+    34→Collecting cryptography==41.0.7 (from -r requirements.txt (line 16))
+    35→  Using cached cryptography-41.0.7-cp37-abi3-win_amd64.whl.metadata (5.3 kB)
+    36→Collecting python-dotenv==1.0.0 (from -r requirements.txt (line 17))
+    37→  Using cached python_dotenv-1.0.0-py3-none-any.whl.metadata (21 kB)
+    38→Collecting pyyaml==6.0.1 (from -r requirements.txt (line 18))
+    39→  Using cached pyyaml-6.0.1-cp313-cp313-win_amd64.whl
+    40→Collecting aiohttp>=3.10.0 (from -r requirements.txt (line 19))
+    41→  Using cached aiohttp-3.14.3-cp313-cp313-win_amd64.whl.metadata (8.5 kB)
+    42→Collecting feedparser==6.0.11 (from -r requirements.txt (line 20))
+    43→  Using cached feedparser-6.0.11-py3-none-any.whl.metadata (2.4 kB)
+    44→Collecting beautifulsoup4==4.12.2 (from -r requirements.txt (line 21))
+    45→  Using cached beautifulsoup4-4.12.2-py3-none-any.whl.metadata (3.6 kB)
+    46→Collecting apscheduler==3.10.4 (from -r requirements.txt (line 22))
+    47→  Using cached APScheduler-3.10.4-py3-none-any.whl.metadata (5.7 kB)
+    48→Collecting python-multipart==0.0.6 (from -r requirements.txt (line 23))
+    49→  Using cached python_multipart-0.0.6-py3-none-any.whl.metadata (2.5 kB)
+    50→Collecting pytest==7.4.3 (from -r requirements.txt (line 24))
+    51→  Using cached pytest-7.4.3-py3-none-any.whl.metadata (7.9 kB)
+    52→Collecting pytest-asyncio==0.23.2 (from -r requirements.txt (line 25))
+    53→  Using cached pytest_asyncio-0.23.2-py3-none-any.whl.metadata (3.9 kB)
+    54→Collecting click>=7.0 (from uvicorn==0.24.0->-r requirements.txt (line 2))
+    55→  Using cached click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+    56→Collecting h11>=0.8 (from uvicorn==0.24.0->-r requirements.txt (line 2))
+    57→  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+    58→Collecting anyio (from httpx==0.25.2->-r requirements.txt (line 8))
+    59→  Using cached anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+    60→Collecting certifi (from httpx==0.25.2->-r requirements.txt (line 8))
+    61→  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+    62→Collecting httpcore==1.* (from httpx==0.25.2->-r requirements.txt (line 8))
+    63→  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+    64→Collecting idna (from httpx==0.25.2->-r requirements.txt (line 8))
+    65→  Using cached idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+    66→Collecting sniffio (from httpx==0.25.2->-r requirements.txt (line 8))
+    67→  Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+    68→Collecting ecdsa!=0.15 (from python-jose==3.3.0->-r requirements.txt (line 13))
+    69→  Using cached ecdsa-0.19.2-py2.py3-none-any.whl.metadata (29 kB)
+    70→Collecting rsa (from python-jose==3.3.0->-r requirements.txt (line 13))
+    71→  Using cached rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+    72→Collecting pyasn1 (from python-jose==3.3.0->-r requirements.txt (line 13))
+    73→  Using cached pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+    74→Collecting cffi>=1.12 (from cryptography==41.0.7->-r requirements.txt (line 16))
+    75→  Using cached cffi-2.1.1-cp313-cp313-win_amd64.whl.metadata (2.6 kB)
+    76→Collecting sgmllib3k (from feedparser==6.0.11->-r requirements.txt (line 20))
+    77→  Using cached sgmllib3k-1.0.0-py3-none-any.whl
+    78→Collecting soupsieve>1.2 (from beautifulsoup4==4.12.2->-r requirements.txt (line 21))
+    79→  Using cached soupsieve-2.9.2-py3-none-any.whl.metadata (4.6 kB)
+    80→Collecting six>=1.4.0 (from apscheduler==3.10.4->-r requirements.txt (line 22))
+    81→  Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+    82→Collecting pytz (from apscheduler==3.10.4->-r requirements.txt (line 22))
+    83→  Using cached pytz-2026.3.post1-py2.py3-none-any.whl.metadata (22 kB)
+    84→Collecting tzlocal!=3.*,>=2.0 (from apscheduler==3.10.4->-r requirements.txt (line 22))
+    85→  Using cached tzlocal-5.4.4-py3-none-any.whl.metadata (7.7 kB)
+    86→Collecting iniconfig (from pytest==7.4.3->-r requirements.txt (line 24))
+    87→  Using cached iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+    88→Collecting packaging (from pytest==7.4.3->-r requirements.txt (line 24))
+    89→  Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+    90→Collecting pluggy<2.0,>=0.12 (from pytest==7.4.3->-r requirements.txt (line 24))
+    91→  Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+    92→Collecting colorama (from pytest==7.4.3->-r requirements.txt (line 24))
+    93→  Using cached colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+    94→Collecting starlette>=0.46.0 (from fastapi>=0.110.0->-r requirements.txt (line 1))
+    95→  Using cached starlette-1.6.0-py3-none-any.whl.metadata (6.4 kB)
+    96→Collecting typing-extensions>=4.8.0 (from fastapi>=0.110.0->-r requirements.txt (line 1))
+    97→  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+    98→Collecting typing-inspection>=0.4.2 (from fastapi>=0.110.0->-r requirements.txt (line 1))
+    99→  Using cached typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+   100→Collecting annotated-doc>=0.0.2 (from fastapi>=0.110.0->-r requirements.txt (line 1))
+   101→  Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+   102→Collecting annotated-types>=0.6.0 (from pydantic>=2.7.0->-r requirements.txt (line 4))
+   103→  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+   104→Collecting pydantic-core==2.46.4 (from pydantic>=2.7.0->-r requirements.txt (line 4))
+   105→  Using cached pydantic_core-2.46.4-cp313-cp313-win_amd64.whl.metadata (6.7 kB)
+   106→Collecting greenlet>=1 (from sqlalchemy>=2.0.30->-r requirements.txt (line 6))
+   107→  Using cached greenlet-3.5.4-cp313-cp313-win_amd64.whl.metadata (3.9 kB)
+   108→Collecting requests>=2.31 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   109→  Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+   110→Collecting multitasking>=0.0.7 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   111→  Using cached multitasking-0.0.13-py3-none-any.whl.metadata (16 kB)
+   112→Collecting platformdirs>=2.0.0 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   113→  Using cached platformdirs-4.11.1-py3-none-any.whl.metadata (5.5 kB)
+   114→Collecting peewee>=3.16.2 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   115→  Using cached peewee-4.3.0-py3-none-any.whl.metadata (10 kB)
+   116→Collecting curl_cffi>=0.15 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   117→  Using cached curl_cffi-0.16.0-cp310-abi3-win_amd64.whl.metadata (17 kB)
+   118→Collecting protobuf>=3.19.0 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   119→  Using cached protobuf-7.35.1-cp310-abi3-win_amd64.whl.metadata (595 bytes)
+   120→INFO: pip is looking at multiple versions of yfinance to determine which version is compatible with other requirements. This could take a while.
+   121→Collecting yfinance>=0.2.31 (from -r requirements.txt (line 9))
+   122→  Using cached yfinance-1.5.1-py2.py3-none-any.whl.metadata (6.2 kB)
+   123→  Using cached yfinance-1.4.1-py2.py3-none-any.whl.metadata (6.2 kB)
+   124→  Using cached yfinance-1.4.0-py2.py3-none-any.whl.metadata (6.2 kB)
+   125→  Using cached yfinance-1.3.0-py2.py3-none-any.whl.metadata (6.1 kB)
+   126→Collecting frozendict>=2.3.4 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   127→  Using cached frozendict-2.4.7-py3-none-any.whl.metadata (23 kB)
+   128→Collecting yfinance>=0.2.31 (from -r requirements.txt (line 9))
+   129→  Using cached yfinance-1.2.2-py2.py3-none-any.whl.metadata (6.1 kB)
+   130→  Using cached yfinance-1.2.1-py2.py3-none-any.whl.metadata (6.1 kB)
+   131→  Using cached yfinance-1.2.0-py2.py3-none-any.whl.metadata (6.1 kB)
+   132→Collecting curl_cffi<0.14,>=0.7 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   133→  Using cached curl_cffi-0.13.0-cp39-abi3-win_amd64.whl.metadata (13 kB)
+   134→INFO: pip is still looking at multiple versions of yfinance to determine which version is compatible with other requirements. This could take a while.
+   135→Collecting yfinance>=0.2.31 (from -r requirements.txt (line 9))
+   136→  Using cached yfinance-1.1.0-py2.py3-none-any.whl.metadata (6.1 kB)
+   137→  Using cached yfinance-1.0-py2.py3-none-any.whl.metadata (6.0 kB)
+   138→  Using cached yfinance-0.2.66-py2.py3-none-any.whl.metadata (6.0 kB)
+   139→  Using cached yfinance-0.2.65-py2.py3-none-any.whl.metadata (5.8 kB)
+   140→  Using cached yfinance-0.2.64-py2.py3-none-any.whl.metadata (5.8 kB)
+   141→INFO: This is taking longer than usual. You might need to provide the dependency resolver with stricter constraints to reduce runtime. See https://pip.pypa.io/warnings/backtracking for guidance. If you want to abort this run, press Ctrl + C.
+   142→  Using cached yfinance-0.2.63-py2.py3-none-any.whl.metadata (5.8 kB)
+   143→  Using cached yfinance-0.2.62-py2.py3-none-any.whl.metadata (5.8 kB)
+   144→  Using cached yfinance-0.2.61-py2.py3-none-any.whl.metadata (5.8 kB)
+   145→  Using cached yfinance-0.2.60-py2.py3-none-any.whl.metadata (5.8 kB)
+   146→  Using cached yfinance-0.2.59-py2.py3-none-any.whl.metadata (5.7 kB)
+   147→Collecting protobuf<6,>=5.29.0 (from yfinance>=0.2.31->-r requirements.txt (line 9))
+   148→  Using cached protobuf-5.29.6-cp310-abi3-win_amd64.whl.metadata (592 bytes)
+   149→Collecting python-dateutil>=2.8.2 (from pandas>=2.2.0->-r requirements.txt (line 10))
+   150→  Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+   151→Collecting tzdata (from pandas>=2.2.0->-r requirements.txt (line 10))
+   152→  Using cached tzdata-2026.3-py2.py3-none-any.whl.metadata (1.4 kB)
+   153→Collecting aiohappyeyeballs>=2.5.0 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   154→  Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+   155→Collecting aiosignal>=1.4.0 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   156→  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+   157→Collecting attrs>=17.3.0 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   158→  Using cached attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+   159→Collecting frozenlist>=1.1.1 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   160→  Using cached frozenlist-1.8.0-cp313-cp313-win_amd64.whl.metadata (21 kB)
+   161→Collecting multidict<7.0,>=4.5 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   162→  Using cached multidict-6.7.1-cp313-cp313-win_amd64.whl.metadata (5.5 kB)
+   163→Collecting propcache>=0.2.0 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   164→  Using cached propcache-0.5.2-cp313-cp313-win_amd64.whl.metadata (17 kB)
+   165→Collecting yarl<2.0,>=1.17.0 (from aiohttp>=3.10.0->-r requirements.txt (line 19))
+   166→  Using cached yarl-1.24.5-cp313-cp313-win_amd64.whl.metadata (107 kB)
+   167→Collecting pycparser (from cffi>=1.12->cryptography==41.0.7->-r requirements.txt (line 16))
+   168→  Using cached pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+   169→Collecting charset_normalizer<4,>=2 (from requests>=2.31->yfinance>=0.2.31->-r requirements.txt (line 9))
+   170→  Using cached charset_normalizer-3.4.9-cp313-cp313-win_amd64.whl.metadata (42 kB)
+   171→Collecting urllib3<3,>=1.26 (from requests>=2.31->yfinance>=0.2.31->-r requirements.txt (line 9))
+   172→  Using cached urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+   173→Using cached uvicorn-0.24.0-py3-none-any.whl (59 kB)
+   174→Using cached websockets-12.0-py3-none-any.whl (118 kB)
+   175→Using cached aiosqlite-0.19.0-py3-none-any.whl (15 kB)
+   176→Using cached httpx-0.25.2-py3-none-any.whl (74 kB)
+   177→Using cached python_jose-3.3.0-py2.py3-none-any.whl (33 kB)
+   178→Using cached passlib-1.7.4-py2.py3-none-any.whl (525 kB)
+   179→Using cached bcrypt-4.1.2-cp39-abi3-win_amd64.whl (158 kB)
+   180→Using cached cryptography-41.0.7-cp37-abi3-win_amd64.whl (2.7 MB)
+   181→Using cached python_dotenv-1.0.0-py3-none-any.whl (19 kB)
+   182→Using cached feedparser-6.0.11-py3-none-any.whl (81 kB)
+   183→Using cached beautifulsoup4-4.12.2-py3-none-any.whl (142 kB)
+   184→Using cached APScheduler-3.10.4-py3-none-any.whl (59 kB)
+   185→Using cached python_multipart-0.0.6-py3-none-any.whl (45 kB)
+   186→Using cached pytest-7.4.3-py3-none-any.whl (325 kB)
+   187→Using cached pytest_asyncio-0.23.2-py3-none-any.whl (17 kB)
+   188→Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+   189→Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+   190→Using cached fastapi-0.141.1-py3-none-any.whl (131 kB)
+   191→Using cached pydantic-2.13.4-py3-none-any.whl (472 kB)
+   192→Using cached pydantic_core-2.46.4-cp313-cp313-win_amd64.whl (2.1 MB)
+   193→Using cached pydantic_settings-2.15.0-py3-none-any.whl (69 kB)
+   194→Using cached sqlalchemy-2.0.51-cp313-cp313-win_amd64.whl (2.1 MB)
+   195→Using cached yfinance-0.2.59-py2.py3-none-any.whl (117 kB)
+   196→Using cached protobuf-5.29.6-cp310-abi3-win_amd64.whl (435 kB)
+   197→Using cached pandas-3.0.5-cp313-cp313-win_amd64.whl (9.8 MB)
+   198→Using cached numpy-2.5.2-cp313-cp313-win_amd64.whl (12.5 MB)
+   199→Using cached aiohttp-3.14.3-cp313-cp313-win_amd64.whl (476 kB)
+   200→Using cached multidict-6.7.1-cp313-cp313-win_amd64.whl (45 kB)
+   201→Using cached yarl-1.24.5-cp313-cp313-win_amd64.whl (97 kB)
+   202→Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+   203→Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+   204→Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+   205→Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+   206→Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+   207→Using cached cffi-2.1.1-cp313-cp313-win_amd64.whl (185 kB)
+   208→Using cached click-8.4.2-py3-none-any.whl (119 kB)
+   209→Using cached curl_cffi-0.16.0-cp310-abi3-win_amd64.whl (2.0 MB)
+   210→Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+   211→Using cached ecdsa-0.19.2-py2.py3-none-any.whl (150 kB)
+   212→Using cached frozendict-2.4.7-py3-none-any.whl (16 kB)
+   213→Using cached frozenlist-1.8.0-cp313-cp313-win_amd64.whl (43 kB)
+   214→Using cached greenlet-3.5.4-cp313-cp313-win_amd64.whl (247 kB)
+   215→Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+   216→Using cached idna-3.18-py3-none-any.whl (65 kB)
+   217→Using cached multitasking-0.0.13-py3-none-any.whl (16 kB)
+   218→Using cached peewee-4.3.0-py3-none-any.whl (179 kB)
+   219→Using cached platformdirs-4.11.1-py3-none-any.whl (23 kB)
+   220→Using cached propcache-0.5.2-cp313-cp313-win_amd64.whl (41 kB)
+   221→Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+   222→Using cached pytz-2026.3.post1-py2.py3-none-any.whl (508 kB)
+   223→Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+   224→Using cached charset_normalizer-3.4.9-cp313-cp313-win_amd64.whl (161 kB)
+   225→Using cached urllib3-2.7.0-py3-none-any.whl (131 kB)
+   226→Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+   227→Using cached soupsieve-2.9.2-py3-none-any.whl (37 kB)
+   228→Using cached starlette-1.6.0-py3-none-any.whl (75 kB)
+   229→Using cached anyio-4.14.2-py3-none-any.whl (125 kB)
+   230→Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+   231→Using cached typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+   232→Using cached tzlocal-5.4.4-py3-none-any.whl (18 kB)
+   233→Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+   234→Using cached iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+   235→Using cached packaging-26.3-py3-none-any.whl (129 kB)
+   236→Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+   237→Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+   238→Using cached rsa-4.9.1-py3-none-any.whl (34 kB)
+   239→Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+   240→Using cached tzdata-2026.3-py2.py3-none-any.whl (348 kB)
+   241→Installing collected packages: sgmllib3k, pytz, passlib, multitasking, websockets, urllib3, tzdata, typing-extensions, soupsieve, sniffio, six, pyyaml, python-multipart, python-dotenv, pycparser, pyasn1, protobuf, propcache, pluggy, platformdirs, peewee, packaging, numpy, multidict, iniconfig, idna, h11, greenlet, frozenlist, frozendict, feedparser, colorama, charset_normalizer, certifi, bcrypt, attrs, annotated-types, annotated-doc, aiosqlite, aiohappyeyeballs, yarl, tzlocal, typing-inspection, sqlalchemy, rsa, requests, python-dateutil, pytest, pydantic-core, httpcore, ecdsa, click, cffi, beautifulsoup4, anyio, aiosignal, uvicorn, starlette, python-jose, pytest-asyncio, pydantic, pandas, httpx, curl_cffi, cryptography, apscheduler, aiohttp, yfinance, ta, pydantic-settings, fastapi
+   242→Successfully installed aiohappyeyeballs-2.7.1 aiohttp-3.14.3 aiosignal-1.4.0 aiosqlite-0.19.0 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.14.2 apscheduler-3.10.4 attrs-26.1.0 bcrypt-4.1.2 beautifulsoup4-4.12.2 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.4.9 click-8.4.2 colorama-0.4.6 cryptography-41.0.7 curl_cffi-0.16.0 ecdsa-0.19.2 fastapi-0.141.1 feedparser-6.0.11 frozendict-2.4.7 frozenlist-1.8.0 greenlet-3.5.4 h11-0.16.0 httpcore-1.0.9 httpx-0.25.2 idna-3.18 iniconfig-2.3.0 multidict-6.7.1 multitasking-0.0.13 numpy-2.5.2 packaging-26.3 pandas-3.0.5 passlib-1.7.4 peewee-4.3.0 platformdirs-4.11.1 pluggy-1.6.0 propcache-0.5.2 protobuf-5.29.6 pyasn1-0.6.4 pycparser-3.0 pydantic-2.13.4 pydantic-core-2.46.4 pydantic-settings-2.15.0 pytest-7.4.3 pytest-asyncio-0.23.2 python-dateutil-2.9.0.post0 python-dotenv-1.0.0 python-jose-3.3.0 python-multipart-0.0.6 pytz-2026.3.post1 pyyaml-6.0.1 requests-2.34.2 rsa-4.9.1 sgmllib3k-1.0.0 six-1.17.0 sniffio-1.3.1 soupsieve-2.9.2 sqlalchemy-2.0.51 starlette-1.6.0 ta-0.10.2 typing-extensions-4.16.0 typing-inspection-0.4.2 tzdata-2026.3 tzlocal-5.4.4 urllib3-2.7.0 uvicorn-0.24.0 websockets-12.0 yarl-1.24.5 yfinance-0.2.59
+   243→
+   244→[notice] A new release of pip is available: 25.2 -> 26.2.1
+   245→[notice] To update, run: python.exe -m pip install --upgrade pip
+   246→(venv) (base) PS C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend> python -m pytest tests/ -v     
+   247→===================================================================== test session starts =====================================================================
+   248→platform win32 -- Python 3.13.9, pytest-7.4.3, pluggy-1.6.0 -- C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend\venv\Scripts\python.exe
+   249→cachedir: .pytest_cache
+   250→rootdir: C:\Users\seera\Downloads
+   251→plugins: anyio-4.14.2, asyncio-0.23.2
+   252→asyncio: mode=Mode.STRICT
+   253→collected 115 items                                                                                                                                            
+   254→
+   255→tests\test_api_endpoints.py::test_root_returns_app_info FAILED                                                                                           [  0%]
+   256→tests\test_api_endpoints.py::test_health_returns_healthy FAILED                                                                                          [  1%]
+   257→tests\test_api_endpoints.py::test_login_success FAILED                                                                                                   [  2%]
+   258→tests\test_api_endpoints.py::test_login_wrong_password FAILED                                                                                            [  3%]
+   259→tests\test_api_endpoints.py::test_login_wrong_username FAILED                                                                                            [  4%]
+   260→tests\test_api_endpoints.py::test_me_authenticated FAILED                                                                                                [  5%]
+   261→tests\test_api_endpoints.py::test_me_unauthenticated FAILED                                                                                              [  6%]
+   262→tests\test_api_endpoints.py::test_logout FAILED                                                                                                          [  6%]
+   263→tests\test_api_endpoints.py::test_dashboard_401 FAILED                                                                                                   [  7%]
+   264→tests\test_api_endpoints.py::test_engine_status_401 FAILED                                                                                               [  8%]
+   265→tests\test_api_endpoints.py::test_trades_401 FAILED                                                                                                      [  9%]
+   266→tests\test_api_endpoints.py::test_strategies_401 FAILED                                                                                                  [ 10%]
+   267→tests\test_api_endpoints.py::test_risk_401 FAILED                                                                                                        [ 11%]
+   268→tests\test_api_endpoints.py::test_watchlist_401 FAILED                                                                                                   [ 12%]
+   269→tests\test_api_endpoints.py::test_brokers_401 FAILED                                                                                                     [ 13%]
+   270→tests\test_api_endpoints.py::test_errors_401 FAILED                                                                                                      [ 13%]
+   271→tests\test_api_endpoints.py::test_dashboard_returns_data FAILED                                                                                          [ 14%]
+   272→tests\test_api_endpoints.py::test_engine_status FAILED                                                                                                   [ 15%]
+   273→tests\test_api_endpoints.py::test_get_errors FAILED                                                                                                      [ 16%]
+   274→tests\test_api_endpoints.py::test_get_error_stats FAILED                                                                                                 [ 17%]
+   275→tests\test_error_engine.py::TestErrorEngineInit::test_singleton PASSED                                                                                   [ 18%]
+   276→tests\test_error_engine.py::TestErrorEngineInit::test_auto_recovery_available PASSED                                                                     [ 19%]
+   277→tests\test_error_engine.py::TestErrorCodeGeneration::test_generates_code PASSED                                                                          [ 20%]
+   278→tests\test_error_engine.py::TestErrorCodeGeneration::test_increments_counter PASSED                                                                      [ 20%]
+   279→tests\test_error_engine.py::TestSeverityDetermination::test_valid_severity PASSED                                                                        [ 21%]
+   280→tests\test_error_engine.py::TestSeverityDetermination::test_invalid_severity_defaults_to_error PASSED                                                    [ 22%]
+   281→tests\test_error_engine.py::TestHandleError::test_handle_ultrabot_error PASSED                                                                           [ 23%]
+   282→tests\test_error_engine.py::TestHandleError::test_handle_raw_exception PASSED                                                                            [ 24%]
+   283→tests\test_error_engine.py::TestHandleError::test_handle_broker_error PASSED                                                                             [ 25%]
+   284→tests\test_error_engine.py::TestHandleError::test_handle_critical_error PASSED                                                                           [ 26%]
+   285→tests\test_error_engine.py::TestHandleError::test_handle_with_session_id PASSED                                                                          [ 26%]
+   286→tests\test_error_engine.py::TestCallbacks::test_set_ws_callback PASSED                                                                                   [ 27%]
+   287→tests\test_error_engine.py::TestCallbacks::test_set_telegram_callback PASSED                                                                             [ 28%]
+   288→tests\test_error_engine.py::TestCallbacks::test_set_db_session_getter PASSED                                                                             [ 29%]
+   289→tests\test_error_engine.py::TestAutoRecoveryDispatch::test_token_expired_no_refresh_fn PASSED                                                            [ 30%]
+   290→tests\test_error_engine.py::TestAutoRecoveryDispatch::test_price_mismatch_no_recovery PASSED                                                             [ 31%]
+   291→tests\test_fee_calculator.py::TestEquityIntraday::test_equity_intraday_total_fees PASSED                                                                 [ 32%]
+   292→tests\test_fee_calculator.py::TestEquityIntraday::test_equity_intraday_components PASSED                                                                 [ 33%]
+   293→tests\test_fee_calculator.py::TestEquityDelivery::test_delivery_fees PASSED                                                                              [ 33%]
+   294→tests\test_fee_calculator.py::TestEquityDelivery::test_delivery_stt_both_sides PASSED                                                                    [ 34%]
+   295→tests\test_fee_calculator.py::TestOptions::test_options_fees PASSED                                                                                      [ 35%]
+   296→tests\test_fee_calculator.py::TestOptions::test_options_stt_sell_only PASSED                                                                             [ 36%]
+   297→tests\test_fee_calculator.py::TestNetPnl::test_long_intraday_net_pnl PASSED                                                                              [ 37%]
+   298→tests\test_fee_calculator.py::TestNetPnl::test_short_intraday_net_pnl PASSED                                                                             [ 38%]
+   299→tests\test_fee_calculator.py::TestNetPnl::test_losing_trade_net_pnl PASSED                                                                               [ 39%]
+   300→tests\test_fee_calculator.py::TestNetPnl::test_options_net_pnl PASSED                                                                                    [ 40%]
+   301→tests\test_market_hours.py::TestHolidayCheck::test_known_holiday PASSED                                                                                  [ 40%]
+   302→tests\test_market_hours.py::TestHolidayCheck::test_normal_day PASSED                                                                                     [ 41%]
+   303→tests\test_market_hours.py::TestHolidayCheck::test_weekend_not_holiday PASSED                                                                            [ 42%]
+   304→tests\test_market_hours.py::TestMarketOpen::test_returns_bool PASSED                                                                                     [ 43%]
+   305→tests\test_market_hours.py::TestMarketOpen::test_weekend_closed PASSED                                                                                   [ 44%]
+   306→tests\test_market_hours.py::TestGetSession::test_returns_valid_session PASSED                                                                            [ 45%]
+   307→tests\test_market_hours.py::TestMarketStatus::test_status_dict_structure PASSED                                                                          [ 46%]
+   308→tests\test_market_hours.py::TestMarketStatus::test_is_open_type PASSED                                                                                   [ 46%]
+   309→tests\test_market_hours.py::TestMarketStatus::test_session_matches PASSED                                                                                [ 47%]
+   310→tests\test_market_hours.py::TestTradeWindow::test_returns_bool PASSED                                                                                    [ 48%]
+   311→tests\test_market_hours.py::TestTradeWindow::test_custom_window PASSED                                                                                   [ 49%]
+   312→tests\test_market_hours.py::TestCustomHolidays::test_custom_holiday_list PASSED                                                                          [ 50%]
+   313→tests\test_market_hours.py::TestNextOpen::test_next_open_structure PASSED                                                                                [ 51%]
+   314→tests\test_paper_broker.py::TestPaperBrokerInit::test_initial_capital PASSED                                                                             [ 52%]
+   315→tests\test_paper_broker.py::TestPaperBrokerInit::test_get_name PASSED                                                                                    [ 53%]
+   316→tests\test_paper_broker.py::TestPaperBrokerInit::test_authenticate PASSED                                                                                [ 53%]
+   317→tests\test_paper_broker.py::TestPaperBrokerOrders::test_place_buy_order PASSED                                                                           [ 54%]
+   318→tests\test_paper_broker.py::TestPaperBrokerOrders::test_buy_creates_position PASSED                                                                      [ 55%]
+   319→tests\test_paper_broker.py::TestPaperBrokerOrders::test_close_position_profit PASSED                                                                     [ 56%]
+   320→tests\test_paper_broker.py::TestPaperBrokerOrders::test_close_position_loss PASSED                                                                       [ 57%]
+   321→tests\test_paper_broker.py::TestPaperBrokerOrders::test_close_nonexistent_position PASSED                                                                [ 58%]
+   322→tests\test_paper_broker.py::TestPaperBrokerOrders::test_get_margin PASSED                                                                                [ 59%]
+   323→tests\test_paper_broker.py::TestPaperBrokerOrders::test_margin_updates_after_buy PASSED                                                                  [ 60%]
+   324→tests\test_paper_broker.py::TestPaperBrokerOrders::test_insufficient_margin PASSED                                                                       [ 60%]
+   325→tests\test_paper_broker.py::TestPaperBrokerOrders::test_cancel_order PASSED                                                                              [ 61%]
+   326→tests\test_partial_booker.py::TestBookingLevels::test_three_levels_long PASSED                                                                           [ 62%]
+   327→tests\test_partial_booker.py::TestBookingLevels::test_levels_short PASSED                                                                                [ 63%]
+   328→tests\test_partial_booker.py::TestCheckAndBook::test_no_levels_hit PASSED                                                                                [ 64%]
+   329→tests\test_partial_booker.py::TestCheckAndBook::test_level1_hit PASSED                                                                                   [ 65%]
+   330→tests\test_partial_booker.py::TestCheckAndBook::test_level2_hit PASSED                                                                                   [ 66%]
+   331→tests\test_partial_booker.py::TestCheckAndBook::test_level3_hit PASSED                                                                                   [ 66%]
+   332→tests\test_partial_booker.py::TestCheckAndBook::test_disabled PASSED                                                                                     [ 67%]
+   333→tests\test_partial_booker.py::TestTrailingSL::test_trailing_sl_moves_up PASSED                                                                           [ 68%]
+   334→tests\test_partial_booker.py::TestTrailingSL::test_trailing_sl_never_below_original PASSED                                                               [ 69%]
+   335→tests\test_partial_booker.py::TestTrailingSL::test_no_hit_returns_original_sl PASSED                                                                     [ 70%]
+   336→tests\test_position_sizer.py::TestPositionSizerBasic::test_returns_sizing_result PASSED                                                                  [ 71%]
+   337→tests\test_position_sizer.py::TestPositionSizerBasic::test_high_confidence_gives_more PASSED                                                             [ 72%]
+   338→tests\test_position_sizer.py::TestPositionSizerBasic::test_high_vix_reduces_size PASSED                                                                  [ 73%]
+   339→tests\test_position_sizer.py::TestPositionSizerBasic::test_drawdown_reduces_size PASSED                                                                  [ 73%]
+   340→tests\test_position_sizer.py::TestPositionSizerBasic::test_fno_uses_lot_size PASSED                                                                      [ 74%]
+   341→tests\test_position_sizer.py::TestPositionSizerBasic::test_equity_any_quantity PASSED                                                                    [ 75%]
+   342→tests\test_position_sizer.py::TestPositionSizerBasic::test_confidence_tier_labels PASSED                                                                 [ 76%]
+   343→tests\test_position_sizer.py::TestPositionSizerBasic::test_volatility_tier_labels PASSED                                                                 [ 77%]
+   344→tests\test_position_sizer.py::TestPositionSizerBasic::test_capital_cap PASSED                                                                            [ 78%]
+   345→tests\test_risk_gates.py::TestG1MaxPositions::test_fail_at_max PASSED                                                                                    [ 79%]
+   346→tests\test_risk_gates.py::TestG1MaxPositions::test_pass_below_max PASSED                                                                                 [ 80%]
+   347→tests\test_risk_gates.py::TestG2SectorConcentration::test_fail_sector_full PASSED                                                                        [ 80%]
+   348→tests\test_risk_gates.py::TestG2SectorConcentration::test_pass_sector_available PASSED                                                                   [ 81%]
+   349→tests\test_risk_gates.py::TestG3MaxPositionSize::test_fail_oversized PASSED                                                                              [ 82%]
+   350→tests\test_risk_gates.py::TestG3MaxPositionSize::test_pass_normal_size PASSED                                                                            [ 83%]
+   351→tests\test_risk_gates.py::TestG4MaxDailyTrades::test_fail_at_limit PASSED                                                                                [ 84%]
+   352→tests\test_risk_gates.py::TestG4MaxDailyTrades::test_pass_below_limit PASSED                                                                             [ 85%]
+   353→tests\test_risk_gates.py::TestG5MaxDailyLoss::test_fail_loss_exceeded PASSED                                                                             [ 86%]
+   354→tests\test_risk_gates.py::TestG5MaxDailyLoss::test_pass_within_limit PASSED                                                                              [ 86%]
+   355→tests\test_risk_gates.py::TestG6CorrelationCheck::test_pass_no_correlation PASSED                                                                        [ 87%]
+   356→tests\test_risk_gates.py::TestG7VIXFilter::test_fail_high_vix PASSED                                                                                     [ 88%]
+   357→tests\test_risk_gates.py::TestG7VIXFilter::test_pass_normal_vix PASSED                                                                                   [ 89%]
+   358→tests\test_risk_gates.py::TestG7VIXFilter::test_pass_missing_vix PASSED                                                                                  [ 90%]
+   359→tests\test_risk_gates.py::TestG8TimeOfDay::test_within_window PASSED                                                                                     [ 91%]
+   360→tests\test_risk_gates.py::TestG9PriceMismatch::test_fail_large_mismatch PASSED                                                                           [ 92%]
+   361→tests\test_risk_gates.py::TestG9PriceMismatch::test_pass_small_mismatch PASSED                                                                           [ 93%]
+   362→tests\test_risk_gates.py::TestG9PriceMismatch::test_pass_no_ltp PASSED                                                                                   [ 93%]
+   363→tests\test_risk_gates.py::TestG10MinConfidence::test_fail_low_confidence PASSED                                                                          [ 94%]
+   364→tests\test_risk_gates.py::TestG10MinConfidence::test_pass_high_confidence PASSED                                                                         [ 95%]
+   365→tests\test_risk_gates.py::TestG11MaxDrawdown::test_fail_deep_drawdown PASSED                                                                             [ 96%]
+   366→tests\test_risk_gates.py::TestG11MaxDrawdown::test_pass_shallow_drawdown PASSED                                                                          [ 97%]
+   367→tests\test_risk_gates.py::TestG12MarginCheck::test_pass_sufficient_margin PASSED                                                                         [ 98%]
+   368→tests\test_risk_gates.py::TestG12MarginCheck::test_fail_insufficient_margin PASSED                                                                       [ 99%]
+   369→tests\test_risk_gates.py::TestG13DuplicateSignal::test_pass_no_repo PASSED                                                                               [100%]
+   370→
+   371→========================================================================== FAILURES ===========================================================================
+   372→_________________________________________________________________ test_root_returns_app_info __________________________________________________________________
+   373→
+   374→client = <async_generator object client at 0x0000021A0DC57010>
+   375→
+   376→    @pytest.mark.asyncio
+   377→    async def test_root_returns_app_info(client):
+   378→>       resp = await client.get("/")
+   379→E       AttributeError: 'async_generator' object has no attribute 'get'
+   380→
+   381→tests\test_api_endpoints.py:40: AttributeError
+   382→_________________________________________________________________ test_health_returns_healthy _________________________________________________________________
+   383→
+   384→client = <async_generator object client at 0x0000021A0DC57A60>
+   385→
+   386→    @pytest.mark.asyncio
+   387→    async def test_health_returns_healthy(client):
+   388→>       resp = await client.get("/health")
+   389→E       AttributeError: 'async_generator' object has no attribute 'get'
+   390→
+   391→tests\test_api_endpoints.py:50: AttributeError
+   392→_____________________________________________________________________ test_login_success ______________________________________________________________________
+   393→
+   394→client = <async_generator object client at 0x0000021A0DC57F10>
+   395→
+   396→    @pytest.mark.asyncio
+   397→    async def test_login_success(client):
+   398→>       resp = await client.post(
+   399→            "/api/auth/login",
+   400→            data={"username": "admin", "password": "admin"},
+   401→        )
+   402→E       AttributeError: 'async_generator' object has no attribute 'post'
+   403→
+   404→tests\test_api_endpoints.py:63: AttributeError
+   405→__________________________________________________________________ test_login_wrong_password __________________________________________________________________
+   406→
+   407→client = <async_generator object client at 0x0000021A0DC57970>
+   408→
+   409→    @pytest.mark.asyncio
+   410→    async def test_login_wrong_password(client):
+   411→>       resp = await client.post(
+   412→            "/api/auth/login",
+   413→            data={"username": "admin", "password": "wrong"},
+   414→        )
+   415→E       AttributeError: 'async_generator' object has no attribute 'post'
+   416→
+   417→tests\test_api_endpoints.py:75: AttributeError
+   418→__________________________________________________________________ test_login_wrong_username __________________________________________________________________
+   419→
+   420→client = <async_generator object client at 0x0000021A0E0345E0>
+   421→
+   422→    @pytest.mark.asyncio
+   423→    async def test_login_wrong_username(client):
+   424→>       resp = await client.post(
+   425→            "/api/auth/login",
+   426→            data={"username": "hacker", "password": "admin"},
+   427→        )
+   428→E       AttributeError: 'async_generator' object has no attribute 'post'
+   429→
+   430→tests\test_api_endpoints.py:84: AttributeError
+   431→____________________________________________________________________ test_me_authenticated ____________________________________________________________________
+   432→
+   433→client = <async_generator object client at 0x0000021A0DC57B50>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0DEF1E00>'}
+   434→
+   435→    @pytest.mark.asyncio
+   436→    async def test_me_authenticated(client, auth_headers):
+   437→>       resp = await client.get("/api/auth/me", headers=auth_headers)
+   438→E       AttributeError: 'async_generator' object has no attribute 'get'
+   439→
+   440→tests\test_api_endpoints.py:93: AttributeError
+   441→___________________________________________________________________ test_me_unauthenticated ___________________________________________________________________
+   442→
+   443→client = <async_generator object client at 0x0000021A0E035030>
+   444→
+   445→    @pytest.mark.asyncio
+   446→    async def test_me_unauthenticated(client):
+   447→>       resp = await client.get("/api/auth/me")
+   448→E       AttributeError: 'async_generator' object has no attribute 'get'
+   449→
+   450→tests\test_api_endpoints.py:100: AttributeError
+   451→_________________________________________________________________________ test_logout _________________________________________________________________________
+   452→
+   453→client = <async_generator object client at 0x0000021A0DC57B50>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0DEF1690>'}
+   454→
+   455→    @pytest.mark.asyncio
+   456→    async def test_logout(client, auth_headers):
+   457→>       resp = await client.post("/api/auth/logout", headers=auth_headers)
+   458→E       AttributeError: 'async_generator' object has no attribute 'post'
+   459→
+   460→tests\test_api_endpoints.py:106: AttributeError
+   461→_____________________________________________________________________ test_dashboard_401 ______________________________________________________________________
+   462→
+   463→client = <async_generator object client at 0x0000021A0E0356C0>
+   464→
+   465→    @pytest.mark.asyncio
+   466→    async def test_dashboard_401(client):
+   467→>       resp = await client.get("/api/dashboard")
+   468→E       AttributeError: 'async_generator' object has no attribute 'get'
+   469→
+   470→tests\test_api_endpoints.py:115: AttributeError
+   471→___________________________________________________________________ test_engine_status_401 ____________________________________________________________________
+   472→
+   473→client = <async_generator object client at 0x0000021A0E034400>
+   474→
+   475→    @pytest.mark.asyncio
+   476→    async def test_engine_status_401(client):
+   477→>       resp = await client.get("/api/engine/status")
+   478→E       AttributeError: 'async_generator' object has no attribute 'get'
+   479→
+   480→tests\test_api_endpoints.py:121: AttributeError
+   481→_______________________________________________________________________ test_trades_401 _______________________________________________________________________
+   482→
+   483→client = <async_generator object client at 0x0000021A0E035D50>
+   484→
+   485→    @pytest.mark.asyncio
+   486→    async def test_trades_401(client):
+   487→>       resp = await client.get("/api/trades")
+   488→E       AttributeError: 'async_generator' object has no attribute 'get'
+   489→
+   490→tests\test_api_endpoints.py:127: AttributeError
+   491→_____________________________________________________________________ test_strategies_401 _____________________________________________________________________
+   492→
+   493→client = <async_generator object client at 0x0000021A0E0354E0>
+   494→
+   495→    @pytest.mark.asyncio
+   496→    async def test_strategies_401(client):
+   497→>       resp = await client.get("/api/strategies")
+   498→E       AttributeError: 'async_generator' object has no attribute 'get'
+   499→
+   500→tests\test_api_endpoints.py:133: AttributeError
+   501→________________________________________________________________________ test_risk_401 ________________________________________________________________________
+   502→
+   503→client = <async_generator object client at 0x0000021A0E036D40>
+   504→
+   505→    @pytest.mark.asyncio
+   506→    async def test_risk_401(client):
+   507→>       resp = await client.get("/api/risk/status")
+   508→E       AttributeError: 'async_generator' object has no attribute 'get'
+   509→
+   510→tests\test_api_endpoints.py:139: AttributeError
+   511→_____________________________________________________________________ test_watchlist_401 ______________________________________________________________________
+   512→
+   513→client = <async_generator object client at 0x0000021A0E0362F0>
+   514→
+   515→    @pytest.mark.asyncio
+   516→    async def test_watchlist_401(client):
+   517→>       resp = await client.get("/api/watchlist")
+   518→E       AttributeError: 'async_generator' object has no attribute 'get'
+   519→
+   520→tests\test_api_endpoints.py:145: AttributeError
+   521→______________________________________________________________________ test_brokers_401 _______________________________________________________________________
+   522→
+   523→client = <async_generator object client at 0x0000021A0E0372E0>
+   524→
+   525→    @pytest.mark.asyncio
+   526→    async def test_brokers_401(client):
+   527→>       resp = await client.get("/api/brokers")
+   528→E       AttributeError: 'async_generator' object has no attribute 'get'
+   529→
+   530→tests\test_api_endpoints.py:151: AttributeError
+   531→_______________________________________________________________________ test_errors_401 _______________________________________________________________________
+   532→
+   533→client = <async_generator object client at 0x0000021A0DC57C40>
+   534→
+   535→    @pytest.mark.asyncio
+   536→    async def test_errors_401(client):
+   537→>       resp = await client.get("/api/errors")
+   538→E       AttributeError: 'async_generator' object has no attribute 'get'
+   539→
+   540→tests\test_api_endpoints.py:157: AttributeError
+   541→_________________________________________________________________ test_dashboard_returns_data _________________________________________________________________
+   542→
+   543→client = <async_generator object client at 0x0000021A0DC56890>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0E044E10>'}
+   544→
+   545→    @pytest.mark.asyncio
+   546→    async def test_dashboard_returns_data(client, auth_headers):
+   547→>       resp = await client.get("/api/dashboard", headers=auth_headers)
+   548→E       AttributeError: 'async_generator' object has no attribute 'get'
+   549→
+   550→tests\test_api_endpoints.py:166: AttributeError
+   551→_____________________________________________________________________ test_engine_status ______________________________________________________________________
+   552→
+   553→client = <async_generator object client at 0x0000021A0DC575B0>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0E046350>'}
+   554→
+   555→    @pytest.mark.asyncio
+   556→    async def test_engine_status(client, auth_headers):
+   557→>       resp = await client.get("/api/engine/status", headers=auth_headers)
+   558→E       AttributeError: 'async_generator' object has no attribute 'get'
+   559→
+   560→tests\test_api_endpoints.py:176: AttributeError
+   561→_______________________________________________________________________ test_get_errors _______________________________________________________________________
+   562→
+   563→client = <async_generator object client at 0x0000021A0E036200>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0E032CE0>'}
+   564→
+   565→    @pytest.mark.asyncio
+   566→    async def test_get_errors(client, auth_headers):
+   567→>       resp = await client.get("/api/errors", headers=auth_headers)
+   568→E       AttributeError: 'async_generator' object has no attribute 'get'
+   569→
+   570→tests\test_api_endpoints.py:187: AttributeError
+   571→____________________________________________________________________ test_get_error_stats _____________________________________________________________________
+   572→
+   573→client = <async_generator object client at 0x0000021A0DC57F10>, auth_headers = {'Authorization': 'Bearer <coroutine object auth_token at 0x0000021A0E046570>'}
+   574→
+   575→    @pytest.mark.asyncio
+   576→    async def test_get_error_stats(client, auth_headers):
+   577→>       resp = await client.get("/api/errors/stats", headers=auth_headers)
+   578→E       AttributeError: 'async_generator' object has no attribute 'get'
+   579→
+   580→tests\test_api_endpoints.py:199: AttributeError
+   581→====================================================================== warnings summary =======================================================================
+   582→api\routes\settings_api.py:75
+   583→  C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend\api\routes\settings_api.py:75: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+   584→    class SettingsUpdate(BaseModel):
+   585→
+   586→ultrabot-web (1)/ultrabot-web/backend/tests/test_risk_gates.py::TestG2SectorConcentration::test_pass_sector_available
+   587→  <frozen os>:717: RuntimeWarning: coroutine 'auth_token' was never awaited
+   588→  Enable tracemalloc to get traceback where the object was allocated.
+   589→  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+   590→
+   591→-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+   592→=================================================================== short test summary info ===================================================================
+   593→FAILED tests\test_api_endpoints.py::test_root_returns_app_info - AttributeError: 'async_generator' object has no attribute 'get'
+   594→FAILED tests\test_api_endpoints.py::test_health_returns_healthy - AttributeError: 'async_generator' object has no attribute 'get'
+   595→FAILED tests\test_api_endpoints.py::test_login_success - AttributeError: 'async_generator' object has no attribute 'post'
+   596→FAILED tests\test_api_endpoints.py::test_login_wrong_password - AttributeError: 'async_generator' object has no attribute 'post'
+   597→FAILED tests\test_api_endpoints.py::test_login_wrong_username - AttributeError: 'async_generator' object has no attribute 'post'
+   598→FAILED tests\test_api_endpoints.py::test_me_authenticated - AttributeError: 'async_generator' object has no attribute 'get'
+   599→FAILED tests\test_api_endpoints.py::test_me_unauthenticated - AttributeError: 'async_generator' object has no attribute 'get'
+   600→FAILED tests\test_api_endpoints.py::test_logout - AttributeError: 'async_generator' object has no attribute 'post'
+   601→FAILED tests\test_api_endpoints.py::test_dashboard_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   602→FAILED tests\test_api_endpoints.py::test_engine_status_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   603→FAILED tests\test_api_endpoints.py::test_trades_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   604→FAILED tests\test_api_endpoints.py::test_strategies_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   605→FAILED tests\test_api_endpoints.py::test_risk_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   606→FAILED tests\test_api_endpoints.py::test_watchlist_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   607→FAILED tests\test_api_endpoints.py::test_brokers_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   608→FAILED tests\test_api_endpoints.py::test_errors_401 - AttributeError: 'async_generator' object has no attribute 'get'
+   609→FAILED tests\test_api_endpoints.py::test_dashboard_returns_data - AttributeError: 'async_generator' object has no attribute 'get'
+   610→FAILED tests\test_api_endpoints.py::test_engine_status - AttributeError: 'async_generator' object has no attribute 'get'
+   611→FAILED tests\test_api_endpoints.py::test_get_errors - AttributeError: 'async_generator' object has no attribute 'get'
+   612→FAILED tests\test_api_endpoints.py::test_get_error_stats - AttributeError: 'async_generator' object has no attribute 'get'
+   613→========================================================== 20 failed, 95 passed, 2 warnings in 7.32s ==========================================================
+   614→<sys>:0: RuntimeWarning: coroutine 'auth_token' was never awaited
+   615→RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+   616→(venv) (base) PS C:\Users\seera\Downloads\ultrabot-web (1)\ultrabot-web\backend> python app.py                  
+   617→INFO:     Started server process [6832]
+   618→INFO:     Waiting for application startup.
+   619→2026-08-10 09:32:23,056 - __main__ - INFO - UltraBot Web starting...
+   620→2026-08-10 09:32:23,124 - __main__ - INFO - Database initialized
+   621→2026-08-10 09:32:23,127 - api.dependencies - INFO - Engine instance registered in dependencies
+   622→2026-08-10 09:32:23,127 - api.dependencies - INFO - Repository instance registered in dependencies
+   623→2026-08-10 09:32:23,128 - __main__ - INFO - UltraBot Web started
+   624→2026-08-10 09:32:23,128 - __main__ - INFO - Market status: {'is_open': True, 'session': 'market', 'next_open': None, 'time_to_open_seconds': None, 'current_time_ist': '2026-08-10 09:32:23 IST'}
+   625→INFO:     Application startup complete.
+   626→ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+   627→INFO:     Waiting for application shutdown.
+   628→2026-08-10 09:32:23,129 - __main__ - INFO - UltraBot Web stopped
+   629→INFO:     Application shutdown complete.

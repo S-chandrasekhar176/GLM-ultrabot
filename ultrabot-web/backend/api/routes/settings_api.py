@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.dependencies import get_current_user
 from config.settings import settings
@@ -79,8 +79,7 @@ class SettingsUpdate(BaseModel):
         {"risk.max_daily_trades": 15, "engine.scan_interval_seconds": 60}
     """
     # Allow arbitrary keys
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
     def get_updates(self) -> Dict[str, Any]:
         return self.model_dump(exclude_none=True)
