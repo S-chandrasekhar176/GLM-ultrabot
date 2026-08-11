@@ -1,0 +1,1068 @@
+     1→'use client';
+     2→
+     3→import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import {
+     6→  Card,
+     7→  CardContent,
+     8→  CardHeader,
+     9→  CardTitle,
+    10→} from '@/components/ui/card';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Badge } from '@/components/ui/badge';
+    13→import { Input } from '@/components/ui/input';
+    14→import { Checkbox } from '@/components/ui/checkbox';
+    15→import { Label } from '@/components/ui/label';
+    16→import { Separator } from '@/components/ui/separator';
+    17→import { Skeleton } from '@/components/ui/skeleton';
+    18→import { ScrollArea } from '@/components/ui/scroll-area';
+    19→import {
+    20→  Select,
+    21→  SelectContent,
+    22→  SelectItem,
+    23→  SelectTrigger,
+    24→  SelectValue,
+    25→} from '@/components/ui/select';
+    26→import {
+    27→  Collapsible,
+    28→  CollapsibleContent,
+    29→  CollapsibleTrigger,
+    30→} from '@/components/ui/collapsible';
+    31→import {
+    32→  Table,
+    33→  TableBody,
+    34→  TableCell,
+    35→  TableHead,
+    36→  TableHeader,
+    37→  TableRow,
+    38→} from '@/components/ui/table';
+    39→import {
+    40→  AreaChart,
+    41→  Area,
+    42→  BarChart,
+    43→  Bar,
+    44→  XAxis,
+    45→  YAxis,
+    46→  Tooltip as RTooltip,
+    47→  ResponsiveContainer,
+    48→  CartesianGrid,
+    49→  Cell,
+    50→  ReferenceLine,
+    51→} from 'recharts';
+    52→import {
+    53→  Play,
+    54→  Loader2,
+    55→  ChevronDown,
+    56→  TrendingUp,
+    57→  TrendingDown,
+    58→  BarChart3,
+    59→  CalendarDays,
+    60→  Clock,
+    61→  Target,
+    62→  ShieldCheck,
+    63→  Activity,
+    64→  ArrowUpRight,
+    65→  ArrowDownRight,
+    66→} from 'lucide-react';
+    67→import { toast } from 'sonner';
+    68→import { runBacktest, getBacktestStatus, getBacktestResult, getBacktestHistory } from '@/lib/api';
+    69→
+    70→// ─────────────────────────────────────────────
+    71→// Types
+    72→// ─────────────────────────────────────────────
+    73→
+    74→interface BacktestForm {
+    75→  strategy: string;
+    76→  symbols: string;
+    77→  fromDate: string;
+    78→  toDate: string;
+    79→  timeframe: string;
+    80→  capital: number;
+    81→  includeFees: boolean;
+    82→  applyRiskGates: boolean;
+    83→}
+    84→
+    85→interface MetricCard {
+    86→  label: string;
+    87→  value: string;
+    88→  color: string;
+    89→  icon: React.ReactNode;
+    90→}
+    91→
+    92→interface Trade {
+    93→  id: number;
+    94→  date: string;
+    95→  symbol: string;
+    96→  direction: 'BUY' | 'SELL';
+    97→  entry: number;
+    98→  exit: number;
+    99→  pnl: number;
+   100→  duration: string;
+   101→  exitReason: string;
+   102→}
+   103→
+   104→interface EquityPoint {
+   105→  trade: number;
+   106→  equity: number;
+   107→}
+   108→
+   109→interface DrawdownPoint {
+   110→  date: string;
+   111→  drawdown: number;
+   112→}
+   113→
+   114→interface MonthlyReturn {
+   115→  month: string;
+   116→  year: number;
+   117→  value: number;
+   118→}
+   119→
+   120→interface PreviousRun {
+   121→  id: string;
+   122→  date: string;
+   123→  strategy: string;
+   124→  symbol: string;
+   125→  returnPct: number;
+   126→  sharpe: number;
+   127→  trades: number;
+   128→}
+   129→
+   130→interface RiskGateStat {
+   131→  name: string;
+   132→  passed: number;
+   133→  rejected: number;
+   134→}
+   135→
+   136→interface BacktestResult {
+   137→  metrics: Record<string, number>;
+   138→  equityCurve: EquityPoint[];
+   139→  drawdownChart: DrawdownPoint[];
+   140→  monthlyReturns: MonthlyReturn[];
+   141→  trades: Trade[];
+   142→  riskGateStats: RiskGateStat[];
+   143→}
+   144→
+   145→// ─────────────────────────────────────────────
+   146→// Constants
+   147→// ─────────────────────────────────────────────
+   148→
+   149→const STRATEGIES = [
+   150→  'Breakout Momentum',
+   151→  'Mean Reversion',
+   152→  'VWAP Bounce',
+   153→  'ORB (Opening Range Breakout)',
+   154→  'Supertrend',
+   155→  'EMA Crossover',
+   156→  'RSI Divergence',
+   157→  'Bollinger Squeeze',
+   158→  'MACD Signal Cross',
+   159→  'Ichimoku Cloud',
+   160→  'Volume Profile',
+   161→  'Fibonacci Retracement',
+   162→  'ADX Trend Strength',
+   163→  'Heikin Ashi Smooth',
+   164→];
+   165→
+   166→const TIMEFRAMES = ['1m', '5m', '15m', '1h', '1d'];
+   167→
+   168→const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+   169→
+   170→// ─────────────────────────────────────────────
+   171→// Mock Data Generators
+   172→// ─────────────────────────────────────────────
+   173→
+   174→function generateMockResult(form: BacktestForm): BacktestResult {
+   175→  const totalTrades = Math.floor(Math.random() * 80) + 40;
+   176→  const winRate = 55 + Math.random() * 20;
+   177→  const winningTrades = Math.floor(totalTrades * winRate / 100);
+   178→  const losingTrades = totalTrades - winningTrades;
+   179→  const avgWin = (Math.random() * 3000 + 1500);
+   180→  const avgLoss = (Math.random() * 1500 + 500);
+   181→  const totalProfit = winningTrades * avgWin;
+   182→  const totalLoss = losingTrades * avgLoss;
+   183→  const totalPnl = totalProfit - totalLoss;
+   184→  const totalReturn = (totalPnl / form.capital) * 100;
+   185→  const annualizedReturn = totalReturn * (365 / 365);
+   186→  const maxDrawdown = -(Math.random() * 15 + 5);
+   187→  const sharpe = (Math.random() * 2 + 0.5);
+   188→  const sortino = sharpe * (1 + Math.random() * 0.5);
+   189→  const profitFactor = totalProfit / totalLoss;
+   190→  const totalFees = form.includeFees ? totalTrades * (Math.random() * 50 + 20) : 0;
+   191→  const avgTradePnl = totalPnl / totalTrades;
+   192→
+   193→  // Equity curve
+   194→  const equityCurve: EquityPoint[] = [];
+   195→  let equity = form.capital;
+   196→  for (let i = 0; i <= totalTrades; i++) {
+   197→    if (i > 0) {
+   198→      const isWin = Math.random() * 100 < winRate;
+   199→      equity += isWin ? avgWin * (0.5 + Math.random()) : -(avgLoss * (0.5 + Math.random()));
+   200→    }
+   201→    equityCurve.push({ trade: i, equity: Math.round(equity) });
+   202→  }
+   203→
+   204→  // Drawdown chart
+   205→  const drawdownChart: DrawdownPoint[] = [];
+   206→  let peak = form.capital;
+   207→  const dates: string[] = [];
+   208→  for (let i = 0; i < totalTrades; i++) {
+   209→    const d = new Date(2025, 0, 1 + i * 3);
+   210→    dates.push(d.toISOString().split('T')[0]);
+   211→  }
+   212→  for (let i = 0; i < totalTrades; i++) {
+   213→    const eq = equityCurve[i + 1]?.equity ?? equity;
+   214→    peak = Math.max(peak, eq);
+   215→    const dd = ((eq - peak) / peak) * 100;
+   216→    drawdownChart.push({ date: dates[i] || `Day ${i}`, drawdown: Math.round(dd * 100) / 100 });
+   217→  }
+   218→
+   219→  // Monthly returns
+   220→  const monthlyReturns: MonthlyReturn[] = [];
+   221→  for (let m = 0; m < 12; m++) {
+   222→    monthlyReturns.push({
+   223→      month: MONTHS[m],
+   224→      year: 2025,
+   225→      value: Math.round((Math.random() * 16 - 6) * 100) / 100,
+   226→    });
+   227→  }
+   228→
+   229→  // Trades
+   230→  const symbols = form.symbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+   231→  const trades: Trade[] = [];
+   232→  const exitReasons = ['Target Hit', 'Stop Loss', 'Signal Reverse', 'EOD Square-off', 'Trailing SL'];
+   233→  for (let i = 0; i < Math.min(totalTrades, 50); i++) {
+   234→    const isBuy = Math.random() > 0.5;
+   235→    const entry = Math.random() * 3000 + 200;
+   236→    const isWin = Math.random() * 100 < winRate;
+   237→    const pnlVal = isWin
+   238→      ? (Math.random() * 4000 + 500)
+   239→      : -(Math.random() * 2000 + 200);
+   240→    const exit = isBuy ? entry + pnlVal / 100 : entry - pnlVal / 100;
+   241→    const durH = Math.floor(Math.random() * 8 + 0.5);
+   242→    const durM = Math.floor(Math.random() * 59);
+   243→    const tradeDate = new Date(2025, 0, 2 + i * 2);
+   244→
+   245→    trades.push({
+   246→      id: i + 1,
+   247→      date: tradeDate.toLocaleDateString('en-IN'),
+   248→      symbol: symbols[Math.floor(Math.random() * symbols.length)] || 'RELIANCE',
+   249→      direction: isBuy ? 'BUY' : 'SELL',
+   250→      entry: Math.round(entry * 100) / 100,
+   251→      exit: Math.round(exit * 100) / 100,
+   252→      pnl: Math.round(pnlVal),
+   253→      duration: `${durH}h ${durM}m`,
+   254→      exitReason: exitReasons[Math.floor(Math.random() * exitReasons.length)],
+   255→    });
+   256→  }
+   257→
+   258→  // Risk gate stats
+   259→  const riskGateStats: RiskGateStat[] = [
+   260→    { name: 'VIX Filter', passed: Math.floor(Math.random() * 30 + 20), rejected: Math.floor(Math.random() * 10 + 2) },
+   261→    { name: 'Daily Loss Limit', passed: Math.floor(Math.random() * 25 + 25), rejected: Math.floor(Math.random() * 8 + 1) },
+   262→    { name: 'Position Limit', passed: Math.floor(Math.random() * 28 + 15), rejected: Math.floor(Math.random() * 6 + 3) },
+   263→    { name: 'Confidence Filter', passed: Math.floor(Math.random() * 22 + 20), rejected: Math.floor(Math.random() * 12 + 2) },
+   264→    { name: 'Sector Exposure', passed: Math.floor(Math.random() * 30 + 18), rejected: Math.floor(Math.random() * 5 + 1) },
+   265→  ];
+   266→
+   267→  return {
+   268→    metrics: {
+   269→      totalReturn: Math.round(totalReturn * 100) / 100,
+   270→      annualizedReturn: Math.round(annualizedReturn * 100) / 100,
+   271→      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+   272→      sharpe: Math.round(sharpe * 100) / 100,
+   273→      sortino: Math.round(sortino * 100) / 100,
+   274→      winRate: Math.round(winRate * 100) / 100,
+   275→      profitFactor: Math.round(profitFactor * 100) / 100,
+   276→      totalTrades,
+   277→      totalFees: Math.round(totalFees),
+   278→      avgTradePnl: Math.round(avgTradePnl),
+   279→    },
+   280→    equityCurve,
+   281→    drawdownChart,
+   282→    monthlyReturns,
+   283→    trades,
+   284→    riskGateStats,
+   285→  };
+   286→}
+   287→
+   288→const PREVIOUS_RUNS: PreviousRun[] = [
+   289→  { id: 'run-1', date: '2025-08-08', strategy: 'Breakout Momentum', symbol: 'RELIANCE, TCS', returnPct: 18.4, sharpe: 1.82, trades: 67 },
+   290→  { id: 'run-2', date: '2025-08-05', strategy: 'VWAP Bounce', symbol: 'INFY', returnPct: 12.1, sharpe: 1.45, trades: 43 },
+   291→  { id: 'run-3', date: '2025-08-02', strategy: 'Mean Reversion', symbol: 'HDFCBANK, SBIN', returnPct: -3.2, sharpe: 0.67, trades: 89 },
+   292→  { id: 'run-4', date: '2025-07-29', strategy: 'ORB', symbol: 'NIFTY', returnPct: 8.7, sharpe: 1.21, trades: 55 },
+   293→  { id: 'run-5', date: '2025-07-25', strategy: 'Supertrend', symbol: 'BAJFINANCE', returnPct: 15.3, sharpe: 1.68, trades: 38 },
+   294→];
+   295→
+   296→// ─────────────────────────────────────────────
+   297→// Helpers
+   298→// ─────────────────────────────────────────────
+   299→
+   300→function getCellColor(value: number): React.CSSProperties {
+   301→  if (value <= -5) return { backgroundColor: 'rgba(239, 68, 68, 0.7)', color: '#fff' };
+   302→  if (value <= -2) return { backgroundColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' };
+   303→  if (value < 2) return { backgroundColor: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8' };
+   304→  if (value < 5) return { backgroundColor: 'rgba(34, 197, 94, 0.35)', color: '#86efac' };
+   305→  return { backgroundColor: 'rgba(34, 197, 94, 0.7)', color: '#fff' };
+   306→}
+   307→
+   308→// Custom tooltip style for charts
+   309→const tooltipStyle = {
+   310→  backgroundColor: '#1e293b',
+   311→  border: '1px solid #334155',
+   312→  borderRadius: '8px',
+   313→  color: '#f1f5f9',
+   314→  fontSize: '12px',
+   315→  padding: '8px 12px',
+   316→};
+   317→
+   318→// ─────────────────────────────────────────────
+   319→// Transform backend result to page format
+   320→// ─────────────────────────────────────────────
+   321→
+   322→function transformBackendResult(result: any, initialCapital: number = 100000): BacktestResult {
+   323→  if (!result) {
+   324→    return {
+   325→      metrics: {},
+   326→      equityCurve: [],
+   327→      drawdownChart: [],
+   328→      monthlyReturns: [],
+   329→      trades: [],
+   330→      riskGateStats: [],
+   331→    };
+   332→  }
+   333→
+   334→  const r = result;
+   335→  const capital = r.initial_capital || initialCapital;
+   336→  const totalPnl = r.total_pnl ?? 0;
+   337→  const totalReturn = capital > 0 ? parseFloat(((totalPnl / capital) * 100).toFixed(2)) : 0;
+   338→  const totalTrades = r.total_trades ?? 0;
+   339→  const winRate = r.win_rate ?? 0;
+   340→  const avgWin = r.avg_win ?? 0;
+   341→  const avgLoss = r.avg_loss ?? 0;
+   342→  const avgTradePnl = totalTrades > 0 ? parseFloat((totalPnl / totalTrades).toFixed(2)) : 0;
+   343→
+   344→  // Equity curve
+   345→  const equityCurve: EquityPoint[] = (r.equity_curve || []).map((pt: any, i: number) => ({
+   346→    trade: i,
+   347→    equity: Math.round(pt.capital ?? pt.equity ?? capital),
+   348→  }));
+   349→
+   350→  // Drawdown chart — derive from equity curve
+   351→  const drawdownChart: DrawdownPoint[] = [];
+   352→  let peak = capital;
+   353→  for (let i = 0; i < equityCurve.length; i++) {
+   354→    const eq = equityCurve[i].equity;
+   355→    peak = Math.max(peak, eq);
+   356→    const dd = peak > 0 ? parseFloat((((eq - peak) / peak) * 100).toFixed(2)) : 0;
+   357→    drawdownChart.push({
+   358→      date: r.equity_curve?.[i]?.bar || `Day ${i}`,
+   359→      drawdown: dd,
+   360→    });
+   361→  }
+   362→
+   363→  return {
+   364→    metrics: {
+   365→      totalReturn,
+   366→      annualizedReturn: totalReturn, // Backend doesn't provide separate annualized
+   367→      maxDrawdown: parseFloat((r.max_drawdown_pct ?? 0).toFixed(2)),
+   368→      sharpe: parseFloat((r.sharpe_ratio ?? 0).toFixed(2)),
+   369→      sortino: 0, // Backend doesn't provide
+   370→      winRate: parseFloat((winRate * 100).toFixed(2)) || 0,
+   371→      profitFactor: parseFloat((r.profit_factor ?? 0).toFixed(2)),
+   372→      totalTrades,
+   373→      totalFees: 0, // Backend doesn't provide
+   374→      avgTradePnl: Math.round(avgTradePnl),
+   375→    },
+   376→    equityCurve,
+   377→    drawdownChart,
+   378→    monthlyReturns: [], // Backend doesn't provide monthly breakdown
+   379→    trades: (r.trades || []).map((t: any, i: number) => ({
+   380→      id: i + 1,
+   381→      date: t.entry_time || t.date || 'N/A',
+   382→      symbol: t.symbol || 'N/A',
+   383→      direction: t.direction?.toUpperCase() || 'BUY',
+   384→      entry: parseFloat(t.entry ?? 0),
+   385→      exit: parseFloat(t.exit ?? 0),
+   386→      pnl: parseFloat(t.pnl ?? 0),
+   387→      duration: t.duration || '-',
+   388→      exitReason: t.exit_reason || t.reason || '-',
+   389→    })),
+   390→    riskGateStats: [], // Backend doesn't provide risk gate breakdown
+   391→  };
+   392→}
+   393→
+   394→// ─────────────────────────────────────────────
+   395→// Component
+   396→// ─────────────────────────────────────────────
+   397→
+   398→export default function BacktestPage() {
+   399→  const [formOpen, setFormOpen] = useState(true);
+   400→  const [isRunning, setIsRunning] = useState(false);
+   401→  const [results, setResults] = useState<BacktestResult | null>(null);
+   402→  const [previousRuns, setPreviousRuns] = useState<PreviousRun[]>([]);
+   403→  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+   404→  const [form, setForm] = useState<BacktestForm>({
+   405→    strategy: 'Breakout Momentum',
+   406→    symbols: 'RELIANCE, INFY, TCS',
+   407→    fromDate: '2025-01-01',
+   408→    toDate: '2025-08-10',
+   409→    timeframe: '5m',
+   410→    capital: 100000,
+   411→    includeFees: true,
+   412→    applyRiskGates: true,
+   413→  });
+   414→
+   415→  const activeRunIdRef = useRef<string | null>(null);
+   416→
+   417→  // Load backtest history on mount
+   418→  const loadHistory = useCallback(async () => {
+   419→    setIsLoadingHistory(true);
+   420→    try {
+   421→      const data: any = await getBacktestHistory({ limit: 20 });
+   422→      if (data?.runs) {
+   423→        setPreviousRuns(data.runs.map((r: any) => ({
+   424→          id: r.id,
+   425→          date: r.completed_at || r.created_at || 'N/A',
+   426→          strategy: r.strategy || 'N/A',
+   427→          symbol: r.symbol || 'N/A',
+   428→          returnPct: r.total_pnl && r.initial_capital ? parseFloat(((r.total_pnl / r.initial_capital) * 100).toFixed(2)) : 0,
+   429→          sharpe: r.sharpe_ratio || 0,
+   430→          trades: r.total_trades || 0,
+   431→        })));
+   432→      }
+   433→    } catch {
+   434→      // Backend not available — that's OK, previous runs will just be empty
+   435→    } finally {
+   436→      setIsLoadingHistory(false);
+   437→    }
+   438→  }, []);
+   439→
+   440→  useEffect(() => {
+   441→    loadHistory();
+   442→  }, [loadHistory]);
+   443→
+   444→  const strategyMap: Record<string, string> = {
+   445→    'Breakout Momentum': 'breakout',
+   446→    'Supertrend': 'supertrend',
+   447→    'Momentum': 'momentum',
+   448→    'RSI Divergence': 'rsi_divergence',
+   449→    'Mean Reversion': 'mean_reversion',
+   450→    'VWAP Bounce': 'vwap_reversion',
+   451→    'ORB (Opening Range Breakout)': 'orb',
+   452→    'Gap Fill': 'gap_fill',
+   453→    'Sector Rotation': 'sector_rotation',
+   454→    'Multi-Timeframe': 'multi_timeframe',
+   455→    'ORB with Volume': 'orb_volume',
+   456→    'Trend Exhaustion': 'trend_exhaustion',
+   457→    'News Momentum': 'news_momentum',
+   458→    'Adaptive Supertrend': 'adaptive_supertrend',
+   459→    'EMA Crossover': 'ema_crossover',
+   460→    'Bollinger Squeeze': 'bollinger_squeeze',
+   461→    'MACD Signal Cross': 'macd_cross',
+   462→    'Ichimoku Cloud': 'ichimoku_cloud',
+   463→    'Volume Profile': 'volume_profile',
+   464→    'Fibonacci Retracement': 'fibonacci_retracement',
+   465→    'ADX Trend Strength': 'adx_trend',
+   466→    'Heikin Ashi Smooth': 'heikin_ashi',
+   467→  };
+   468→
+   469→  const handleRun = useCallback(async () => {
+   470→    if (!form.symbols.trim()) {
+   471→      toast.error('Please enter at least one symbol');
+   472→      return;
+   473→    }
+   474→    setIsRunning(true);
+   475→    setResults(null);
+   476→    try {
+   477→      const response: any = await runBacktest({
+   478→        strategy: strategyMap[form.strategy] || form.strategy.toLowerCase().replace(/ /g, '_'),
+   479→        symbol: form.symbols.split(',')[0].trim(),
+   480→        start_date: form.fromDate,
+   481→        end_date: form.toDate,
+   482→        timeframe: form.timeframe === '5m' ? '5min' : form.timeframe,
+   483→        initial_capital: form.capital,
+   484→        parameters: { include_fees: form.includeFees, apply_risk_gates: form.applyRiskGates },
+   485→      });
+   486→      if (response?.run_id) {
+   487→        activeRunIdRef.current = response.run_id;
+   488→        // Poll for status
+   489→        const pollStatus = async () => {
+   490→          try {
+   491→            const status: any = await getBacktestStatus(response.run_id);
+   492→            if (status?.status === 'completed') {
+   493→              // Fetch full results
+   494→              const result: any = await getBacktestResult(response.run_id);
+   495→              const backtestResult = transformBackendResult(result, form.capital);
+   496→              setResults(backtestResult);
+   497→              setIsRunning(false);
+   498→              toast.success('Backtest completed successfully');
+   499→              loadHistory(); // Refresh previous runs
+   500→              return;
+   501→            } else if (status?.status === 'error') {
+   502→              toast.error(status?.error_message || 'Backtest failed');
+   503→              setIsRunning(false);
+   504→              return;
+   505→            }
+   506→          } catch {
+   507→            // Ignore polling errors
+   508→          }
+   509→          setTimeout(pollStatus, 2000);
+   510→        };
+   511→        pollStatus();
+   512→      } else {
+   513→        throw new Error('No run_id returned');
+   514→      }
+   515→    } catch (err: any) {
+   516→      console.error('Backtest failed:', err);
+   517→      toast.error(err?.response?.data?.detail || err?.message || 'Backtest failed. Check if backend is running.');
+   518→      setIsRunning(false);
+   519→    }
+   520→  }, [form, loadHistory]);
+   521→
+   522→  const handleViewRun = useCallback(async (run: PreviousRun) => {
+   523→    setForm((prev) => ({
+   524→      ...prev,
+   525→      strategy: run.strategy,
+   526→      symbols: run.symbol,
+   527→    }));
+   528→    setResults(null);
+   529→    setIsRunning(true);
+   530→    try {
+   531→      const result = await getBacktestResult(run.id);
+   532→      const backtestResult = transformBackendResult(result, form.capital);
+   533→      setResults(backtestResult);
+   534→      toast.success(`Loaded results for ${run.strategy}`);
+   535→    } catch (err: any) {
+   536→      toast.error('Failed to load backtest results');
+   537→      // Fall back to mock if backend not available
+   538→      const mockResult = generateMockResult({
+   539→        ...form,
+   540→        strategy: run.strategy,
+   541→        symbols: run.symbol,
+   542→      });
+   543→      setResults(mockResult);
+   544→    } finally {
+   545→      setIsRunning(false);
+   546→      setFormOpen(false);
+   547→    }
+   548→  }, [form]);
+   549→
+   550→  const metricCards: MetricCard[] = useMemo(() => {
+   551→    if (!results) return [];
+   552→    const m = results.metrics;
+   553→    return [
+   554→      { label: 'Total Return', value: `${m.totalReturn > 0 ? '+' : ''}${m.totalReturn}%`, color: m.totalReturn >= 0 ? '#22c55e' : '#ef4444', icon: <TrendingUp className="h-4 w-4" /> },
+   555→      { label: 'Annualized Return', value: `${m.annualizedReturn > 0 ? '+' : ''}${m.annualizedReturn}%`, color: m.annualizedReturn >= 0 ? '#22c55e' : '#ef4444', icon: <Activity className="h-4 w-4" /> },
+   556→      { label: 'Max Drawdown', value: `${m.maxDrawdown}%`, color: '#ef4444', icon: <TrendingDown className="h-4 w-4" /> },
+   557→      { label: 'Sharpe Ratio', value: `${m.sharpe}`, color: m.sharpe >= 1.5 ? '#22c55e' : m.sharpe >= 1 ? '#f59e0b' : '#ef4444', icon: <BarChart3 className="h-4 w-4" /> },
+   558→      { label: 'Sortino Ratio', value: `${m.sortino}`, color: m.sortino >= 1.5 ? '#22c55e' : m.sortino >= 1 ? '#f59e0b' : '#ef4444', icon: <ShieldCheck className="h-4 w-4" /> },
+   559→      { label: 'Win Rate', value: `${m.winRate}%`, color: m.winRate >= 60 ? '#22c55e' : '#f59e0b', icon: <Target className="h-4 w-4" /> },
+   560→      { label: 'Profit Factor', value: `${m.profitFactor}`, color: m.profitFactor >= 1.5 ? '#22c55e' : m.profitFactor >= 1 ? '#f59e0b' : '#ef4444', icon: <ArrowUpRight className="h-4 w-4" /> },
+   561→      { label: 'Total Trades', value: `${m.totalTrades}`, color: '#00d09c', icon: <BarChart3 className="h-4 w-4" /> },
+   562→      { label: 'Total Fees', value: `₹${m.totalFees.toLocaleString('en-IN')}`, color: '#94a3b8', icon: <CalendarDays className="h-4 w-4" /> },
+   563→      { label: 'Avg Trade P&L', value: `₹${m.avgTradePnl.toLocaleString('en-IN')}`, color: m.avgTradePnl >= 0 ? '#22c55e' : '#ef4444', icon: m.avgTradePnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" /> },
+   564→    ];
+   565→  }, [results]);
+   566→
+   567→  // Monthly returns grouped by year (only 2025 in mock)
+   568→  const monthlyYears = useMemo(() => {
+   569→    if (!results) return [];
+   570→    const years = [...new Set(results.monthlyReturns.map(m => m.year))];
+   571→    return years;
+   572→  }, [results]);
+   573→
+   574→  return (
+   575→    <div className="space-y-6">
+   576→      {/* Page Header */}
+   577→      <div className="flex items-center gap-3">
+   578→        <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   579→          <Activity className="h-5 w-5 text-ub-accent" />
+   580→        </div>
+   581→        <div>
+   582→          <h1 className="text-2xl font-bold text-ub-text-primary">Backtesting</h1>
+   583→          <p className="text-sm text-ub-text-muted">Run strategy backtests and analyze performance</p>
+   584→        </div>
+   585→      </div>
+   586→
+   587→      {/* ── New Backtest Form ── */}
+   588→      <Collapsible open={formOpen} onOpenChange={setFormOpen}>
+   589→        <Card className="bg-ub-surface border-ub-border">
+   590→          <CollapsibleTrigger asChild>
+   591→            <CardHeader className="cursor-pointer hover:bg-ub-surface-hover transition-colors rounded-t-lg">
+   592→              <div className="flex items-center justify-between">
+   593→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   594→                  <Play className="h-4 w-4 text-ub-accent" />
+   595→                  New Backtest
+   596→                </CardTitle>
+   597→                <ChevronDown
+   598→                  className={`h-4 w-4 text-ub-text-muted transition-transform ${formOpen ? 'rotate-180' : ''}`}
+   599→                />
+   600→              </div>
+   601→            </CardHeader>
+   602→          </CollapsibleTrigger>
+   603→          <CollapsibleContent>
+   604→            <CardContent className="pt-0 space-y-4">
+   605→              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   606→                {/* Strategy */}
+   607→                <div className="space-y-2">
+   608→                  <Label className="text-ub-text-muted text-sm">Strategy</Label>
+   609→                  <Select
+   610→                    value={form.strategy}
+   611→                    onValueChange={(v) => setForm((p) => ({ ...p, strategy: v }))}
+   612→                  >
+   613→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   614→                      <SelectValue placeholder="Select strategy" />
+   615→                    </SelectTrigger>
+   616→                    <SelectContent className="bg-ub-surface border-ub-border">
+   617→                      {STRATEGIES.map((s) => (
+   618→                        <SelectItem key={s} value={s} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   619→                          {s}
+   620→                        </SelectItem>
+   621→                      ))}
+   622→                    </SelectContent>
+   623→                  </Select>
+   624→                </div>
+   625→
+   626→                {/* Symbols */}
+   627→                <div className="space-y-2">
+   628→                  <Label className="text-ub-text-muted text-sm">Symbol(s)</Label>
+   629→                  <Input
+   630→                    placeholder="RELIANCE, INFY, TCS"
+   631→                    value={form.symbols}
+   632→                    onChange={(e) => setForm((p) => ({ ...p, symbols: e.target.value }))}
+   633→                    className="bg-ub-background border-ub-border text-ub-text-primary placeholder:text-ub-text-disabled"
+   634→                  />
+   635→                </div>
+   636→
+   637→                {/* Timeframe */}
+   638→                <div className="space-y-2">
+   639→                  <Label className="text-ub-text-muted text-sm">Timeframe</Label>
+   640→                  <Select
+   641→                    value={form.timeframe}
+   642→                    onValueChange={(v) => setForm((p) => ({ ...p, timeframe: v }))}
+   643→                  >
+   644→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   645→                      <SelectValue />
+   646→                    </SelectTrigger>
+   647→                    <SelectContent className="bg-ub-surface border-ub-border">
+   648→                      {TIMEFRAMES.map((tf) => (
+   649→                        <SelectItem key={tf} value={tf} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   650→                          {tf}
+   651→                        </SelectItem>
+   652→                      ))}
+   653→                    </SelectContent>
+   654→                  </Select>
+   655→                </div>
+   656→
+   657→                {/* From Date */}
+   658→                <div className="space-y-2">
+   659→                  <Label className="text-ub-text-muted text-sm">From Date</Label>
+   660→                  <Input
+   661→                    type="date"
+   662→                    value={form.fromDate}
+   663→                    onChange={(e) => setForm((p) => ({ ...p, fromDate: e.target.value }))}
+   664→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   665→                  />
+   666→                </div>
+   667→
+   668→                {/* To Date */}
+   669→                <div className="space-y-2">
+   670→                  <Label className="text-ub-text-muted text-sm">To Date</Label>
+   671→                  <Input
+   672→                    type="date"
+   673→                    value={form.toDate}
+   674→                    onChange={(e) => setForm((p) => ({ ...p, toDate: e.target.value }))}
+   675→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   676→                  />
+   677→                </div>
+   678→
+   679→                {/* Initial Capital */}
+   680→                <div className="space-y-2">
+   681→                  <Label className="text-ub-text-muted text-sm">Initial Capital (₹)</Label>
+   682→                  <Input
+   683→                    type="number"
+   684→                    value={form.capital}
+   685→                    onChange={(e) => setForm((p) => ({ ...p, capital: Number(e.target.value) }))}
+   686→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   687→                  />
+   688→                </div>
+   689→              </div>
+   690→
+   691→              {/* Checkboxes and Run */}
+   692→              <div className="flex flex-wrap items-center gap-6 pt-2">
+   693→                <div className="flex items-center gap-2">
+   694→                  <Checkbox
+   695→                    id="includeFees"
+   696→                    checked={form.includeFees}
+   697→                    onCheckedChange={(v) => setForm((p) => ({ ...p, includeFees: v === true }))}
+   698→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   699→                  />
+   700→                  <Label htmlFor="includeFees" className="text-sm text-ub-text-muted cursor-pointer">
+   701→                    Include fees
+   702→                  </Label>
+   703→                </div>
+   704→                <div className="flex items-center gap-2">
+   705→                  <Checkbox
+   706→                    id="applyRiskGates"
+   707→                    checked={form.applyRiskGates}
+   708→                    onCheckedChange={(v) => setForm((p) => ({ ...p, applyRiskGates: v === true }))}
+   709→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   710→                  />
+   711→                  <Label htmlFor="applyRiskGates" className="text-sm text-ub-text-muted cursor-pointer">
+   712→                    Apply risk gates
+   713→                  </Label>
+   714→                </div>
+   715→                <div className="ml-auto">
+   716→                  <Button
+   717→                    onClick={handleRun}
+   718→                    disabled={isRunning}
+   719→                    className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold px-6"
+   720→                  >
+   721→                    {isRunning ? (
+   722→                      <>
+   723→                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   724→                        Running...
+   725→                      </>
+   726→                    ) : (
+   727→                      <>
+   728→                        <Play className="h-4 w-4 mr-2" />
+   729→                        Run Backtest
+   730→                      </>
+   731→                    )}
+   732→                  </Button>
+   733→                </div>
+   734→              </div>
+   735→            </CardContent>
+   736→          </CollapsibleContent>
+   737→        </Card>
+   738→      </Collapsible>
+   739→
+   740→      {/* ── Loading Skeleton ── */}
+   741→      {isRunning && (
+   742→        <motion.div
+   743→          initial={{ opacity: 0 }}
+   744→          animate={{ opacity: 1 }}
+   745→          className="space-y-6"
+   746→        >
+   747→          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+   748→            {Array.from({ length: 10 }).map((_, i) => (
+   749→              <Skeleton key={i} className="h-24 bg-ub-surface rounded-lg" />
+   750→            ))}
+   751→          </div>
+   752→          <Skeleton className="h-[300px] bg-ub-surface rounded-lg" />
+   753→          <Skeleton className="h-[200px] bg-ub-surface rounded-lg" />
+   754→        </motion.div>
+   755→      )}
+   756→
+   757→      {/* ── Results Section ── */}
+   758→      <AnimatePresence>
+   759→        {results && !isRunning && (
+   760→          <motion.div
+   761→            initial={{ opacity: 0, y: 20 }}
+   762→            animate={{ opacity: 1, y: 0 }}
+   763→            transition={{ duration: 0.4 }}
+   764→            className="space-y-6"
+   765→          >
+   766→            {/* Key Metrics */}
+   767→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+   768→              {metricCards.map((card) => (
+   769→                <Card key={card.label} className="bg-ub-surface border-ub-border">
+   770→                  <CardContent className="p-4">
+   771→                    <div className="flex items-center justify-between mb-2">
+   772→                      <span className="text-xs font-medium text-ub-text-muted uppercase tracking-wider">
+   773→                        {card.label}
+   774→                      </span>
+   775→                      <div style={{ color: card.color }}>{card.icon}</div>
+   776→                    </div>
+   777→                    <p className="text-xl font-bold" style={{ color: card.color }}>
+   778→                      {card.value}
+   779→                    </p>
+   780→                  </CardContent>
+   781→                </Card>
+   782→              ))}
+   783→            </div>
+   784→
+   785→            {/* Equity Curve */}
+   786→            <Card className="bg-ub-surface border-ub-border">
+   787→              <CardHeader className="pb-2">
+   788→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   789→                  <TrendingUp className="h-4 w-4 text-ub-accent" />
+   790→                  Equity Curve
+   791→                </CardTitle>
+   792→              </CardHeader>
+   793→              <CardContent>
+   794→                <div className="h-[300px] w-full">
+   795→                  <ResponsiveContainer width="100%" height="100%">
+   796→                    <AreaChart data={results.equityCurve} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   797→                      <defs>
+   798→                        <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+   799→                          <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+   800→                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+   801→                        </linearGradient>
+   802→                      </defs>
+   803→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   804→                      <XAxis
+   805→                        dataKey="trade"
+   806→                        stroke="#94a3b8"
+   807→                        tick={{ fontSize: 11 }}
+   808→                        label={{ value: 'Trade #', position: 'insideBottomRight', offset: -5, style: { fill: '#94a3b8', fontSize: 11 } }}
+   809→                      />
+   810→                      <YAxis
+   811→                        stroke="#94a3b8"
+   812→                        tick={{ fontSize: 11 }}
+   813→                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+   814→                      />
+   815→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Equity']) as never} />
+   816→                      <ReferenceLine y={form.capital} stroke="#94a3b8" strokeDasharray="5 5" strokeOpacity={0.5} />
+   817→                      <Area
+   818→                        type="monotone"
+   819→                        dataKey="equity"
+   820→                        stroke="#00d09c"
+   821→                        strokeWidth={2}
+   822→                        fill="url(#equityGradient)"
+   823→                      />
+   824→                    </AreaChart>
+   825→                  </ResponsiveContainer>
+   826→                </div>
+   827→              </CardContent>
+   828→            </Card>
+   829→
+   830→            {/* Monthly Returns Heatmap */}
+   831→            <Card className="bg-ub-surface border-ub-border">
+   832→              <CardHeader className="pb-2">
+   833→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   834→                  <CalendarDays className="h-4 w-4 text-ub-accent" />
+   835→                  Monthly Returns Heatmap
+   836→                </CardTitle>
+   837→              </CardHeader>
+   838→              <CardContent>
+   839→                <div className="overflow-x-auto">
+   840→                  <div className="inline-grid gap-1" style={{ gridTemplateColumns: `60px repeat(12, 1fr)` }}>
+   841→                    {/* Header row */}
+   842→                    <div className="p-1" />
+   843→                    {MONTHS.map((m) => (
+   844→                      <div key={m} className="p-1 text-center text-xs font-medium text-ub-text-muted">
+   845→                        {m}
+   846→                      </div>
+   847→                    ))}
+   848→                    {/* Data rows */}
+   849→                    {monthlyYears.map((year) => (
+   850→                      <>
+   851→                        <div key={`year-${year}`} className="p-1 flex items-center text-xs font-medium text-ub-text-muted">
+   852→                          {year}
+   853→                        </div>
+   854→                        {results.monthlyReturns
+   855→                          .filter((mr) => mr.year === year)
+   856→                          .map((mr) => (
+   857→                            <div
+   858→                              key={`${year}-${mr.month}`}
+   859→                              className="p-1.5 text-center text-xs font-semibold rounded min-w-[60px] flex items-center justify-center"
+   860→                              style={getCellColor(mr.value)}
+   861→                            >
+   862→                              {mr.value > 0 ? '+' : ''}{mr.value}%
+   863→                            </div>
+   864→                          ))}
+   865→                      </>
+   866→                    ))}
+   867→                  </div>
+   868→                </div>
+   869→              </CardContent>
+   870→            </Card>
+   871→
+   872→            {/* Drawdown Chart */}
+   873→            <Card className="bg-ub-surface border-ub-border">
+   874→              <CardHeader className="pb-2">
+   875→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   876→                  <TrendingDown className="h-4 w-4 text-ub-loss" />
+   877→                  Drawdown Chart
+   878→                </CardTitle>
+   879→              </CardHeader>
+   880→              <CardContent>
+   881→                <div className="h-[200px] w-full">
+   882→                  <ResponsiveContainer width="100%" height="100%">
+   883→                    <AreaChart data={results.drawdownChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   884→                      <defs>
+   885→                        <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
+   886→                          <stop offset="0%" stopColor="#ef4444" stopOpacity={0.05} />
+   887→                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+   888→                        </linearGradient>
+   889→                      </defs>
+   890→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   891→                      <XAxis
+   892→                        dataKey="date"
+   893→                        stroke="#94a3b8"
+   894→                        tick={{ fontSize: 10 }}
+   895→                        interval="preserveStartEnd"
+   896→                      />
+   897→                      <YAxis
+   898→                        stroke="#94a3b8"
+   899→                        tick={{ fontSize: 11 }}
+   900→                        tickFormatter={(v: number) => `${v}%`}
+   901→                      />
+   902→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}%`, 'Drawdown']) as never} />
+   903→                      <ReferenceLine y={0} stroke="#94a3b8" strokeOpacity={0.3} />
+   904→                      <Area
+   905→                        type="monotone"
+   906→                        dataKey="drawdown"
+   907→                        stroke="#ef4444"
+   908→                        strokeWidth={1.5}
+   909→                        fill="url(#drawdownGradient)"
+   910→                      />
+   911→                    </AreaChart>
+   912→                  </ResponsiveContainer>
+   913→                </div>
+   914→              </CardContent>
+   915→            </Card>
+   916→
+   917→            {/* Trade List */}
+   918→            <Card className="bg-ub-surface border-ub-border">
+   919→              <CardHeader className="pb-2">
+   920→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   921→                  <Clock className="h-4 w-4 text-ub-accent" />
+   922→                  Trade List
+   923→                </CardTitle>
+   924→              </CardHeader>
+   925→              <CardContent className="p-0">
+   926→                <ScrollArea className="max-h-64">
+   927→                  <Table>
+   928→                    <TableHeader>
+   929→                      <TableRow className="border-ub-border hover:bg-transparent">
+   930→                        <TableHead className="text-ub-text-muted text-xs">#</TableHead>
+   931→                        <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+   932→                        <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+   933→                        <TableHead className="text-ub-text-muted text-xs">Direction</TableHead>
+   934→                        <TableHead className="text-ub-text-muted text-xs text-right">Entry</TableHead>
+   935→                        <TableHead className="text-ub-text-muted text-xs text-right">Exit</TableHead>
+   936→                        <TableHead className="text-ub-text-muted text-xs text-right">P&L</TableHead>
+   937→                        <TableHead className="text-ub-text-muted text-xs">Duration</TableHead>
+   938→                        <TableHead className="text-ub-text-muted text-xs">Exit Reason</TableHead>
+   939→                      </TableRow>
+   940→                    </TableHeader>
+   941→                    <TableBody>
+   942→                      {results.trades.map((trade) => (
+   943→                        <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover">
+   944→                          <TableCell className="text-ub-text-muted text-xs">{trade.id}</TableCell>
+   945→                          <TableCell className="text-ub-text-primary text-xs">{trade.date}</TableCell>
+   946→                          <TableCell className="text-ub-text-primary text-xs font-medium">{trade.symbol}</TableCell>
+   947→                          <TableCell>
+   948→                            <Badge
+   949→                              variant="outline"
+   950→                              className={`text-[10px] font-semibold ${
+   951→                                trade.direction === 'BUY'
+   952→                                  ? 'border-ub-profit/40 text-ub-profit'
+   953→                                  : 'border-ub-loss/40 text-ub-loss'
+   954→                              }`}
+   955→                            >
+   956→                              {trade.direction}
+   957→                            </Badge>
+   958→                          </TableCell>
+   959→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.entry}</TableCell>
+   960→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.exit}</TableCell>
+   961→                          <TableCell className={`text-xs text-right font-semibold ${trade.pnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   962→                            {trade.pnl >= 0 ? '+' : ''}₹{trade.pnl.toLocaleString('en-IN')}
+   963→                          </TableCell>
+   964→                          <TableCell className="text-ub-text-muted text-xs">{trade.duration}</TableCell>
+   965→                          <TableCell className="text-ub-text-muted text-xs">{trade.exitReason}</TableCell>
+   966→                        </TableRow>
+   967→                      ))}
+   968→                    </TableBody>
+   969→                  </Table>
+   970→                </ScrollArea>
+   971→              </CardContent>
+   972→            </Card>
+   973→
+   974→            {/* Risk Gate Stats */}
+   975→            <Card className="bg-ub-surface border-ub-border">
+   976→              <CardHeader className="pb-2">
+   977→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   978→                  <ShieldCheck className="h-4 w-4 text-ub-accent" />
+   979→                  Risk Gate Stats
+   980→                </CardTitle>
+   981→              </CardHeader>
+   982→              <CardContent>
+   983→                <div className="space-y-3">
+   984→                  {results.riskGateStats.map((gate) => {
+   985→                    const total = gate.passed + gate.rejected;
+   986→                    const passPct = Math.round((gate.passed / total) * 100);
+   987→                    return (
+   988→                      <div key={gate.name} className="space-y-1">
+   989→                        <div className="flex items-center justify-between text-sm">
+   990→                          <span className="text-ub-text-muted">{gate.name}</span>
+   991→                          <div className="flex items-center gap-3 text-xs">
+   992→                            <span className="text-ub-profit">{gate.passed} passed</span>
+   993→                            <span className="text-ub-loss">{gate.rejected} rejected</span>
+   994→                          </div>
+   995→                        </div>
+   996→                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-ub-background">
+   997→                          <div className="bg-ub-profit transition-all duration-500" style={{ width: `${passPct}%` }} />
+   998→                          <div className="bg-ub-loss transition-all duration-500" style={{ width: `${100 - passPct}%` }} />
+   999→                        </div>
+  1000→                      </div>
+  1001→                    );
+  1002→                  })}
+  1003→                </div>
+  1004→              </CardContent>
+  1005→            </Card>
+  1006→          </motion.div>
+  1007→        )}
+  1008→      </AnimatePresence>
+  1009→
+  1010→      {/* ── Previous Runs ── */}
+  1011→      <Card className="bg-ub-surface border-ub-border">
+  1012→        <CardHeader className="pb-2">
+  1013→          <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+  1014→            <BarChart3 className="h-4 w-4 text-ub-accent" />
+  1015→            Previous Runs
+  1016→          </CardTitle>
+  1017→        </CardHeader>
+  1018→        <CardContent className="p-0">
+  1019→          <Table>
+  1020→            <TableHeader>
+  1021→              <TableRow className="border-ub-border hover:bg-transparent">
+  1022→                <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+  1023→                <TableHead className="text-ub-text-muted text-xs">Strategy</TableHead>
+  1024→                <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+  1025→                <TableHead className="text-ub-text-muted text-xs text-right">Return %</TableHead>
+  1026→                <TableHead className="text-ub-text-muted text-xs text-right">Sharpe</TableHead>
+  1027→                <TableHead className="text-ub-text-muted text-xs text-right">Trades</TableHead>
+  1028→                <TableHead className="text-ub-text-muted text-xs text-right">Action</TableHead>
+  1029→              </TableRow>
+  1030→            </TableHeader>
+  1031→            <TableBody>
+  1032→              {isLoadingHistory ? (
+  1033→                <TableRow className="border-ub-border hover:bg-transparent">
+  1034→                  <TableCell colSpan={7} className="text-center text-ub-text-muted text-xs py-8">
+  1035→                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+  1036→                    Loading previous runs...
+  1037→                  </TableCell>
+  1038→                </TableRow>
+  1039→              ) : (previousRuns.length > 0 ? previousRuns : PREVIOUS_RUNS).map((run) => (
+  1040→                <TableRow key={run.id} className="border-ub-border hover:bg-ub-surface-hover">
+  1041→                  <TableCell className="text-ub-text-primary text-xs">{run.date}</TableCell>
+  1042→                  <TableCell className="text-ub-text-primary text-xs font-medium">{run.strategy}</TableCell>
+  1043→                  <TableCell className="text-ub-text-muted text-xs">{run.symbol}</TableCell>
+  1044→                  <TableCell className={`text-xs text-right font-semibold ${run.returnPct >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+  1045→                    {run.returnPct > 0 ? '+' : ''}{run.returnPct}%
+  1046→                  </TableCell>
+  1047→                  <TableCell className="text-ub-text-primary text-xs text-right">{run.sharpe}</TableCell>
+  1048→                  <TableCell className="text-ub-text-muted text-xs text-right">{run.trades}</TableCell>
+  1049→                  <TableCell className="text-right">
+  1050→                    <Button
+  1051→                      variant="ghost"
+  1052→                      size="sm"
+  1053→                      className="text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 text-xs h-7 px-3"
+  1054→                      onClick={() => handleViewRun(run)}
+  1055→                    >
+  1056→                      View
+  1057→                    </Button>
+  1058→                  </TableCell>
+  1059→                </TableRow>
+  1060→              ))}
+  1061→            </TableBody>
+  1062→          </Table>
+  1063→        </CardContent>
+  1064→      </Card>
+  1065→    </div>
+  1066→  );
+  1067→}
+  1068→
