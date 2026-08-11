@@ -1134,10 +1134,9 @@ function HistoryTab() {
           </p>
         </div>
       ) : (
-        <>
-          <Card className="bg-ub-surface border-ub-border">
-            <ScrollArea className="max-h-[500px]">
-              <Table>
+        <Card className="bg-ub-surface border-ub-border">
+          <ScrollArea className="max-h-[420px]">
+            <Table>
                 <TableHeader>
                   <TableRow className="border-ub-border hover:bg-transparent">
                     <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Time</TableHead>
@@ -1227,76 +1226,75 @@ function HistoryTab() {
                 </TableBody>
               </Table>
             </ScrollArea>
+
+            {/* Footer: Summary + Pagination + Export */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-ub-border">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <div className="text-ub-text-muted">
+                  Total Trades:{' '}
+                  <span className="font-semibold text-ub-text-primary">{totals.totalTrades}</span>
+                </div>
+                <Separator orientation="vertical" className="h-4 bg-ub-border" />
+                <div className="text-ub-text-muted">
+                  Total P&L:{' '}
+                  <span
+                    className={`font-bold ${
+                      totals.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+                    }`}
+                  >
+                    {totals.totalPnl >= 0 ? '+' : ''}
+                    {INR(totals.totalPnl)}
+                  </span>
+                </div>
+                <Separator orientation="vertical" className="h-4 bg-ub-border" />
+                <div className="text-ub-text-muted">
+                  Win Rate:{' '}
+                  <span
+                    className={`font-bold ${
+                      totals.winRate >= 50 ? 'text-ub-profit' : 'text-ub-loss'
+                    }`}
+                  >
+                    {totals.winRate.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-ub-border text-ub-text-muted hover:text-ub-text-primary text-xs h-8"
+                  onClick={handleExportCSV}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Export CSV
+                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    disabled={safePage <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs text-ub-text-muted px-2">
+                    {safePage} / {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    disabled={safePage >= totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </Card>
-
-          {/* Footer: Summary + Pagination + Export */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="text-ub-text-muted">
-                Total Trades:{' '}
-                <span className="font-semibold text-ub-text-primary">{totals.totalTrades}</span>
-              </div>
-              <Separator orientation="vertical" className="h-4 bg-ub-border" />
-              <div className="text-ub-text-muted">
-                Total P&L:{' '}
-                <span
-                  className={`font-bold ${
-                    totals.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
-                  }`}
-                >
-                  {totals.totalPnl >= 0 ? '+' : ''}
-                  {INR(totals.totalPnl)}
-                </span>
-              </div>
-              <Separator orientation="vertical" className="h-4 bg-ub-border" />
-              <div className="text-ub-text-muted">
-                Win Rate:{' '}
-                <span
-                  className={`font-bold ${
-                    totals.winRate >= 50 ? 'text-ub-profit' : 'text-ub-loss'
-                  }`}
-                >
-                  {totals.winRate.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-ub-border text-ub-text-muted hover:text-ub-text-primary text-xs h-8"
-                onClick={handleExportCSV}
-              >
-                <Download className="h-3.5 w-3.5 mr-1.5" />
-                Export CSV
-              </Button>
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
-                  onClick={() => setPage(Math.max(1, safePage - 1))}
-                  disabled={safePage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-xs text-ub-text-muted px-2">
-                  {safePage} / {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
-                  onClick={() => setPage(Math.min(totalPages, safePage + 1))}
-                  disabled={safePage >= totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </>
       )}
     </div>
   );
