@@ -1,0 +1,771 @@
+   120→   204→   243→   243→   243→        textAnchor="middle"
+   121→   205→   244→   244→   244→        dominantBaseline="central"
+   122→   206→   245→   245→   245→        transform={`rotate(90, ${size / 2}, ${size / 2})`}
+   123→   207→   246→   246→   246→      >
+   124→   208→   247→   247→   247→        {value.toFixed(0)}%
+   125→   209→   248→   248→   248→      </text>
+   126→   210→   249→   249→   249→    </svg>
+   127→   211→   250→   250→   250→  );
+   128→   212→   251→   251→   251→}
+   129→   213→   252→   252→   252→
+   130→   214→   253→   253→   253→// ─────────────────────────────────────────────
+   131→   215→   254→   254→   254→// Risk Bar Color Helper
+   132→   216→   255→   255→   255→// ─────────────────────────────────────────────
+   133→   217→   256→   256→   256→
+   134→   218→   257→   257→   257→function getRiskColor(pct: number): string {
+   135→   219→   258→   258→   258→  if (pct < 50) return '#22c55e';
+   136→   220→   259→   259→   259→  if (pct <= 80) return '#f59e0b';
+   137→   221→   260→   260→   260→  return '#ef4444';
+   138→   222→   261→   261→   261→}
+   139→   223→   262→   262→   262→
+   140→   224→   263→   263→   263→function getRiskLabel(pct: number): string {
+   141→   225→   264→   264→   264→  if (pct < 50) return 'Low';
+   142→   226→   265→   265→   265→  if (pct <= 80) return 'Medium';
+   143→   227→   266→   266→   266→  return 'High';
+   144→   228→   267→   267→   267→}
+   145→   229→   268→   268→   268→
+   146→   230→   269→   269→   269→// ─────────────────────────────────────────────
+   147→   231→   270→   270→   270→// Regime Config
+   148→   232→   271→   271→   271→// ─────────────────────────────────────────────
+   149→   233→   272→   272→   272→
+   150→   234→   273→   273→   273→const REGIME_CONFIG: Record<MarketRegime, { label: string; colorClass: string; bgClass: string; borderClass: string }> = {
+   151→   235→   274→   274→   274→  bull: {
+   152→   236→   275→   275→   275→    label: 'Bull',
+   153→   237→   276→   276→   276→    colorClass: 'text-ub-bull',
+   154→   238→   277→   277→   277→    bgClass: 'bg-ub-bull/15',
+   155→   239→   278→   278→   278→    borderClass: 'border-ub-bull/30',
+   156→   240→   279→   279→   279→  },
+   157→   241→   280→   280→   280→  bear: {
+   158→   242→   281→   281→   281→    label: 'Bear',
+   159→   243→   282→   282→   282→    colorClass: 'text-ub-bear',
+   160→   244→   283→   283→   283→    bgClass: 'bg-ub-bear/15',
+   161→   245→   284→   284→   284→    borderClass: 'border-ub-bear/30',
+   162→   246→   285→   285→   285→  },
+   163→   247→   286→   286→   286→  sideways: {
+   164→   248→   287→   287→   287→    label: 'Sideways',
+   165→   249→   288→   288→   288→    colorClass: 'text-ub-sideways',
+   166→   250→   289→   289→   289→    bgClass: 'bg-ub-sideways/15',
+   167→   251→   290→   290→   290→    borderClass: 'border-ub-sideways/30',
+   168→   252→   291→   291→   291→  },
+   169→   253→   292→   292→   292→  volatile: {
+   170→   254→   293→   293→   293→    label: 'Volatile',
+   171→   255→   294→   294→   294→    colorClass: 'text-ub-volatile',
+   172→   256→   295→   295→   295→    bgClass: 'bg-ub-volatile/15',
+   173→   257→   296→   296→   296→    borderClass: 'border-ub-volatile/30',
+   174→   258→   297→   297→   297→  },
+   175→   259→   298→   298→   298→};
+   176→   260→   299→   299→   299→
+   177→   261→   300→   300→   300→// ─────────────────────────────────────────────
+   178→   262→   301→   301→   301→// Skeleton Loaders
+   179→   263→   302→   302→   302→// ─────────────────────────────────────────────
+   180→   264→   303→   303→   303→
+   181→   265→   304→   304→   304→function StatsRowSkeleton() {
+   182→   266→   305→   305→   305→  return (
+   183→   267→   306→   306→   306→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   184→   268→   307→   307→   307→      {Array.from({ length: 4 }).map((_, i) => (
+   185→   269→   308→   308→   308→        <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   186→   270→   309→   309→   309→          <CardContent className="p-4 space-y-3">
+   187→   271→   310→   310→   310→            <Skeleton className="h-4 w-28 bg-ub-border" />
+   188→   272→   311→   311→   311→            <Skeleton className="h-8 w-32 bg-ub-border" />
+   189→   273→   312→   312→   312→            <Skeleton className="h-3 w-20 bg-ub-border" />
+   190→   274→   313→   313→   313→          </CardContent>
+   191→   275→   314→   314→   314→        </Card>
+   192→   276→   315→   315→   315→      ))}
+   193→   277→   316→   316→   316→    </div>
+   194→   278→   317→   317→   317→  );
+   195→   279→   318→   318→   318→}
+   196→   280→   319→   319→   319→
+   197→   281→   320→   320→   320→function MainContentSkeleton() {
+   198→   282→   321→   321→   321→  return (
+   199→   283→   322→   322→   322→    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+   200→   284→   323→   323→   323→      <div className="lg:col-span-3 space-y-4">
+   201→   285→   324→   324→   324→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   202→   286→   325→   325→   325→          <CardContent className="p-4 space-y-3">
+   203→   287→   326→   326→   326→            <Skeleton className="h-5 w-32 bg-ub-border" />
+   204→   288→   327→   327→   327→            {Array.from({ length: 4 }).map((_, i) => (
+   205→   289→   328→   328→   328→              <Skeleton key={i} className="h-4 w-full bg-ub-border" />
+   206→   290→   329→   329→   329→            ))}
+   207→   291→   330→   330→   330→          </CardContent>
+   208→   292→   331→   331→   331→        </Card>
+   209→   293→   332→   332→   332→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   210→   294→   333→   333→   333→          <CardContent className="p-4 space-y-3">
+   211→   295→   334→   334→   334→            <Skeleton className="h-5 w-36 bg-ub-border" />
+   212→   296→   335→   335→   335→            {Array.from({ length: 5 }).map((_, i) => (
+   213→   297→   336→   336→   336→              <Skeleton key={i} className="h-10 w-full bg-ub-border" />
+   214→   298→   337→   337→   337→            ))}
+   215→   299→   338→   338→   338→          </CardContent>
+   216→   300→   339→   339→   339→        </Card>
+   217→   301→   340→   340→   340→      </div>
+   218→   302→   341→   341→   341→      <div className="lg:col-span-2 space-y-4">
+   219→   303→   342→   342→   342→        {Array.from({ length: 4 }).map((_, i) => (
+   220→   304→   343→   343→   343→          <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   221→   305→   344→   344→   344→            <CardContent className="p-4 space-y-3">
+   222→   306→   345→   345→   345→              <Skeleton className="h-5 w-28 bg-ub-border" />
+   223→   307→   346→   346→   346→              <Skeleton className="h-4 w-20 bg-ub-border" />
+   224→   308→   347→   347→   347→            </CardContent>
+   225→   309→   348→   348→   348→          </Card>
+   226→   310→   349→   349→   349→        ))}
+   227→   311→   350→   350→   350→      </div>
+   228→   312→   351→   351→   351→    </div>
+   229→   313→   352→   352→   352→  );
+   230→   314→   353→   353→   353→}
+   231→   315→   354→   354→   354→
+   232→   316→   355→   355→   355→// ─────────────────────────────────────────────
+   233→   317→   356→   356→   356→// Market Timer Component
+   234→   318→   357→   357→   357→// ─────────────────────────────────────────────
+   235→   319→   358→   358→   358→
+   236→   320→   359→   359→   359→function MarketTimer() {
+   237→   321→   360→   360→   360→  const [now, setNow] = useState(() => new Date());
+   238→   322→   361→   361→   361→  const engine = useEngineStore();
+   239→   323→   362→   362→   362→
+   240→   324→   363→   363→   363→  useEffect(() => {
+   241→   325→   364→   364→   364→    const interval = setInterval(() => setNow(new Date()), 1_000);
+   242→   326→   365→   365→   365→    return () => clearInterval(interval);
+   243→   327→   366→   366→   366→  }, []);
+   244→   328→   367→   367→   367→
+   245→   329→   368→   368→   368→  const istString = now.toLocaleTimeString('en-IN', {
+   246→   330→   369→   369→   369→    timeZone: 'Asia/Kolkata',
+   247→   331→   370→   370→   370→    hour12: false,
+   248→   332→   371→   371→   371→    hour: '2-digit',
+   249→   333→   372→   372→   372→    minute: '2-digit',
+   250→   334→   373→   373→   373→    second: '2-digit',
+   251→   335→   374→   374→   374→  });
+   252→   336→   375→   375→   375→
+   253→   337→   376→   376→   376→  const marketCloseSeconds = engine.marketCloseSeconds;
+   254→   338→   377→   377→   377→  const hours = Math.floor(marketCloseSeconds / 3600);
+   255→   339→   378→   378→   378→  const minutes = Math.floor((marketCloseSeconds % 3600) / 60);
+   256→   340→   379→   379→   379→  const seconds = Math.floor(marketCloseSeconds % 60);
+   257→   341→   380→   380→   380→  const pad = (n: number) => String(n).padStart(2, '0');
+   258→   342→   381→   381→   381→  const timeToClose = marketCloseSeconds > 0
+   259→   343→   382→   382→   382→    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+   260→   344→   383→   383→   383→    : 'Market Closed';
+   261→   345→   384→   384→   384→
+   262→   346→   385→   385→   385→  const isUrgent = marketCloseSeconds > 0 && marketCloseSeconds < 1800;
+   263→   347→   386→   386→   386→
+   264→   348→   387→   387→   387→  return (
+   265→   349→   388→   388→   388→    <div className="flex flex-col gap-2">
+   266→   350→   389→   389→   389→      <div className="flex items-center gap-2">
+   267→   351→   390→   390→   390→        <Clock className="h-4 w-4 text-ub-text-muted" />
+   268→   352→   391→   391→   391→        <span className="text-lg font-mono font-bold text-ub-text-primary tracking-wider">
+   269→   353→   392→   392→   392→          {istString}
+   270→   354→   393→   393→   393→        </span>
+   271→   355→   394→   394→   394→        <Badge variant="outline" className="text-[10px] font-medium border-ub-border text-ub-text-muted">
+   272→   356→   395→   395→   395→          IST
+   273→   357→   396→   396→   396→        </Badge>
+   274→   358→   397→   397→   397→      </div>
+   275→   359→   398→   398→   398→      <Separator className="bg-ub-border" />
+   276→   360→   399→   399→   399→      <div className="flex items-center justify-between">
+   277→   361→   400→   400→   400→        <span className="text-xs text-ub-text-muted">Time to Close</span>
+   278→   362→   401→   401→   401→        <span className={`text-sm font-mono font-semibold ${isUrgent ? 'text-ub-warning' : 'text-ub-text-primary'}`}>
+   279→   363→   402→   402→   402→          {timeToClose}
+   280→   364→   403→   403→   403→        </span>
+   281→   365→   404→   404→   404→      </div>
+   282→   366→   405→   405→   405→    </div>
+   283→   367→   406→   406→   406→  );
+   284→   368→   407→   407→   407→}
+   285→   369→   408→   408→   408→
+   286→   370→   409→   409→   409→// ─────────────────────────────────────────────
+   287→   371→   410→   410→   410→// Stat Card Component
+   288→   372→   411→   411→   411→// ─────────────────────────────────────────────
+   289→   373→   412→   412→   412→
+   290→   374→   413→   413→   413→function StatCard({ title, children }: { title: string; children: React.ReactNode }) {
+   291→   375→   414→   414→   414→  return (
+   292→   376→   415→   415→   415→    <Card className="bg-ub-surface border-ub-border rounded-lg">
+   293→   377→   416→   416→   416→      <CardContent className="p-4">
+   294→   378→   417→   417→   417→        <p className="text-xs font-medium text-ub-text-muted uppercase tracking-wider mb-2">
+   295→   379→   418→   418→   418→          {title}
+   296→   380→   419→   419→   419→        </p>
+   297→   381→   420→   420→   420→        {children}
+   298→   382→   421→   421→   421→      </CardContent>
+   299→   383→   422→   422→   422→    </Card>
+   300→   384→   423→   423→   423→  );
+   301→   385→   424→   424→   424→}
+   302→   386→   425→   425→   425→
+   303→   387→   426→   426→   426→// ─────────────────────────────────────────────
+   304→   388→   427→   427→   427→// Dashboard Section Card
+   305→   389→   428→   428→   428→// ─────────────────────────────────────────────
+   306→   390→   429→   429→   429→
+   307→   391→   430→   430→   430→function SectionCard({ title, icon: Icon, children, className = '' }: {
+   308→   392→   431→   431→   431→  title: string;
+   309→   393→   432→   432→   432→  icon: React.ElementType;
+   310→   394→   433→   433→   433→  children: React.ReactNode;
+   311→   395→   434→   434→   434→  className?: string;
+   312→   396→   435→   435→   435→}) {
+   313→   397→   436→   436→   436→  return (
+   314→   398→   437→   437→   437→    <Card className={`bg-ub-surface border-ub-border rounded-lg ${className}`}>
+   315→   399→   438→   438→   438→      <CardHeader className="pb-3 pt-4 px-4">
+   316→   400→   439→   439→   439→        <CardTitle className="text-sm font-semibold text-ub-text-primary flex items-center gap-2">
+   317→   401→   440→   440→   440→          <Icon className="h-4 w-4 text-ub-accent" />
+   318→   402→   441→   441→   441→          {title}
+   319→   403→   442→   442→   442→        </CardTitle>
+   320→   404→   443→   443→   443→      </CardHeader>
+   321→   405→   444→   444→   444→      <CardContent className="px-4 pb-4 pt-0">
+   322→   406→   445→   445→   445→        {children}
+   323→   407→   446→   446→   446→      </CardContent>
+   324→   408→   447→   447→   447→    </Card>
+   325→   409→   448→   448→   448→  );
+   326→   410→   449→   449→   449→}
+   327→   411→   450→   450→   450→
+   328→   412→   451→   451→   451→// ─────────────────────────────────────────────
+   329→   413→   452→   452→   452→// MAIN DASHBOARD
+   330→   414→   453→   453→   453→// ─────────────────────────────────────────────
+   331→   415→   454→   454→   454→
+   332→   416→   455→   455→   455→export default function DashboardPage() {
+   333→   417→   456→   456→   456→  const { data: apiData, isLoading } = useDashboard();
+   334→   418→   457→   457→   457→  const engine = useEngine();
+   335→   419→   458→   458→   458→  const engineStore = useEngineStore();
+   336→   420→   459→   459→   459→
+   337→   421→   460→   460→   460→  // Merge API data with store state, fall back to mock
+   338→   422→   461→   461→   461→  const data: DashboardData = useMemo(() => {
+   339→   423→   462→   462→   462→    const raw = apiData as Record<string, unknown> | undefined;
+   340→   424→   463→   463→   463→    if (!raw || !raw.todayPnl) return MOCK_DATA;
+   341→   425→   464→   464→   464→    return {
+   342→   426→   465→   465→   465→      todayPnl: (raw.todayPnl as number) ?? MOCK_DATA.todayPnl,
+   343→   427→   466→   466→   466→      todayPnlPercent: (raw.todayPnlPercent as number) ?? MOCK_DATA.todayPnlPercent,
+   344→   428→   467→   467→   467→      activePositions: (raw.activePositions as number) ?? MOCK_DATA.activePositions,
+   345→   429→   468→   468→   468→      longCount: (raw.longCount as number) ?? MOCK_DATA.longCount,
+   346→   430→   469→   469→   469→      shortCount: (raw.shortCount as number) ?? MOCK_DATA.shortCount,
+   347→   431→   470→   470→   470→      winRate: (raw.winRate as number) ?? MOCK_DATA.winRate,
+   348→   432→   471→   471→   471→      riskUsed: (raw.riskUsed as number) ?? MOCK_DATA.riskUsed,
+   349→   433→   472→   472→   472→      totalCapital: (raw.totalCapital as number) ?? MOCK_DATA.totalCapital,
+   350→   434→   473→   473→   473→      capitalUsed: (raw.capitalUsed as number) ?? MOCK_DATA.capitalUsed,
+   351→   435→   474→   474→   474→      freeCapital: (raw.freeCapital as number) ?? MOCK_DATA.freeCapital,
+   352→   436→   475→   475→   475→      dayPnl: (raw.dayPnl as number) ?? MOCK_DATA.dayPnl,
+   353→   437→   476→   476→   476→      totalPnl: (raw.totalPnl as number) ?? MOCK_DATA.totalPnl,
+   354→   438→   477→   477→   477→      positions: (Array.isArray(raw.positions) && raw.positions.length > 0 ? raw.positions : MOCK_DATA.positions) as Position[],
+   355→   439→   478→   478→   478→      recentTrades: (Array.isArray(raw.recentTrades) && raw.recentTrades.length > 0 ? raw.recentTrades : MOCK_DATA.recentTrades) as Trade[],
+   356→   440→   479→   479→   479→      engineStatus: (raw.engineStatus as string) ?? engineStore.status ?? MOCK_DATA.engineStatus,
+   357→   441→   480→   480→   480→      engineMode: (raw.engineMode as string) ?? engineStore.mode ?? MOCK_DATA.engineMode,
+   358→   442→   481→   481→   481→      regime: (raw.regime as MarketRegime) ?? engineStore.regime ?? MOCK_DATA.regime,
+   359→   443→   482→   482→   482→      regimeConfidence: (raw.regimeConfidence as number) ?? MOCK_DATA.regimeConfidence,
+   360→   444→   483→   483→   483→      activeStrategies: (Array.isArray(raw.activeStrategies) && raw.activeStrategies.length > 0 ? raw.activeStrategies : MOCK_DATA.activeStrategies) as string[],
+   361→   445→   484→   484→   484→      signalsGenerated: (raw.signalsGenerated as number) ?? MOCK_DATA.signalsGenerated,
+   362→   446→   485→   485→   485→      signalsConfirmed: (raw.signalsConfirmed as number) ?? MOCK_DATA.signalsConfirmed,
+   363→   447→   486→   486→   486→      signalsSkipped: (raw.signalsSkipped as number) ?? MOCK_DATA.signalsSkipped,
+   364→   448→   487→   487→   487→    };
+   365→   449→   488→   488→   488→  }, [apiData, engineStore.status, engineStore.mode, engineStore.regime]);
+   366→   450→   489→   489→   489→
+   367→   451→   490→   490→   490→  const pnlIsPositive = data.todayPnl >= 0;
+   368→   452→   491→   491→   491→  const pnlColor = data.todayPnl > 0 ? 'text-ub-profit' : data.todayPnl < 0 ? 'text-ub-loss' : 'text-ub-text-muted';
+   369→   453→   492→   492→   492→  const riskColor = getRiskColor(data.riskUsed);
+   370→   454→   493→   493→   493→  const capitalUsedPct = data.totalCapital > 0 ? (data.capitalUsed / data.totalCapital) * 100 : 0;
+   371→   455→   494→   494→   494→
+   372→   456→   495→   495→   495→  const engineStatus = (engineStore.status || data.engineStatus || 'stopped') as 'running' | 'stopped' | 'paused';
+   373→   457→   496→   496→   496→  const engineMode = (engineStore.mode || data.engineMode || 'paper') as 'paper' | 'live';
+   374→   458→   497→   497→   497→  const regime = (engineStore.regime || data.regime || 'sideways') as MarketRegime;
+   375→   459→   498→   498→   498→  const regimeConf = data.regimeConfidence;
+   376→   460→   499→   499→   499→  const regimeCfg = REGIME_CONFIG[regime];
+   377→   461→   500→   500→   500→
+   378→   462→   501→   501→   501→  const [engineDialogOpen, setEngineDialogOpen] = useState(false);
+   379→   463→   502→   502→   502→
+   380→   464→   503→   503→   503→  const handleStartStop = useCallback(() => {
+   381→   465→   504→   504→   504→    if (engineStatus === 'running' || engineStatus === 'paused') {
+   382→   466→   505→   505→   505→      engine.stop();
+   383→   467→   506→   506→   506→    } else {
+   384→   468→   507→   507→   507→      setEngineDialogOpen(true);
+   385→   469→   508→   508→   508→    }
+   386→   470→   509→   509→   509→  }, [engineStatus, engine]);
+   387→   471→   510→   510→   510→
+   388→   472→   511→   511→   511→  const handleEngineStart = useCallback((_mode: 'paper' | 'live', _brokerId: string) => {
+   389→   473→   512→   512→   512→    engine.start();
+   390→   474→   513→   513→   513→    setEngineDialogOpen(false);
+   391→   475→   514→   514→   514→  }, [engine]);
+   392→   476→   515→   515→   515→
+   393→   477→   516→   516→   516→  return (
+   394→   478→   517→   517→   517→    <TooltipProvider delayDuration={300}>
+   395→   479→   518→   518→   518→        {isLoading ? (
+   396→   480→   519→   519→   519→          <div className="space-y-4">
+   397→   481→   520→   520→   520→            <StatsRowSkeleton />
+   398→   482→   521→   521→   521→            <MainContentSkeleton />
+   399→   483→   522→   522→   522→          </div>
+   400→   484→   523→   523→   523→        ) : (
+   401→   485→   524→   524→   524→          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+   402→   486→   525→   525→   525→            {/* ────────────────────────────────────────
+   403→   487→   526→   526→   526→                SECTION 1: TOP STATS ROW
+   404→   488→   527→   527→   527→            ──────────────────────────────────────── */}
+   405→   489→   528→   528→   528→
+   406→   490→   529→   529→   529→            {/* Card 1: Today's P&L */}
+   407→   491→   530→   530→   530→            <StatCard title="Today's P&L">
+   408→   492→   531→   531→   531→              <div className="flex items-center gap-3">
+   409→   493→   532→   532→   532→                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${pnlIsPositive ? 'bg-ub-profit/10' : 'bg-ub-loss/10'}`}>
+   410→   494→   533→   533→   533→                  {pnlIsPositive ? (
+   411→   495→   534→   534→   534→                    <TrendingUp className="h-5 w-5 text-ub-profit" />
+   412→   496→   535→   535→   535→                  ) : (
+   413→   497→   536→   536→   536→                    <TrendingDown className="h-5 w-5 text-ub-loss" />
+   414→   498→   537→   537→   537→                  )}
+   415→   499→   538→   538→   538→                </div>
+   416→   500→   539→   539→   539→                <div>
+   417→   501→   540→   540→   540→                  <p className={`text-xl font-bold font-mono ${pnlColor}`}>
+   418→   502→   541→   541→   541→                    {formatINR(data.todayPnl)}
+   419→   503→   542→   542→   542→                  </p>
+   420→   504→   543→   543→   543→                  <p className={`text-xs font-medium ${pnlColor}`}>
+   421→   505→   544→   544→   544→                    {formatPercent(data.todayPnlPercent)}
+   422→   506→   545→   545→   545→                  </p>
+   423→   507→   546→   546→   546→                </div>
+   424→   508→   547→   547→   547→              </div>
+   425→   509→   548→   548→   548→            </StatCard>
+   426→   510→   549→   549→   549→
+   427→   511→   550→   550→   550→            {/* Card 2: Active Positions */}
+   428→   512→   551→   551→   551→            <StatCard title="Active Positions">
+   429→   513→   552→   552→   552→              <div className="flex items-center gap-3">
+   430→   514→   553→   553→   553→                <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   431→   515→   554→   554→   554→                  <Activity className="h-5 w-5 text-ub-accent" />
+   432→   516→   555→   555→   555→                </div>
+   433→   517→   556→   556→   556→                <div>
+   434→   518→   557→   557→   557→                  <p className="text-xl font-bold text-ub-text-primary font-mono">
+   435→   519→   558→   558→   558→                    {data.activePositions}
+   436→   520→   559→   559→   559→                  </p>
+   437→   521→   560→   560→   560→                  <div className="flex items-center gap-2 mt-0.5">
+   438→   522→   561→   561→   561→                    <span className="text-xs text-ub-profit font-medium">
+   439→   523→   562→   562→   562→                      {data.longCount} Long
+   440→   524→   563→   563→   563→                    </span>
+   441→   525→   564→   564→   564→                    <span className="text-ub-border">|</span>
+   442→   526→   565→   565→   565→                    <span className="text-xs text-ub-loss font-medium">
+   443→   527→   566→   566→   566→                      {data.shortCount} Short
+   444→   528→   567→   567→   567→                    </span>
+   445→   529→   568→   568→   568→                  </div>
+   446→   530→   569→   569→   569→                </div>
+   447→   531→   570→   570→   570→              </div>
+   448→   532→   571→   571→   571→            </StatCard>
+   449→   533→   572→   572→   572→
+   450→   534→   573→   573→   573→            {/* Card 3: Day Win Rate */}
+   451→   535→   574→   574→   574→            <StatCard title="Day Win Rate">
+   452→   536→   575→   575→   575→              <div className="flex items-center gap-4">
+   453→   537→   576→   576→   576→                <CircularProgress
+   454→   538→   577→   577→   577→                  value={data.winRate}
+   455→   539→   578→   578→   578→                  size={68}
+   456→   540→   579→   579→   579→                  strokeWidth={5}
+   457→   541→   580→   580→   580→                  color={data.winRate >= 60 ? '#22c55e' : data.winRate >= 40 ? '#f59e0b' : '#ef4444'}
+   458→   542→   581→   581→   581→                />
+   459→   543→   582→   582→   582→                <div className="flex flex-col">
+   460→   544→   583→   583→   583→                  <span className="text-xs text-ub-text-muted">Trades Won</span>
+   461→   545→   584→   584→   584→                  <span className={`text-sm font-semibold ${data.winRate >= 60 ? 'text-ub-profit' : data.winRate >= 40 ? 'text-ub-warning' : 'text-ub-loss'}`}>
+   462→   546→   585→   585→   585→                    {data.winRate >= 60 ? 'Good' : data.winRate >= 40 ? 'Average' : 'Poor'}
+   463→   547→   586→   586→   586→                  </span>
+   464→   548→   587→   587→   587→                </div>
+   465→   549→   588→   588→   588→              </div>
+   466→   550→   589→   589→   589→            </StatCard>
+   467→   551→   590→   590→   590→
+   468→   552→   591→   591→   591→            {/* Card 4: Risk Used */}
+   469→   553→   592→   592→   592→            <StatCard title="Risk Used">
+   470→   554→   593→   593→   593→              <div className="space-y-3">
+   471→   555→   594→   594→   594→                <div className="flex items-center justify-between">
+   472→   556→   595→   595→   595→                  <div className="flex items-center gap-2">
+   473→   557→   596→   596→   596→                    <ShieldAlert className={`h-5 w-5`} style={{ color: riskColor }} />
+   474→   558→   597→   597→   597→                    <span className="text-xl font-bold font-mono" style={{ color: riskColor }}>
+   475→   559→   598→   598→   598→                      {data.riskUsed}%
+   476→   560→   599→   599→   599→                    </span>
+   477→   561→   600→   600→   600→                  </div>
+   478→   562→   601→   601→   601→                  <Badge
+   479→   563→   602→   602→   602→                    variant="outline"
+   480→   564→   603→   603→   603→                    className="text-[10px] font-semibold"
+   481→   565→   604→   604→   604→                    style={{
+   482→   566→   605→   605→   605→                      color: riskColor,
+   483→   567→   606→   606→   606→                      borderColor: riskColor + '40',
+   484→   568→   607→   607→   607→                      backgroundColor: riskColor + '15',
+   485→   569→   608→   608→   608→                    }}
+   486→   570→   609→   609→   609→                  >
+   487→   571→   610→   610→   610→                    {getRiskLabel(data.riskUsed)}
+   488→   572→   611→   611→   611→                  </Badge>
+   489→   573→   612→   612→   612→                </div>
+   490→   574→   613→   613→   613→                <div className="h-2 w-full rounded-full bg-ub-border overflow-hidden">
+   491→   575→   614→   614→   614→                  <div
+   492→   576→   615→   615→   615→                    className="h-full rounded-full transition-all duration-500"
+   493→   577→   616→   616→   616→                    style={{
+   494→   578→   617→   617→   617→                      width: `${Math.min(data.riskUsed, 100)}%`,
+   495→   579→   618→   618→   618→                      backgroundColor: riskColor,
+   496→   580→   619→   619→   619→                    }}
+   497→   581→   620→   620→   620→                  />
+   498→   582→   621→   621→   621→                </div>
+   499→   583→   622→   622→   622→                <p className="text-[11px] text-ub-text-muted">
+   500→   584→   623→   623→   623→                  {data.riskUsed < 50
+   501→   585→   624→   624→   624→                    ? 'Healthy risk utilization'
+   502→   586→   625→   625→   625→                    : data.riskUsed <= 80
+   503→   587→   626→   626→   626→                      ? 'Approaching limit — exercise caution'
+   504→   588→   627→   627→   627→                      : 'High risk — consider reducing exposure'}
+   505→   589→   628→   628→   628→                </p>
+   506→   590→   629→   629→   629→              </div>
+   507→   591→   630→   630→   630→            </StatCard>
+   508→   592→   631→   631→   631→
+   509→   593→   632→   632→   632→            {/* ────────────────────────────────────────
+   510→   594→   633→   633→   633→                SECTION 2: MAIN CONTENT — LEFT (3/5)
+   511→   595→   634→   634→   634→            ──────────────────────────────────────── */}
+   512→   596→   635→   635→   635→
+   513→   597→   636→   636→   636→            {/* Capital Panel */}
+   514→   598→   637→   637→   637→            <SectionCard title="Capital Overview" icon={BarChart3} className="md:col-span-1 xl:col-span-3">
+   515→   599→   638→   638→   638→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+   516→   600→   639→   639→   639→                <div>
+   517→   601→   640→   640→   640→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Total Capital</p>
+   518→   602→   641→   641→   641→                  <p className="text-sm font-bold text-ub-text-primary font-mono mt-0.5">
+   519→   603→   642→   642→   642→                    {formatINR(data.totalCapital)}
+   520→   604→   643→   643→   643→                  </p>
+   521→   605→   644→   644→   644→                </div>
+   522→   606→   645→   645→   645→                <div>
+   523→   607→   646→   646→   646→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Capital Used</p>
+   524→   608→   647→   647→   647→                  <p className="text-sm font-bold text-ub-warning font-mono mt-0.5">
+   525→   609→   648→   648→   648→                    {formatINR(data.capitalUsed)}
+   526→   610→   649→   649→   649→                  </p>
+   527→   611→   650→   650→   650→                </div>
+   528→   612→   651→   651→   651→                <div>
+   529→   613→   652→   652→   652→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Free Capital</p>
+   530→   614→   653→   653→   653→                  <p className="text-sm font-bold text-ub-profit font-mono mt-0.5">
+   531→   615→   654→   654→   654→                    {formatINR(data.freeCapital)}
+   532→   616→   655→   655→   655→                  </p>
+   533→   617→   656→   656→   656→                </div>
+   534→   618→   657→   657→   657→                <div>
+   535→   619→   658→   658→   658→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Day P&L</p>
+   536→   620→   659→   659→   659→                  <p className={`text-sm font-bold font-mono mt-0.5 ${data.dayPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   537→   621→   660→   660→   660→                    {formatINR(data.dayPnl)}
+   538→   622→   661→   661→   661→                  </p>
+   539→   623→   662→   662→   662→                </div>
+   540→   624→   663→   663→   663→              </div>
+   541→   625→   664→   664→   664→              <div className="space-y-1.5">
+   542→   626→   665→   665→   665→                <div className="flex items-center justify-between text-xs">
+   543→   627→   666→   666→   666→                  <span className="text-ub-text-muted">Capital Utilization</span>
+   544→   628→   667→   667→   667→                  <span className="text-ub-text-primary font-medium font-mono">{capitalUsedPct.toFixed(1)}%</span>
+   545→   629→   668→   668→   668→                </div>
+   546→   630→   669→   669→   669→                <Progress
+   547→   631→   670→   670→   670→                  value={capitalUsedPct}
+   548→   632→   671→   671→   671→                  className="h-2 bg-ub-border [&>div]:bg-ub-accent"
+   549→   633→   672→   672→   672→                />
+   550→   634→   673→   673→   673→              </div>
+   551→   635→   674→   674→   674→              <Separator className="my-3 bg-ub-border" />
+   552→   636→   675→   675→   675→              <div className="flex items-center justify-between">
+   553→   637→   676→   676→   676→                <span className="text-xs text-ub-text-muted">Total P&L (All Time)</span>
+   554→   638→   677→   677→   677→                <span className={`text-base font-bold font-mono ${data.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   555→   639→   678→   678→   678→                  {formatINR(data.totalPnl)}
+   556→   640→   679→   679→   679→                </span>
+   557→   641→   680→   680→   680→              </div>
+   558→   642→   681→   681→   681→            </SectionCard>
+   559→   643→   682→   682→   682→
+   560→   644→   683→   683→   683→            {/* ────────────────────────────────────────
+   561→   645→   684→   684→   684→                SECTION 2: MAIN CONTENT — RIGHT (2/5)
+   562→   646→   685→   685→   685→            ──────────────────────────────────────── */}
+   563→   647→   686→   686→   686→
+   564→   648→   687→   687→   687→            {/* Engine Status */}
+   565→   649→   688→   688→   688→            <SectionCard title="Engine Status" icon={Zap} className="xl:col-span-2">
+   566→   650→   689→   689→   689→              <div className="space-y-3">
+   567→   651→   690→   690→   690→                <div className="flex items-center justify-between">
+   568→   652→   691→   691→   691→                  <div className="flex items-center gap-2">
+   569→   653→   692→   692→   692→                    <div
+   570→   654→   693→   693→   693→                      className={`h-2.5 w-2.5 rounded-full ${
+   571→   655→   694→   694→   694→                        engineStatus === 'running'
+   572→   656→   695→   695→   695→                          ? 'bg-ub-profit animate-pulse'
+   573→   657→   696→   696→   696→                          : engineStatus === 'paused'
+   574→   658→   697→   697→   697→                            ? 'bg-ub-warning'
+   575→   659→   698→   698→   698→                            : 'bg-ub-loss'
+   576→   660→   699→   699→   699→                      }`}
+   577→   661→   700→   700→   700→                    />
+   578→   662→   701→   701→   701→                    <Badge
+   579→   663→   702→   702→   702→                      variant="outline"
+   580→   664→   703→   703→   703→                      className={`text-xs font-semibold ${
+   581→   665→   704→   704→   704→                        engineStatus === 'running'
+   582→   666→   705→   705→   705→                          ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   583→   667→   706→   706→   706→                          : engineStatus === 'paused'
+   584→   668→   707→   707→   707→                            ? 'border-ub-warning/30 text-ub-warning bg-ub-warning/10'
+   585→   669→   708→   708→   708→                            : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   586→   670→   709→   709→   709→                      }`}
+   587→   671→   710→   710→   710→                    >
+   588→   672→   711→   711→   711→                      {engineStatus.charAt(0).toUpperCase() + engineStatus.slice(1)}
+   589→   673→   712→   712→   712→                    </Badge>
+   590→   674→   713→   713→   713→                  </div>
+   591→   675→   714→   714→   714→                  <Badge
+   592→   676→   715→   715→   715→                    variant="outline"
+   593→   677→   716→   716→   716→                    className={`text-[10px] font-semibold ${
+   594→   678→   717→   717→   717→                      engineMode === 'live'
+   595→   679→   718→   718→   718→                        ? 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   596→   680→   719→   719→   719→                        : 'border-ub-accent/30 text-ub-accent bg-ub-accent/10'
+   597→   681→   720→   720→   720→                    }`}
+   598→   682→   721→   721→   721→                  >
+   599→   683→   722→   722→   722→                    {engineMode === 'live' ? '🔴 ' : '🟢 '}
+   600→   684→   723→   723→   723→                    {engineMode.charAt(0).toUpperCase() + engineMode.slice(1)}
+   601→   685→   724→   724→   724→                  </Badge>
+   602→   686→   725→   725→   725→                </div>
+   603→   687→   726→   726→   726→                <div className="flex gap-2">
+   604→   688→   727→   727→   727→                  <Tooltip>
+   605→   689→   728→   728→   728→                    <TooltipTrigger asChild>
+   606→   690→   729→   729→   729→                      <Button
+   607→   691→   730→   730→   730→                        size="sm"
+   608→   692→   731→   731→   731→                        variant="outline"
+   609→   693→   732→   732→   732→                        disabled={engineStatus === 'running'}
+   610→   694→   733→   733→   733→                        onClick={() => setEngineDialogOpen(true)}
+   611→   695→   734→   734→   734→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   612→   696→   735→   735→   735→                          engineStatus !== 'running'
+   613→   697→   736→   736→   736→                            ? 'hover:bg-ub-profit/15 hover:text-ub-profit hover:border-ub-profit/40 text-ub-text-muted'
+   614→   698→   737→   737→   737→                            : 'opacity-40 cursor-not-allowed'
+   615→   699→   738→   738→   738→                        }`}
+   616→   700→   739→   739→   739→                      >
+   617→   701→   740→   740→   740→                        <Power className="h-3.5 w-3.5 mr-1.5" />
+   618→   702→   741→   741→   741→                        Start Engine
+   619→   703→   742→   742→   742→                      </Button>
+   620→   704→   743→   743→   743→                    </TooltipTrigger>
+   621→   705→   744→   744→   744→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   622→   706→   745→   745→   745→                      Choose mode & broker to start
+   623→   707→   746→   746→   746→                    </TooltipContent>
+   624→   708→   747→   747→   747→                  </Tooltip>
+   625→   709→   748→   748→   748→                  <Tooltip>
+   626→   710→   749→   749→   749→                    <TooltipTrigger asChild>
+   627→   711→   750→   750→   750→                      <Button
+   628→   712→   751→   751→   751→                        size="sm"
+   629→   713→   752→   752→   752→                        variant="outline"
+   630→   714→   753→   753→   753→                        disabled={engineStatus === 'stopped'}
+   631→   715→   754→   754→   754→                        onClick={() => engine.stop()}
+   632→   716→   755→   755→   755→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   633→   717→   756→   756→   756→                          engineStatus !== 'stopped'
+   634→   718→   757→   757→   757→                            ? 'hover:bg-ub-loss/15 hover:text-ub-loss hover:border-ub-loss/40 text-ub-text-muted'
+   635→   719→   758→   758→   758→                            : 'opacity-40 cursor-not-allowed'
+   636→   720→   759→   759→   759→                        }`}
+   637→   721→   760→   760→   760→                      >
+   638→   722→   761→   761→   761→                        <Square className="h-3.5 w-3.5 mr-1.5" />
+   639→   723→   762→   762→   762→                        Stop
+   640→   724→   763→   763→   763→                      </Button>
+   641→   725→   764→   764→   764→                    </TooltipTrigger>
+   642→   726→   765→   765→   765→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   643→   727→   766→   766→   766→                      Stop the trading engine
+   644→   728→   767→   767→   767→                    </TooltipContent>
+   645→   729→   768→   768→   768→                  </Tooltip>
+   646→   730→   769→   769→   769→                </div>
+   647→   731→   770→   770→   770→                {(engine.isStarting || engine.isStopping) && (
+   648→   732→   771→   771→   771→                  <p className="text-[11px] text-ub-text-muted animate-pulse">
+   649→   733→   772→   772→   772→                    {engine.isStarting ? 'Starting engine...' : 'Stopping engine...'}
+   650→   734→   773→   773→   773→                  </p>
+   651→   735→   774→   774→   774→                )}
+   652→   736→   775→   775→   775→              </div>
+   653→   737→   776→   776→   776→            </SectionCard>
+   654→   738→   777→   777→   777→
+   655→   739→   778→   778→   778→            {/* Open Positions Table */}
+   656→   740→   779→   779→   779→            <SectionCard title="Open Positions" icon={Activity} className="md:col-span-1 xl:col-span-3">
+   657→   741→   780→   780→   780→              <ScrollArea className="max-h-[300px]">
+   658→   742→   781→   781→   781→                <Table>
+   659→   743→   782→   782→   782→                  <TableHeader>
+   660→   744→   783→   783→   783→                    <TableRow className="border-ub-border hover:bg-transparent">
+   661→   745→   784→   784→   784→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+   662→   746→   785→   785→   785→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Dir</TableHead>
+   663→   747→   786→   786→   786→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Entry</TableHead>
+   664→   748→   787→   787→   787→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Current</TableHead>
+   665→   749→   788→   788→   788→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Qty</TableHead>
+   666→   750→   789→   789→   789→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+   667→   751→   790→   790→   790→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center hidden sm:table-cell">Booked</TableHead>
+   668→   752→   791→   791→   791→                    </TableRow>
+   669→   753→   792→   792→   792→                  </TableHeader>
+   670→   754→   793→   793→   793→                  <TableBody>
+   671→   755→   794→   794→   794→                    {data.positions.map((pos) => {
+   672→   756→   795→   795→   795→                      const pnlPositive = pos.pnl >= 0;
+   673→   757→   796→   796→   796→                      return (
+   674→   758→   797→   797→   797→                        <TableRow key={pos.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+   675→   759→   798→   798→   798→                          <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+   676→   760→   799→   799→   799→                            {pos.symbol}
+   677→   761→   800→   800→   800→                          </TableCell>
+   678→   762→   801→   801→   801→                          <TableCell className="py-2.5 text-center">
+   679→   763→   802→   802→   802→                            <Badge
+   680→   764→   803→   803→   803→                              variant="outline"
+   681→   765→   804→   804→   804→                              className={`text-[10px] font-bold ${
+   682→   766→   805→   805→   805→                                pos.direction === 'BUY'
+   683→   767→   806→   806→   806→                                  ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   684→   768→   807→   807→   807→                                  : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   685→   769→   808→   808→   808→                              }`}
+   686→   770→   809→   809→   809→                            >
+   687→   771→   810→   810→   810→                              {pos.direction === 'BUY' ? (
+   688→   772→   811→   811→   811→                                <ArrowUpRight className="h-3 w-3 mr-0.5" />
+   689→   773→   812→   812→   812→                              ) : (
+   690→   774→   813→   813→   813→                                <ArrowDownRight className="h-3 w-3 mr-0.5" />
+   691→   775→   814→   814→   814→                              )}
+   692→   776→   815→   815→   815→                              {pos.direction}
+   693→   777→   816→   816→   816→                            </Badge>
+   694→   778→   817→   817→   817→                          </TableCell>
+   695→   779→   818→   818→   818→                          <TableCell className="text-xs font-mono text-ub-text-muted py-2.5 text-right">
+   696→   780→   819→   819→   819→                            {pos.entry.toFixed(2)}
+   697→   781→   820→   820→   820→                          </TableCell>
+   698→   782→   821→   821→   821→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-right">
+   699→   783→   822→   822→   822→                            {pos.current.toFixed(2)}
+   700→   784→   823→   823→   823→                          </TableCell>
+   701→   785→   824→   824→   824→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-center">
+   702→   786→   825→   825→   825→                            {pos.qty}
+   703→   787→   826→   826→   826→                          </TableCell>
+   704→   788→   827→   827→   827→                          <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+   705→   789→   828→   828→   828→                            pnlPositive ? 'text-ub-profit' : 'text-ub-loss'
+   706→   790→   829→   829→   829→                          }`}>
+   707→   791→   830→   830→   830→                            {pnlPositive ? '+' : ''}{formatINR(pos.pnl)}
+   708→   792→   831→   831→   831→                          </TableCell>
+   709→   793→   832→   832→   832→                          <TableCell className="py-2.5 text-center hidden sm:table-cell">
+   710→   794→   833→   833→   833→                            {pos.bookedLevels.length > 0 ? (
+   711→   795→   834→   834→   834→                              <div className="flex flex-wrap gap-1 justify-center">
+   712→   796→   835→   835→   835→                                {pos.bookedLevels.map((level, idx) => (
+   713→   797→   836→   836→   836→                                  <Badge
+   714→   798→   837→   837→   837→                                    key={idx}
+   715→   799→   838→   838→   838→                                    variant="outline"
+   716→   800→   839→   839→   839→                                    className="text-[9px] font-mono border-ub-accent/30 text-ub-accent bg-ub-accent/5"
+   717→   801→   840→   840→   840→                                  >
+   718→   802→   841→   841→   841→                                    {level.toFixed(1)}
+   719→   803→   842→   842→   842→                                  </Badge>
+   720→   804→   843→   843→   843→                                ))}
+   721→   805→   844→   844→   844→                              </div>
+   722→   806→   845→   845→   845→                            ) : (
+   723→   807→   846→   846→   846→                              <span className="text-[11px] text-ub-text-muted">—</span>
+   724→   808→   847→   847→   847→                            )}
+   725→   809→   848→   848→   848→                          </TableCell>
+   726→   810→   849→   849→   849→                        </TableRow>
+   727→   811→   850→   850→   850→                      );
+   728→   812→   851→   851→   851→                    })}
+   729→   813→   852→   852→   852→                  </TableBody>
+   730→   814→   853→   853→   853→                </Table>
+   731→   815→   854→   854→   854→              </ScrollArea>
+   732→   816→   855→   855→   855→              {data.positions.length === 0 && (
+   733→   817→   856→   856→   856→                <div className="flex flex-col items-center justify-center py-8 text-ub-text-muted">
+   734→   818→   857→   857→   857→                  <Activity className="h-8 w-8 mb-2 opacity-30" />
+   735→   819→   858→   858→   858→                  <p className="text-xs">No open positions</p>
+   736→   820→   859→   859→   859→                </div>
+   737→   821→   860→   860→   860→              )}
+   738→   822→   861→   861→   861→            </SectionCard>
+   739→   823→   862→   862→   862→
+   740→   824→   863→   863→   863→            {/* Market Regime */}
+   741→   825→   864→   864→   864→            <SectionCard title="Market Regime" icon={Radio} className="xl:col-span-2">
+   742→   826→   865→   865→   865→              <div className="space-y-3">
+   743→   827→   866→   866→   866→                <div className="flex items-center justify-between">
+   744→   828→   867→   867→   867→                  <Badge
+   745→   829→   868→   868→   868→                    variant="outline"
+   746→   830→   869→   869→   869→                    className={`text-xs font-bold px-3 py-1 ${regimeCfg.colorClass} ${regimeCfg.bgClass} ${regimeCfg.borderClass}`}
+   747→   831→   870→   870→   870→                  >
+   748→   832→   871→   871→   871→                    {regime === 'bull' && <TrendingUp className="h-3.5 w-3.5 mr-1" />}
+   749→   833→   872→   872→   872→                    {regime === 'bear' && <TrendingDown className="h-3.5 w-3.5 mr-1" />}
+   750→   834→   873→   873→   873→                    {regime === 'sideways' && <BarChart3 className="h-3.5 w-3.5 mr-1" />}
+   751→   835→   874→   874→   874→                    {regime === 'volatile' && <AlertTriangle className="h-3.5 w-3.5 mr-1" />}
+   752→   836→   875→   875→   875→                    {regimeCfg.label} Market
+   753→   837→   876→   876→   876→                  </Badge>
+   754→   838→   877→   877→   877→                  <div className="flex items-center gap-1.5">
+   755→   839→   878→   878→   878→                    <span className="text-[11px] text-ub-text-muted">Confidence</span>
+   756→   840→   879→   879→   879→                    <span className="text-xs font-mono font-bold text-ub-text-primary">{regimeConf}%</span>
+   757→   841→   880→   880→   880→                  </div>
+   758→   842→   881→   881→   881→                </div>
+   759→   843→   882→   882→   882→                <Progress
+   760→   844→   883→   883→   883→                  value={regimeConf}
+   761→   845→   884→   884→   884→                  className="h-1.5 bg-ub-border"
+   762→   846→   885→   885→   885→                  style={{ '--progress-color': regimeCfg.colorClass.includes('profit') ? '#22c55e' : regimeCfg.colorClass.includes('loss') ? '#ef4444' : regimeCfg.colorClass.includes('volatile') ? '#a855f7' : '#f59e0b' } as React.CSSProperties}
+   763→   847→   886→   886→   886→                />
+   764→   848→   887→   887→   887→                <Separator className="bg-ub-border" />
+   765→   849→   888→   888→   888→                <div>
+   766→   850→   889→   889→   889→                  <p className="text-[11px] text-ub-text-muted mb-2">Active Strategies</p>
+   767→   851→   890→   890→   890→                  <div className="flex flex-wrap gap-1.5">
+   768→   852→   891→   891→   891→                    {data.activeStrategies.map((strategy, idx) => (
+   769→   853→   892→   892→   892→                      <Badge
+   770→   854→   893→   893→   893→                        key={idx}
+   771→   855→   894→   894→   894→                        variant="outline"
+   772→   856→   895→   895→   895→                        className="text-[10px] font-medium border-ub-accent/20 text-ub-accent bg-ub-accent/5"
+   773→   857→   896→   896→   896→                      >
+   774→   858→   897→   897→   897→                        {strategy}
+   775→   859→   898→   898→   898→                      </Badge>
+   776→   860→   899→   899→   899→                    ))}
+   777→   861→   900→   900→   900→                  </div>
+   778→   862→   901→   901→   901→                </div>
+   779→   863→   902→   902→   902→              </div>
+   780→   864→   903→   903→   903→            </SectionCard>
+   781→   865→   904→   904→   904→
+   782→   866→   905→   905→   905→            {/* Quick Signals */}
+   783→   867→   906→   906→   906→            <SectionCard title="Quick Signals" icon={SignalHigh} className="xl:col-span-2">
+   784→   868→   907→   907→   907→              <div className="grid grid-cols-3 gap-3">
+   785→   869→   908→   908→   908→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   786→   870→   909→   909→   909→                  <p className="text-lg font-bold font-mono text-ub-accent">{data.signalsGenerated}</p>
+   787→   871→   910→   910→   910→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Generated</p>
+   788→   872→   911→   911→   911→                </div>
+   789→   873→   912→   912→   912→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   790→   874→   913→   913→   913→                  <p className="text-lg font-bold font-mono text-ub-profit">{data.signalsConfirmed}</p>
+   791→   875→   914→   914→   914→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Confirmed</p>
+   792→   876→   915→   915→   915→                </div>
+   793→   877→   916→   916→   916→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   794→   878→   917→   917→   917→                  <p className="text-lg font-bold font-mono text-ub-warning">{data.signalsSkipped}</p>
+   795→   879→   918→   918→   918→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Skipped</p>
+   796→   880→   919→   919→   919→                </div>
+   797→   881→   920→   920→   920→              </div>
+   798→   882→   921→   921→   921→              <div className="mt-3 flex items-center gap-1.5 text-[11px] text-ub-text-muted">
+   799→   883→   922→   922→   922→                <SignalHigh className="h-3 w-3" />
+   800→   884→   923→   923→   923→                <span>
+   801→   885→   924→   924→   924→                  {data.signalsGenerated > 0
+   802→   886→   925→   925→   925→                    ? `${((data.signalsConfirmed / data.signalsGenerated) * 100).toFixed(0)}% confirmation rate`
+   803→   887→   926→   926→   926→                    : 'No signals today'}
+   804→   888→   927→   927→   927→                </span>
+   805→   889→   928→   928→   928→              </div>
+   806→   890→   929→   929→   929→            </SectionCard>
+   807→   891→   930→   930→   930→
+   808→   892→   931→   931→   931→            {/* Market Timer */}
+   809→   893→   932→   932→   932→            <SectionCard title="Market Timer" icon={Clock} className="xl:col-span-2">
+   810→   894→   933→   933→   933→              <MarketTimer />
+   811→   895→   934→   934→   934→            </SectionCard>
+   812→   896→   935→   935→   935→
+   813→   897→   936→   936→   936→            {/* ────────────────────────────────────────
+   814→   898→   937→   937→   937→                SECTION 3: RECENT TRADES
+   815→   899→   938→   938→   938→            ──────────────────────────────────────── */}
+   816→   900→   939→   939→   939→
+   817→   901→   940→   940→   940→            {/* Recent Trades - spans full width */}
+   818→   902→   941→   941→   941→            <SectionCard title="Recent Trades" icon={Eye} className="md:col-span-2 xl:col-span-4">
+   819→   903→   942→   942→   942→              <Table>
+   820→   904→   943→   943→   943→                <TableHeader>
+   821→   905→   944→   944→   944→                  <TableRow className="border-ub-border hover:bg-transparent">
+   822→   906→   945→   945→   945→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Time</TableHead>
+   823→   907→   946→   946→   946→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+   824→   908→   947→   947→   947→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Direction</TableHead>
+   825→   909→   948→   948→   948→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+   826→   910→   949→   949→   949→                  </TableRow>
+   827→   911→   950→   950→   950→                </TableHeader>
+   828→   912→   951→   951→   951→                <TableBody>
+   829→   913→   952→   952→   952→                  {data.recentTrades.slice(0, 5).map((trade) => {
+   830→   914→   953→   953→   953→                    const isProfit = trade.pnl >= 0;
+   831→   915→   954→   954→   954→                    return (
+   832→   916→   955→   955→   955→                      <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+   833→   917→   956→   956→   956→                        <TableCell className="text-xs font-mono text-ub-text-muted py-2.5">
+   834→   918→   957→   957→   957→                          {trade.time}
+   835→   919→   958→   958→   958→                        </TableCell>
+   836→   920→   959→   959→   959→                        <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+   837→   921→   960→   960→   960→                          {trade.symbol}
+   838→   922→   961→   961→   961→                        </TableCell>
+   839→   923→   962→   962→   962→                        <TableCell className="py-2.5 text-center">
+   840→   924→   963→   963→   963→                          <Badge
+   841→   925→   964→   964→   964→                            variant="outline"
+   842→   926→   965→   965→   965→                            className={`text-[10px] font-bold ${
+   843→   927→   966→   966→   966→                              trade.direction === 'BUY'
+   844→   928→   967→   967→   967→                                ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   845→   929→   968→   968→   968→                                : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   846→   930→   969→   969→   969→                            }`}
+   847→   931→   970→   970→   970→                          >
+   848→   932→   971→   971→   971→                            {trade.direction}
+   849→   933→   972→   972→   972→                          </Badge>
+   850→   934→   973→   973→   973→                        </TableCell>
+   851→   935→   974→   974→   974→                        <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+   852→   936→   975→   975→   975→                          isProfit ? 'text-ub-profit' : 'text-ub-loss'
+   853→   937→   976→   976→   976→                        }`}>
+   854→   938→   977→   977→   977→                          {isProfit ? '+' : ''}{formatINR(trade.pnl)}
+   855→   939→   978→   978→   978→                        </TableCell>
+   856→   940→   979→   979→   979→                      </TableRow>
+   857→   941→   980→   980→   980→                    );
+   858→   942→   981→   981→   981→                  })}
+   859→   943→   982→   982→   982→                </TableBody>
+   860→   944→   983→   983→   983→              </Table>
+   861→   945→   984→   984→   984→              {data.recentTrades.length === 0 && (
+   862→   946→   985→   985→   985→                <div className="flex flex-col items-center justify-center py-6 text-ub-text-muted">
+   863→   947→   986→   986→   986→                  <Eye className="h-8 w-8 mb-2 opacity-30" />
+   864→   948→   987→   987→   987→                  <p className="text-xs">No trades today</p>
+   865→   949→   988→   988→   988→                </div>
+   866→   950→   989→   989→   989→              )}
+   867→   951→   990→   990→   990→              <div className="mt-3 flex justify-end">
+   868→   952→   991→   991→   991→                <Button
+   869→   953→   992→   992→   992→                  variant="ghost"
+   870→   954→   993→   993→   993→                  size="sm"
+   871→   955→   994→   994→   994→                  className="text-xs text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 h-7"
+   872→   956→   995→   995→   995→                >
+   873→   957→   996→   996→   996→                  View All Trades
+   874→   958→   997→   997→   997→                  <ArrowUpRight className="h-3 w-3 ml-1" />
+   875→   959→   998→   998→   998→                </Button>
+   876→   960→   999→   999→   999→              </div>
+   877→   961→  1000→  1000→  1000→            </SectionCard>
+   878→   962→  1001→  1001→  1001→          </div>
+   879→   963→  1002→  1002→  1002→        )}
+   880→   964→  1003→  1003→  1003→
+   881→   965→  1004→  1004→  1004→      <StartEngineDialog
+   882→   966→  1005→  1005→  1005→        open={engineDialogOpen}
+   883→   967→  1006→  1006→  1006→        onOpenChange={setEngineDialogOpen}
+   884→   968→  1007→  1007→  1007→        onStart={handleEngineStart}
+   885→   969→  1008→  1008→  1008→        isStarting={engine.isStarting}
+   886→   970→  1009→  1009→  1009→      />
+   887→   971→  1010→  1010→  1010→    </TooltipProvider>
+   888→   972→  1011→  1011→  1011→  );
+   889→   973→  1012→  1012→  1012→}
+   890→   974→  1013→  1013→  1013→
