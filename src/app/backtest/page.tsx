@@ -514,9 +514,9 @@ export default function BacktestPage() {
       }
     } catch (err: any) {
       console.error('Backtest failed:', err);
-      const isNetworkErr = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
+      const shouldFallback = !err.response || err.response?.status >= 500 || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
       const isDemo = typeof window !== 'undefined' && localStorage.getItem('ultrabot_token') === 'demo-token';
-      if (isNetworkErr || isDemo) {
+      if (shouldFallback || isDemo) {
         // Backend unreachable or demo mode — simulate with a short delay then show mock
         setTimeout(() => {
           setResults(generateMockResult(form));

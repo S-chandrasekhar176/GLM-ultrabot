@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -21,6 +21,7 @@ import {
   XCircle,
   Scissors,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -484,7 +485,7 @@ const INR_SHORT = (n: number) =>
 // Positions Tab Component
 // ─────────────────────────────────────────────
 
-function PositionsTab() {
+function PositionsTab({ resetSignal }: { resetSignal: number }) {
   const [positions, setPositions] = useState<Position[]>(MOCK_POSITIONS);
   const [closeDialogId, setCloseDialogId] = useState<string | null>(null);
   const [modifyDialog, setModifyDialog] = useState<{
@@ -498,6 +499,11 @@ function PositionsTab() {
     id: string;
   }>({ open: false, id: '' });
   const [partialQty, setPartialQty] = useState('');
+
+  // Reset paper mode when parent triggers
+  useEffect(() => {
+    if (resetSignal > 0) setPositions([]);
+  }, [resetSignal]);
 
   const totalUnrealizedPnl = useMemo(
     () => positions.reduce((sum, p) => sum + p.unrealizedPnl, 0),
@@ -919,10 +925,15 @@ const ITEMS_PER_PAGE = 20;
 
 type ResultFilter = 'all' | 'win' | 'loss';
 
-function HistoryTab() {
+function HistoryTab({ resetSignal }: { resetSignal: number }) {
   const [trades, setTrades] = useState<HistoricalTrade[]>(MOCK_TRADES);
   const [isLoading] = useState(false);
   const [page, setPage] = useState(1);
+
+  // Reset paper mode when parent triggers
+  useEffect(() => {
+    if (resetSignal > 0) setTrades([]);
+  }, [resetSignal]);
 
   // Filters
   const [dateFrom, setDateFrom] = useState('');
@@ -1305,13 +1316,54 @@ function HistoryTab() {
 // ─────────────────────────────────────────────
 
 export default function TradesPage() {
+  const [resetSignal, setResetSignal] = useState(0);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+
+  const handleResetPaper = useCallback(() => {
+    setResetSignal((s) => s + 1);
+    setResetDialogOpen(false);
+    toast.success('Paper mode reset — all trades & positions cleared');
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <ArrowLeftRight className="h-6 w-6 text-ub-accent" />
-        <h1 className="text-2xl font-bold text-ub-text-primary">Trades</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ArrowLeftRight className="h-6 w-6 text-ub-accent" />
+          <h1 className="text-2xl font-bold text-ub-text-primary">Trades</h1>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-ub-loss/40 text-ub-loss hover:bg-ub-loss/10 hover:text-ub-loss text-xs"
+          onClick={() => setResetDialogOpen(true)}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+          Reset Paper Mode
+        </Button>
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent className="bg-ub-surface border-ub-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-ub-text-primary">Reset Paper Mode?</AlertDialogTitle>
+            <AlertDialogDescription className="text-ub-text-muted">
+              This will permanently clear all open positions and trade history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-ub-border text-ub-text-muted hover:text-ub-text-primary">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-ub-loss hover:bg-ub-loss/90 text-white"
+              onClick={handleResetPaper}
+            >
+              Yes, Reset Everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Tabs */}
       <Tabs defaultValue="positions" className="w-full">
@@ -1331,11 +1383,11 @@ export default function TradesPage() {
         </TabsList>
 
         <TabsContent value="positions" className="mt-4">
-          <PositionsTab />
+          <PositionsTab resetSignal={resetSignal} />
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">
-          <HistoryTab />
+          <HistoryTab resetSignal={resetSignal} />
         </TabsContent>
       </Tabs>
     </div>

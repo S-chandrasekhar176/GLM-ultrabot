@@ -988,9 +988,9 @@ export default function OpportunitiesPage() {
       }
     } catch (err: any) {
       console.error('Quick backtest failed:', err);
-      const isNetworkErr = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
+      const shouldFallback = !err.response || err.response?.status >= 500 || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
       const isDemo = typeof window !== 'undefined' && localStorage.getItem('ultrabot_token') === 'demo-token';
-      if (isNetworkErr || isDemo) {
+      if (shouldFallback || isDemo) {
         // Backend unreachable or demo mode — show mock backtest stats
         setTimeout(() => {
           const mockWinRate = 50 + Math.random() * 30;

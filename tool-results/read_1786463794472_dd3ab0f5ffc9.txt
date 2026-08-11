@@ -1,0 +1,1355 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useMemo, useCallback } from 'react';
+     4→import { motion } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  ArrowUpDown,
+     8→  ArrowLeftRight,
+     9→  TrendingUp,
+    10→  TrendingDown,
+    11→  Download,
+    12→  Filter,
+    13→  RotateCcw,
+    14→  Check,
+    15→  X,
+    16→  ChevronLeft,
+    17→  ChevronRight,
+    18→  Wifi,
+    19→  Target,
+    20→  Pencil,
+    21→  XCircle,
+    22→  Scissors,
+    23→  Search,
+    24→  Trash2,
+    25→} from 'lucide-react';
+    26→import { Badge } from '@/components/ui/badge';
+    27→import { Button } from '@/components/ui/button';
+    28→import { Card, CardContent } from '@/components/ui/card';
+    29→import { Skeleton } from '@/components/ui/skeleton';
+    30→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    31→import {
+    32→  Table,
+    33→  TableBody,
+    34→  TableCell,
+    35→  TableHead,
+    36→  TableHeader,
+    37→  TableRow,
+    38→} from '@/components/ui/table';
+    39→import {
+    40→  Dialog,
+    41→  DialogContent,
+    42→  DialogHeader,
+    43→  DialogTitle,
+    44→  DialogDescription,
+    45→  DialogFooter,
+    46→} from '@/components/ui/dialog';
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→} from '@/components/ui/alert-dialog';
+    57→import {
+    58→  DropdownMenu,
+    59→  DropdownMenuContent,
+    60→  DropdownMenuItem,
+    61→  DropdownMenuTrigger,
+    62→  DropdownMenuSeparator,
+    63→} from '@/components/ui/dropdown-menu';
+    64→import {
+    65→  Select,
+    66→  SelectContent,
+    67→  SelectItem,
+    68→  SelectTrigger,
+    69→  SelectValue,
+    70→} from '@/components/ui/select';
+    71→import { Input } from '@/components/ui/input';
+    72→import { ScrollArea } from '@/components/ui/scroll-area';
+    73→import { Separator } from '@/components/ui/separator';
+    74→import { format, parseISO } from 'date-fns';
+    75→
+    76→// ─────────────────────────────────────────────
+    77→// Types
+    78→// ─────────────────────────────────────────────
+    79→
+    80→type Direction = 'BUY' | 'SELL';
+    81→
+    82→interface BookedLevel {
+    83→  level: number;
+    84→  achieved: boolean;
+    85→}
+    86→
+    87→interface Position {
+    88→  id: string;
+    89→  symbol: string;
+    90→  direction: Direction;
+    91→  entry: number;
+    92→  current: number;
+    93→  quantity: number;
+    94→  remainingQty: number;
+    95→  stopLoss: number;
+    96→  target: number;
+    97→  unrealizedPnl: number;
+    98→  bookedLevels: BookedLevel[];
+    99→  strategy: string;
+   100→}
+   101→
+   102→interface HistoricalTrade {
+   103→  id: string;
+   104→  time: string;
+   105→  symbol: string;
+   106→  direction: Direction;
+   107→  strategy: string;
+   108→  entry: number;
+   109→  exit: number;
+   110→  quantity: number;
+   111→  grossPnl: number;
+   112→  fees: number;
+   113→  netPnl: number;
+   114→  duration: string;
+   115→  exitReason: string;
+   116→}
+   117→
+   118→// ─────────────────────────────────────────────
+   119→// Strategy List
+   120→// ─────────────────────────────────────────────
+   121→
+   122→const STRATEGIES = [
+   123→  'All Strategies',
+   124→  'Momentum Breakout',
+   125→  'Mean Reversion',
+   126→  'VWAP Bounce',
+   127→  'Supertrend Follow',
+   128→  'RSI Divergence',
+   129→  'Gap Fill',
+   130→  'Opening Range',
+   131→  'Volume Profile',
+   132→  'Support Resistance',
+   133→  'EMA Crossover',
+   134→  'Bollinger Squeeze',
+   135→  'Ichimoku Cloud',
+   136→  'Order Block',
+   137→  'Fibonacci Retrace',
+   138→];
+   139→
+   140→// ─────────────────────────────────────────────
+   141→// Mock Data — Positions
+   142→// ─────────────────────────────────────────────
+   143→
+   144→const MOCK_POSITIONS: Position[] = [
+   145→  {
+   146→    id: 'pos-001',
+   147→    symbol: 'RELIANCE',
+   148→    direction: 'BUY',
+   149→    entry: 2932.50,
+   150→    current: 2958.75,
+   151→    quantity: 50,
+   152→    remainingQty: 50,
+   153→    stopLoss: 2908.00,
+   154→    target: 3020.00,
+   155→    unrealizedPnl: 1312.50,
+   156→    bookedLevels: [
+   157→      { level: 2950, achieved: true },
+   158→      { level: 2980, achieved: false },
+   159→    ],
+   160→    strategy: 'Momentum Breakout',
+   161→  },
+   162→  {
+   163→    id: 'pos-002',
+   164→    symbol: 'INFY',
+   165→    direction: 'SELL',
+   166→    entry: 1878.30,
+   167→    current: 1864.15,
+   168→    quantity: 75,
+   169→    remainingQty: 75,
+   170→    stopLoss: 1910.00,
+   171→    target: 1820.00,
+   172→    unrealizedPnl: 1061.25,
+   173→    bookedLevels: [
+   174→      { level: 1855, achieved: false },
+   175→      { level: 1835, achieved: false },
+   176→    ],
+   177→    strategy: 'Mean Reversion',
+   178→  },
+   179→  {
+   180→    id: 'pos-003',
+   181→    symbol: 'HDFCBANK',
+   182→    direction: 'BUY',
+   183→    entry: 1688.00,
+   184→    current: 1679.45,
+   185→    quantity: 100,
+   186→    remainingQty: 100,
+   187→    stopLoss: 1665.00,
+   188→    target: 1735.00,
+   189→    unrealizedPnl: -855.00,
+   190→    bookedLevels: [
+   191→      { level: 1710, achieved: false },
+   192→      { level: 1725, achieved: false },
+   193→    ],
+   194→    strategy: 'VWAP Bounce',
+   195→  },
+   196→  {
+   197→    id: 'pos-004',
+   198→    symbol: 'TCS',
+   199→    direction: 'BUY',
+   200→    entry: 4125.00,
+   201→    current: 4168.50,
+   202→    quantity: 25,
+   203→    remainingQty: 25,
+   204→    stopLoss: 4080.00,
+   205→    target: 4250.00,
+   206→    unrealizedPnl: 1087.50,
+   207→    bookedLevels: [
+   208→      { level: 4180, achieved: false },
+   209→      { level: 4220, achieved: false },
+   210→    ],
+   211→    strategy: 'Supertrend Follow',
+   212→  },
+   213→  {
+   214→    id: 'pos-005',
+   215→    symbol: 'ICICIBANK',
+   216→    direction: 'BUY',
+   217→    entry: 1274.80,
+   218→    current: 1268.35,
+   219→    quantity: 150,
+   220→    remainingQty: 100,
+   221→    stopLoss: 1255.00,
+   222→    target: 1320.00,
+   223→    unrealizedPnl: -967.50,
+   224→    bookedLevels: [
+   225→      { level: 1295, achieved: true },
+   226→      { level: 1310, achieved: false },
+   227→    ],
+   228→    strategy: 'Opening Range',
+   229→  },
+   230→];
+   231→
+   232→// ─────────────────────────────────────────────
+   233→// Mock Data — Trade History
+   234→// ─────────────────────────────────────────────
+   235→
+   236→const MOCK_TRADES: HistoricalTrade[] = [
+   237→  {
+   238→    id: 'trd-001',
+   239→    time: '2025-01-15T14:32:00',
+   240→    symbol: 'RELIANCE',
+   241→    direction: 'BUY',
+   242→    strategy: 'Momentum Breakout',
+   243→    entry: 2890.00,
+   244→    exit: 2948.50,
+   245→    quantity: 50,
+   246→    grossPnl: 2925.00,
+   247→    fees: 72.50,
+   248→    netPnl: 2852.50,
+   249→    duration: '2h 15m',
+   250→    exitReason: 'Target Hit',
+   251→  },
+   252→  {
+   253→    id: 'trd-002',
+   254→    time: '2025-01-15T11:20:00',
+   255→    symbol: 'BAJFINANCE',
+   256→    direction: 'SELL',
+   257→    strategy: 'Mean Reversion',
+   258→    entry: 7245.00,
+   259→    exit: 7310.00,
+   260→    quantity: 15,
+   261→    grossPnl: -975.00,
+   262→    fees: 43.50,
+   263→    netPnl: -1018.50,
+   264→    duration: '1h 45m',
+   265→    exitReason: 'Stop Loss',
+   266→  },
+   267→  {
+   268→    id: 'trd-003',
+   269→    time: '2025-01-14T15:10:00',
+   270→    symbol: 'TCS',
+   271→    direction: 'BUY',
+   272→    strategy: 'VWAP Bounce',
+   273→    entry: 4080.00,
+   274→    exit: 4135.00,
+   275→    quantity: 25,
+   276→    grossPnl: 1375.00,
+   277→    fees: 41.25,
+   278→    netPnl: 1333.75,
+   279→    duration: '3h 30m',
+   280→    exitReason: 'Target Hit',
+   281→  },
+   282→  {
+   283→    id: 'trd-004',
+   284→    time: '2025-01-14T13:45:00',
+   285→    symbol: 'HDFCBANK',
+   286→    direction: 'BUY',
+   287→    strategy: 'Support Resistance',
+   288→    entry: 1650.00,
+   289→    exit: 1678.00,
+   290→    quantity: 100,
+   291→    grossPnl: 2800.00,
+   292→    fees: 83.00,
+   293→    netPnl: 2717.00,
+   294→    duration: '2h 5m',
+   295→    exitReason: 'Target Hit',
+   296→  },
+   297→  {
+   298→    id: 'trd-005',
+   299→    time: '2025-01-14T10:15:00',
+   300→    symbol: 'INFY',
+   301→    direction: 'SELL',
+   302→    strategy: 'RSI Divergence',
+   303→    entry: 1912.00,
+   304→    exit: 1878.50,
+   305→    quantity: 75,
+   306→    grossPnl: 2512.50,
+   307→    fees: 71.40,
+   308→    netPnl: 2441.10,
+   309→    duration: '4h 10m',
+   310→    exitReason: 'Target Hit',
+   311→  },
+   312→  {
+   313→    id: 'trd-006',
+   314→    time: '2025-01-13T14:55:00',
+   315→    symbol: 'SBIN',
+   316→    direction: 'BUY',
+   317→    strategy: 'Gap Fill',
+   318→    entry: 812.50,
+   319→    exit: 798.00,
+   320→    quantity: 200,
+   321→    grossPnl: -2900.00,
+   322→    fees: 129.00,
+   323→    netPnl: -3029.00,
+   324→    duration: '5h 40m',
+   325→    exitReason: 'Stop Loss',
+   326→  },
+   327→  {
+   328→    id: 'trd-007',
+   329→    time: '2025-01-13T11:30:00',
+   330→    symbol: 'WIPRO',
+   331→    direction: 'BUY',
+   332→    strategy: 'EMA Crossover',
+   333→    entry: 582.00,
+   334→    exit: 601.50,
+   335→    quantity: 150,
+   336→    grossPnl: 2925.00,
+   337→    fees: 88.15,
+   338→    netPnl: 2836.85,
+   339→    duration: '2h 50m',
+   340→    exitReason: 'Target Hit',
+   341→  },
+   342→  {
+   343→    id: 'trd-008',
+   344→    time: '2025-01-13T09:45:00',
+   345→    symbol: 'ADANIENT',
+   346→    direction: 'SELL',
+   347→    strategy: 'Bollinger Squeeze',
+   348→    entry: 3210.00,
+   349→    exit: 3150.00,
+   350→    quantity: 30,
+   351→    grossPnl: 1800.00,
+   352→    fees: 57.90,
+   353→    netPnl: 1742.10,
+   354→    duration: '3h 15m',
+   355→    exitReason: 'Target Hit',
+   356→  },
+   357→  {
+   358→    id: 'trd-009',
+   359→    time: '2025-01-12T14:20:00',
+   360→    symbol: 'MARUTI',
+   361→    direction: 'BUY',
+   362→    strategy: 'Volume Profile',
+   363→    entry: 12450.00,
+   364→    exit: 12380.00,
+   365→    quantity: 10,
+   366→    grossPnl: -700.00,
+   367→    fees: 37.25,
+   368→    netPnl: -737.25,
+   369→    duration: '1h 30m',
+   370→    exitReason: 'Stop Loss',
+   371→  },
+   372→  {
+   373→    id: 'trd-010',
+   374→    time: '2025-01-12T12:00:00',
+   375→    symbol: 'KOTAKBANK',
+   376→    direction: 'BUY',
+   377→    strategy: 'Opening Range',
+   378→    entry: 1872.00,
+   379→    exit: 1915.00,
+   380→    quantity: 50,
+   381→    grossPnl: 2150.00,
+   382→    fees: 69.65,
+   383→    netPnl: 2080.35,
+   384→    duration: '3h 45m',
+   385→    exitReason: 'Target Hit',
+   386→  },
+   387→  {
+   388→    id: 'trd-011',
+   389→    time: '2025-01-12T10:30:00',
+   390→    symbol: 'LT',
+   391→    direction: 'SELL',
+   392→    strategy: 'Ichimoku Cloud',
+   393→    entry: 3650.00,
+   394→    exit: 3690.00,
+   395→    quantity: 20,
+   396→    grossPnl: -800.00,
+   397→    fees: 29.40,
+   398→    netPnl: -829.40,
+   399→    duration: '2h 20m',
+   400→    exitReason: 'Stop Loss',
+   401→  },
+   402→  {
+   403→    id: 'trd-012',
+   404→    time: '2025-01-11T15:00:00',
+   405→    symbol: 'HCLTECH',
+   406→    direction: 'BUY',
+   407→    strategy: 'Fibonacci Retrace',
+   408→    entry: 1825.00,
+   409→    exit: 1872.00,
+   410→    quantity: 60,
+   411→    grossPnl: 2820.00,
+   412→    fees: 81.90,
+   413→    netPnl: 2738.10,
+   414→    duration: '4h 25m',
+   415→    exitReason: 'Target Hit',
+   416→  },
+   417→  {
+   418→    id: 'trd-013',
+   419→    time: '2025-01-11T13:15:00',
+   420→    symbol: 'AXISBANK',
+   421→    direction: 'BUY',
+   422→    strategy: 'Order Block',
+   423→    entry: 1190.00,
+   424→    exit: 1178.00,
+   425→    quantity: 125,
+   426→    grossPnl: -1500.00,
+   427→    fees: 59.65,
+   428→    netPnl: -1559.65,
+   429→    duration: '1h 55m',
+   430→    exitReason: 'Stop Loss',
+   431→  },
+   432→  {
+   433→    id: 'trd-014',
+   434→    time: '2025-01-11T10:00:00',
+   435→    symbol: 'SUNPHARMA',
+   436→    direction: 'BUY',
+   437→    strategy: 'Momentum Breakout',
+   438→    entry: 1720.00,
+   439→    exit: 1768.00,
+   440→    quantity: 40,
+   441→    grossPnl: 1920.00,
+   442→    fees: 59.76,
+   443→    netPnl: 1860.24,
+   444→    duration: '3h 10m',
+   445→    exitReason: 'Target Hit',
+   446→  },
+   447→  {
+   448→    id: 'trd-015',
+   449→    time: '2025-01-10T14:40:00',
+   450→    symbol: 'TITAN',
+   451→    direction: 'SELL',
+   452→    strategy: 'Mean Reversion',
+   453→    entry: 3780.00,
+   454→    exit: 3720.00,
+   455→    quantity: 15,
+   456→    grossPnl: 900.00,
+   457→    fees: 28.50,
+   458→    netPnl: 871.50,
+   459→    duration: '2h 35m',
+   460→    exitReason: 'Target Hit',
+   461→  },
+   462→];
+   463→
+   464→// ─────────────────────────────────────────────
+   465→// Helpers
+   466→// ─────────────────────────────────────────────
+   467→
+   468→const INR = (n: number) =>
+   469→  new Intl.NumberFormat('en-IN', {
+   470→    style: 'currency',
+   471→    currency: 'INR',
+   472→    minimumFractionDigits: 2,
+   473→    maximumFractionDigits: 2,
+   474→  }).format(n);
+   475→
+   476→const INR_SHORT = (n: number) =>
+   477→  new Intl.NumberFormat('en-IN', {
+   478→    style: 'currency',
+   479→    currency: 'INR',
+   480→    minimumFractionDigits: 0,
+   481→    maximumFractionDigits: 0,
+   482→  }).format(n);
+   483→
+   484→// ─────────────────────────────────────────────
+   485→// Positions Tab Component
+   486→// ─────────────────────────────────────────────
+   487→
+   488→function PositionsTab({ resetSignal }: { resetSignal: number }) {
+   489→  const [positions, setPositions] = useState<Position[]>(MOCK_POSITIONS);
+   490→  const [closeDialogId, setCloseDialogId] = useState<string | null>(null);
+   491→  const [modifyDialog, setModifyDialog] = useState<{
+   492→    open: boolean;
+   493→    id: string;
+   494→    field: 'stopLoss' | 'target';
+   495→  }>({ open: false, id: '', field: 'stopLoss' });
+   496→  const [modifyValue, setModifyValue] = useState('');
+   497→  const [partialDialog, setPartialDialog] = useState<{
+   498→    open: boolean;
+   499→    id: string;
+   500→  }>({ open: false, id: '' });
+   501→  const [partialQty, setPartialQty] = useState('');
+   502→
+   503→  // Reset paper mode when parent triggers
+   504→  useEffect(() => {
+   505→    if (resetSignal > 0) setPositions([]);
+   506→  }, [resetSignal]);
+   507→
+   508→  const totalUnrealizedPnl = useMemo(
+   509→    () => positions.reduce((sum, p) => sum + p.unrealizedPnl, 0),
+   510→    [positions]
+   511→  );
+   512→
+   513→  const totalInvested = useMemo(
+   514→    () => positions.reduce((sum, p) => sum + p.entry * p.quantity, 0),
+   515→    [positions]
+   516→  );
+   517→
+   518→  const handleClosePosition = (id: string) => {
+   519→    setPositions((prev) => prev.filter((p) => p.id !== id));
+   520→    setCloseDialogId(null);
+   521→    const pos = positions.find((p) => p.id === id);
+   522→    toast.success(`${pos?.symbol} position closed`, {
+   523→      description: `P&L: ${INR(pos?.unrealizedPnl ?? 0)}`,
+   524→    });
+   525→  };
+   526→
+   527→  const handleModify = () => {
+   528→    const val = parseFloat(modifyValue);
+   529→    if (isNaN(val) || val <= 0) return;
+   530→    setPositions((prev) =>
+   531→      prev.map((p) =>
+   532→        p.id === modifyDialog.id
+   533→          ? { ...p, [modifyDialog.field]: val }
+   534→          : p
+   535→      )
+   536→    );
+   537→    const pos = positions.find((p) => p.id === modifyDialog.id);
+   538→    toast.success(`${pos?.symbol} ${modifyDialog.field === 'stopLoss' ? 'SL' : 'Target'} updated`, {
+   539→      description: `New ${modifyDialog.field === 'stopLoss' ? 'Stop Loss' : 'Target'}: ${INR(val)}`,
+   540→    });
+   541→    setModifyDialog({ open: false, id: '', field: 'stopLoss' });
+   542→    setModifyValue('');
+   543→  };
+   544→
+   545→  const handlePartialClose = () => {
+   546→    const qty = parseInt(partialQty, 10);
+   547→    if (isNaN(qty) || qty <= 0) return;
+   548→    setPositions((prev) =>
+   549→      prev.map((p) =>
+   550→        p.id === partialDialog.id
+   551→          ? {
+   552→              ...p,
+   553→              remainingQty: Math.max(0, p.remainingQty - qty),
+   554→              quantity: p.quantity,
+   555→            }
+   556→          : p
+   557→      )
+   558→    );
+   559→    const pos = positions.find((p) => p.id === partialDialog.id);
+   560→    toast.success(`Partial close on ${pos?.symbol}`, {
+   561→      description: `${qty} shares closed, ${Math.max(0, (pos?.remainingQty ?? 0) - qty)} remaining.`,
+   562→    });
+   563→    setPartialDialog({ open: false, id: '' });
+   564→    setPartialQty('');
+   565→  };
+   566→
+   567→  const openModify = (id: string, field: 'stopLoss' | 'target') => {
+   568→    const pos = positions.find((p) => p.id === id);
+   569→ setModifyValue(pos ? String(pos[field]) : '');
+   570→    setModifyDialog({ open: true, id, field });
+   571→  };
+   572→
+   573→  const openPartial = (id: string) => {
+   574→    const pos = positions.find((p) => p.id === id);
+   575→    setPartialQty(pos ? String(pos.remainingQty) : '');
+   576→    setPartialDialog({ open: true, id });
+   577→  };
+   578→
+   579→  return (
+   580→    <div className="space-y-4">
+   581→      {/* Summary Bar */}
+   582→      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+   583→        <Card className="bg-ub-surface border-ub-border">
+   584→          <CardContent className="p-4 flex items-center gap-3">
+   585→            <div className="h-9 w-9 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   586→              <ArrowLeftRight className="h-4.5 w-4.5 text-ub-accent" />
+   587→            </div>
+   588→            <div>
+   589→              <p className="text-[11px] uppercase tracking-wider text-ub-text-muted">Total Positions</p>
+   590→              <p className="text-xl font-bold text-ub-text-primary">{positions.length}</p>
+   591→            </div>
+   592→          </CardContent>
+   593→        </Card>
+   594→        <Card className="bg-ub-surface border-ub-border">
+   595→          <CardContent className="p-4 flex items-center gap-3">
+   596→            <div
+   597→              className={`h-9 w-9 rounded-lg flex items-center justify-center ${
+   598→                totalUnrealizedPnl >= 0 ? 'bg-ub-profit/10' : 'bg-ub-loss/10'
+   599→              }`}
+   600→            >
+   601→              {totalUnrealizedPnl >= 0 ? (
+   602→                <TrendingUp className="h-4.5 w-4.5 text-ub-profit" />
+   603→              ) : (
+   604→                <TrendingDown className="h-4.5 w-4.5 text-ub-loss" />
+   605→              )}
+   606→            </div>
+   607→            <div>
+   608→              <p className="text-[11px] uppercase tracking-wider text-ub-text-muted">Unrealized P&L</p>
+   609→              <p
+   610→                className={`text-xl font-bold ${
+   611→                  totalUnrealizedPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+   612→                }`}
+   613→              >
+   614→                {INR(totalUnrealizedPnl)}
+   615→              </p>
+   616→            </div>
+   617→          </CardContent>
+   618→        </Card>
+   619→        <Card className="bg-ub-surface border-ub-border">
+   620→          <CardContent className="p-4 flex items-center gap-3">
+   621→            <div className="h-9 w-9 rounded-lg bg-ub-warning/10 flex items-center justify-center">
+   622→              <Target className="h-4.5 w-4.5 text-ub-warning" />
+   623→            </div>
+   624→            <div>
+   625→              <p className="text-[11px] uppercase tracking-wider text-ub-text-muted">Total Invested</p>
+   626→              <p className="text-xl font-bold text-ub-text-primary">{INR_SHORT(totalInvested)}</p>
+   627→            </div>
+   628→          </CardContent>
+   629→        </Card>
+   630→      </div>
+   631→
+   632→      {/* WS Hint */}
+   633→      <div className="flex items-center gap-2 text-xs text-ub-text-muted">
+   634→        <Wifi className="h-3 w-3 text-ub-accent" />
+   635→        <span>Prices update in real-time via WebSocket</span>
+   636→      </div>
+   637→
+   638→      {/* Positions Table */}
+   639→      {positions.length === 0 ? (
+   640→        <div className="flex flex-col items-center justify-center py-20 text-center">
+   641→          <div className="h-16 w-16 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-4">
+   642→            <ArrowLeftRight className="h-7 w-7 text-ub-text-muted" />
+   643→          </div>
+   644→          <h3 className="text-lg font-semibold text-ub-text-primary mb-1">No open positions</h3>
+   645→          <p className="text-sm text-ub-text-muted">
+   646→            Your confirmed trades will appear here once executed.
+   647→          </p>
+   648→        </div>
+   649→      ) : (
+   650→        <Card className="bg-ub-surface border-ub-border">
+   651→          <ScrollArea className="max-h-[600px]">
+   652→            <Table>
+   653→              <TableHeader>
+   654→                <TableRow className="border-ub-border hover:bg-transparent">
+   655→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Symbol</TableHead>
+   656→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Dir</TableHead>
+   657→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Entry</TableHead>
+   658→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Current</TableHead>
+   659→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Qty</TableHead>
+   660→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Remain</TableHead>
+   661→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">SL</TableHead>
+   662→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Target</TableHead>
+   663→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">P&L</TableHead>
+   664→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Booked</TableHead>
+   665→                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Actions</TableHead>
+   666→                </TableRow>
+   667→              </TableHeader>
+   668→              <TableBody>
+   669→                {positions.map((pos) => (
+   670→                  <TableRow
+   671→                    key={pos.id}
+   672→                    className="border-ub-border/50 hover:bg-ub-surface-hover transition-colors"
+   673→                  >
+   674→                    <TableCell className="font-bold text-ub-text-primary">{pos.symbol}</TableCell>
+   675→                    <TableCell>
+   676→                      <Badge
+   677→                        className={`text-[10px] font-semibold px-1.5 py-0 h-5 ${
+   678→                          pos.direction === 'BUY'
+   679→                            ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30'
+   680→                            : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30'
+   681→                        }`}
+   682→                        variant="outline"
+   683→                      >
+   684→                        {pos.direction}
+   685→                      </Badge>
+   686→                    </TableCell>
+   687→                    <TableCell className="text-right font-mono text-sm text-ub-text-primary">
+   688→                      {INR(pos.entry)}
+   689→                    </TableCell>
+   690→                    <TableCell className="text-right font-mono text-sm text-ub-accent">
+   691→                      {INR(pos.current)}
+   692→                    </TableCell>
+   693→                    <TableCell className="text-right font-mono text-sm text-ub-text-primary">
+   694→                      {pos.quantity}
+   695→                    </TableCell>
+   696→                    <TableCell className="text-right font-mono text-sm text-ub-text-muted">
+   697→                      {pos.remainingQty}
+   698→                    </TableCell>
+   699→                    <TableCell className="text-right font-mono text-sm text-ub-loss">
+   700→                      {INR(pos.stopLoss)}
+   701→                    </TableCell>
+   702→                    <TableCell className="text-right font-mono text-sm text-ub-profit">
+   703→                      {INR(pos.target)}
+   704→                    </TableCell>
+   705→                    <TableCell
+   706→                      className={`text-right font-mono text-sm font-semibold ${
+   707→                        pos.unrealizedPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+   708→                      }`}
+   709→                    >
+   710→                      {pos.unrealizedPnl >= 0 ? '+' : ''}
+   711→                      {INR(pos.unrealizedPnl)}
+   712→                    </TableCell>
+   713→                    <TableCell>
+   714→                      <div className="flex gap-1">
+   715→                        {pos.bookedLevels.map((bl, idx) => (
+   716→                          <span
+   717→                            key={idx}
+   718→                            className={`text-[10px] font-mono font-medium ${
+   719→                              bl.achieved ? 'text-ub-profit' : 'text-ub-text-muted'
+   720→                            }`}
+   721→                          >
+   722→                            L{idx + 1}
+   723→                            {bl.achieved ? <Check className="inline h-2.5 w-2.5 ml-0.5" /> : null}
+   724→                          </span>
+   725→                        ))}
+   726→                      </div>
+   727→                    </TableCell>
+   728→                    <TableCell className="text-right">
+   729→                      <DropdownMenu>
+   730→                        <DropdownMenuTrigger asChild>
+   731→                          <Button
+   732→                            variant="ghost"
+   733→                            size="sm"
+   734→                            className="h-8 text-xs text-ub-text-muted hover:text-ub-text-primary"
+   735→                          >
+   736→                            Actions
+   737→                          </Button>
+   738→                        </DropdownMenuTrigger>
+   739→                        <DropdownMenuContent className="bg-ub-surface border-ub-border" align="end">
+   740→                          <DropdownMenuItem
+   741→                            className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary"
+   742→                            onClick={() => openModify(pos.id, 'stopLoss')}
+   743→                          >
+   744→                            <Pencil className="h-3.5 w-3.5 mr-2" />
+   745→                            Modify SL
+   746→                          </DropdownMenuItem>
+   747→                          <DropdownMenuItem
+   748→                            className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary"
+   749→                            onClick={() => openModify(pos.id, 'target')}
+   750→                          >
+   751→                            <Pencil className="h-3.5 w-3.5 mr-2" />
+   752→                            Modify Target
+   753→                          </DropdownMenuItem>
+   754→                          <DropdownMenuSeparator className="bg-ub-border" />
+   755→                          <DropdownMenuItem
+   756→                            className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary"
+   757→                            onClick={() => openPartial(pos.id)}
+   758→                          >
+   759→                            <Scissors className="h-3.5 w-3.5 mr-2" />
+   760→                            Close Partial
+   761→                          </DropdownMenuItem>
+   762→                          <DropdownMenuItem
+   763→                            className="text-ub-loss focus:bg-ub-loss/10 focus:text-ub-loss"
+   764→                            onClick={() => setCloseDialogId(pos.id)}
+   765→                          >
+   766→                            <XCircle className="h-3.5 w-3.5 mr-2" />
+   767→                            Close Position
+   768→                          </DropdownMenuItem>
+   769→                        </DropdownMenuContent>
+   770→                      </DropdownMenu>
+   771→                    </TableCell>
+   772→                  </TableRow>
+   773→                ))}
+   774→              </TableBody>
+   775→            </Table>
+   776→          </ScrollArea>
+   777→        </Card>
+   778→      )}
+   779→
+   780→      {/* Close Position Alert Dialog */}
+   781→      <AlertDialog open={!!closeDialogId} onOpenChange={(open) => !open && setCloseDialogId(null)}>
+   782→        <AlertDialogContent className="bg-ub-surface border-ub-border">
+   783→          <AlertDialogHeader>
+   784→            <AlertDialogTitle className="text-ub-text-primary">Close Position?</AlertDialogTitle>
+   785→            <AlertDialogDescription className="text-ub-text-muted">
+   786→              Are you sure you want to close your{' '}
+   787→              <span className="text-ub-text-primary font-semibold">
+   788→                {positions.find((p) => p.id === closeDialogId)?.symbol}
+   789→              </span>{' '}
+   790→              position? This action cannot be undone.
+   791→            </AlertDialogDescription>
+   792→          </AlertDialogHeader>
+   793→          <div className="py-2">
+   794→            <div className="flex justify-between p-2 rounded bg-ub-background border border-ub-border/50 text-sm">
+   795→              <span className="text-ub-text-muted">Unrealized P&L</span>
+   796→              <span
+   797→                className={`font-semibold font-mono ${
+   798→                  (positions.find((p) => p.id === closeDialogId)?.unrealizedPnl ?? 0) >= 0
+   799→                    ? 'text-ub-profit'
+   800→                    : 'text-ub-loss'
+   801→                }`}
+   802→              >
+   803→                {INR(positions.find((p) => p.id === closeDialogId)?.unrealizedPnl ?? 0)}
+   804→              </span>
+   805→            </div>
+   806→          </div>
+   807→          <AlertDialogFooter>
+   808→            <AlertDialogCancel className="border-ub-border text-ub-text-muted hover:text-ub-text-primary">
+   809→              Cancel
+   810→            </AlertDialogCancel>
+   811→            <AlertDialogAction
+   812→              className="bg-ub-loss hover:bg-ub-loss/90 text-white"
+   813→              onClick={() => closeDialogId && handleClosePosition(closeDialogId)}
+   814→            >
+   815→              Close Position
+   816→            </AlertDialogAction>
+   817→          </AlertDialogFooter>
+   818→        </AlertDialogContent>
+   819→      </AlertDialog>
+   820→
+   821→      {/* Modify SL/Target Dialog */}
+   822→      <Dialog
+   823→        open={modifyDialog.open}
+   824→        onOpenChange={(open) => !open && setModifyDialog({ ...modifyDialog, open: false })}
+   825→      >
+   826→        <DialogContent className="bg-ub-surface border-ub-border max-w-sm">
+   827→          <DialogHeader>
+   828→            <DialogTitle className="text-ub-text-primary">
+   829→              Modify {modifyDialog.field === 'stopLoss' ? 'Stop Loss' : 'Target'}
+   830→            </DialogTitle>
+   831→            <DialogDescription className="text-ub-text-muted">
+   832→              Update the {modifyDialog.field === 'stopLoss' ? 'stop loss' : 'target'} for{' '}
+   833→              <span className="text-ub-text-primary font-semibold">
+   834→                {positions.find((p) => p.id === modifyDialog.id)?.symbol}
+   835→              </span>
+   836→            </DialogDescription>
+   837→          </DialogHeader>
+   838→          <div className="py-2">
+   839→            <Input
+   840→              type="number"
+   841→              step="0.05"
+   842→              value={modifyValue}
+   843→              onChange={(e) => setModifyValue(e.target.value)}
+   844→              className="bg-ub-background border-ub-border text-ub-text-primary font-mono"
+   845→              placeholder="Enter new value"
+   846→            />
+   847→          </div>
+   848→          <DialogFooter className="gap-2">
+   849→            <Button
+   850→              variant="outline"
+   851→              className="border-ub-border text-ub-text-muted"
+   852→              onClick={() => setModifyDialog({ ...modifyDialog, open: false })}
+   853→            >
+   854→              Cancel
+   855→            </Button>
+   856→            <Button
+   857→              className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold"
+   858→              onClick={handleModify}
+   859→            >
+   860→              Update
+   861→            </Button>
+   862→          </DialogFooter>
+   863→        </DialogContent>
+   864→      </Dialog>
+   865→
+   866→      {/* Partial Close Dialog */}
+   867→      <Dialog
+   868→        open={partialDialog.open}
+   869→        onOpenChange={(open) => !open && setPartialDialog({ ...partialDialog, open: false })}
+   870→      >
+   871→        <DialogContent className="bg-ub-surface border-ub-border max-w-sm">
+   872→          <DialogHeader>
+   873→            <DialogTitle className="text-ub-text-primary">Close Partial</DialogTitle>
+   874→            <DialogDescription className="text-ub-text-muted">
+   875→              Partially close{' '}
+   876→              <span className="text-ub-text-primary font-semibold">
+   877→                {positions.find((p) => p.id === partialDialog.id)?.symbol}
+   878→              </span>{' '}
+   879→              position.
+   880→            </DialogDescription>
+   881→          </DialogHeader>
+   882→          <div className="py-2 space-y-2">
+   883→            <div className="flex justify-between text-sm">
+   884→              <span className="text-ub-text-muted">Remaining Quantity</span>
+   885→              <span className="text-ub-text-primary font-mono">
+   886→                {positions.find((p) => p.id === partialDialog.id)?.remainingQty ?? 0}
+   887→              </span>
+   888→            </div>
+   889→            <Input
+   890→              type="number"
+   891→              value={partialQty}
+   892→              onChange={(e) => setPartialQty(e.target.value)}
+   893→              className="bg-ub-background border-ub-border text-ub-text-primary font-mono"
+   894→              placeholder="Quantity to close"
+   895→              max={positions.find((p) => p.id === partialDialog.id)?.remainingQty ?? 0}
+   896→            />
+   897→          </div>
+   898→          <DialogFooter className="gap-2">
+   899→            <Button
+   900→              variant="outline"
+   901→              className="border-ub-border text-ub-text-muted"
+   902→              onClick={() => setPartialDialog({ ...partialDialog, open: false })}
+   903→            >
+   904→              Cancel
+   905→            </Button>
+   906→            <Button
+   907→              className="bg-ub-warning hover:bg-ub-warning/90 text-ub-background font-semibold"
+   908→              onClick={handlePartialClose}
+   909→            >
+   910→              <Scissors className="h-4 w-4 mr-1.5" />
+   911→              Close Partial
+   912→            </Button>
+   913→          </DialogFooter>
+   914→        </DialogContent>
+   915→      </Dialog>
+   916→    </div>
+   917→  );
+   918→}
+   919→
+   920→// ─────────────────────────────────────────────
+   921→// Trade History Tab Component
+   922→// ─────────────────────────────────────────────
+   923→
+   924→const ITEMS_PER_PAGE = 20;
+   925→
+   926→type ResultFilter = 'all' | 'win' | 'loss';
+   927→
+   928→function HistoryTab({ resetSignal }: { resetSignal: number }) {
+   929→  const [trades, setTrades] = useState<HistoricalTrade[]>(MOCK_TRADES);
+   930→  const [isLoading] = useState(false);
+   931→  const [page, setPage] = useState(1);
+   932→
+   933→  // Reset paper mode when parent triggers
+   934→  useEffect(() => {
+   935→    if (resetSignal > 0) setTrades([]);
+   936→  }, [resetSignal]);
+   937→
+   938→  // Filters
+   939→  const [dateFrom, setDateFrom] = useState('');
+   940→  const [dateTo, setDateTo] = useState('');
+   941→  const [strategyFilter, setStrategyFilter] = useState('All Strategies');
+   942→  const [symbolFilter, setSymbolFilter] = useState('');
+   943→  const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
+   944→
+   945→  const filteredTrades = useMemo(() => {
+   946→    return trades.filter((t) => {
+   947→      if (dateFrom) {
+   948→        const from = new Date(dateFrom);
+   949→        if (new Date(t.time) < from) return false;
+   950→      }
+   951→      if (dateTo) {
+   952→        const to = new Date(dateTo);
+   953→        to.setHours(23, 59, 59, 999);
+   954→        if (new Date(t.time) > to) return false;
+   955→      }
+   956→      if (strategyFilter !== 'All Strategies' && t.strategy !== strategyFilter) return false;
+   957→      if (symbolFilter && !t.symbol.toLowerCase().includes(symbolFilter.toLowerCase())) return false;
+   958→      if (resultFilter === 'win' && t.netPnl < 0) return false;
+   959→      if (resultFilter === 'loss' && t.netPnl >= 0) return false;
+   960→      return true;
+   961→    });
+   962→  }, [trades, dateFrom, dateTo, strategyFilter, symbolFilter, resultFilter]);
+   963→
+   964→  const totalPages = Math.max(1, Math.ceil(filteredTrades.length / ITEMS_PER_PAGE));
+   965→  const safePage = Math.min(page, totalPages);
+   966→  const paginatedTrades = useMemo(
+   967→    () => filteredTrades.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE),
+   968→    [filteredTrades, safePage]
+   969→  );
+   970→
+   971→  const totals = useMemo(() => {
+   972→    const totalTrades = filteredTrades.length;
+   973→    const totalPnl = filteredTrades.reduce((sum, t) => sum + t.netPnl, 0);
+   974→    const wins = filteredTrades.filter((t) => t.netPnl > 0).length;
+   975→    const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+   976→    return { totalTrades, totalPnl, winRate };
+   977→  }, [filteredTrades]);
+   978→
+   979→  const handleApplyFilters = () => {
+   980→    setPage(1);
+   981→    toast.success('Filters applied', {
+   982→      description: `${filteredTrades.length} trades match your criteria.`,
+   983→    });
+   984→  };
+   985→
+   986→  const handleResetFilters = () => {
+   987→    setDateFrom('');
+   988→    setDateTo('');
+   989→    setStrategyFilter('All Strategies');
+   990→    setSymbolFilter('');
+   991→    setResultFilter('all');
+   992→    setPage(1);
+   993→    toast.info('Filters reset');
+   994→  };
+   995→
+   996→  const handleExportCSV = useCallback(() => {
+   997→    const headers = ['Time', 'Symbol', 'Direction', 'Strategy', 'Entry', 'Exit', 'Qty', 'Gross P&L', 'Fees', 'Net P&L', 'Duration', 'Exit Reason'];
+   998→    const rows = filteredTrades.map((t) => [
+   999→      format(parseISO(t.time), 'yyyy-MM-dd HH:mm'),
+  1000→      t.symbol,
+  1001→      t.direction,
+  1002→      t.strategy,
+  1003→      t.entry.toFixed(2),
+  1004→      t.exit.toFixed(2),
+  1005→      t.quantity,
+  1006→      t.grossPnl.toFixed(2),
+  1007→      t.fees.toFixed(2),
+  1008→      t.netPnl.toFixed(2),
+  1009→      t.duration,
+  1010→      t.exitReason,
+  1011→    ]);
+  1012→    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+  1013→    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  1014→    const url = URL.createObjectURL(blob);
+  1015→    const link = document.createElement('a');
+  1016→    link.href = url;
+  1017→    link.download = `ultrabot-trades-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+  1018→    link.click();
+  1019→    URL.revokeObjectURL(url);
+  1020→    toast.success('CSV exported', {
+  1021→      description: `${filteredTrades.length} trades exported.`,
+  1022→    });
+  1023→  }, [filteredTrades]);
+  1024→
+  1025→  return (
+  1026→    <div className="space-y-4">
+  1027→      {/* Filter Bar */}
+  1028→      <Card className="bg-ub-surface border-ub-border">
+  1029→        <CardContent className="p-4">
+  1030→          <div className="flex items-center gap-2 mb-3">
+  1031→            <Filter className="h-4 w-4 text-ub-text-muted" />
+  1032→            <span className="text-sm font-semibold text-ub-text-primary">Filters</span>
+  1033→          </div>
+  1034→          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+  1035→            <div className="space-y-1">
+  1036→              <label className="text-[10px] uppercase tracking-wider text-ub-text-muted">From Date</label>
+  1037→              <Input
+  1038→                type="date"
+  1039→                value={dateFrom}
+  1040→                onChange={(e) => setDateFrom(e.target.value)}
+  1041→                className="bg-ub-background border-ub-border text-ub-text-primary text-sm h-9"
+  1042→              />
+  1043→            </div>
+  1044→            <div className="space-y-1">
+  1045→              <label className="text-[10px] uppercase tracking-wider text-ub-text-muted">To Date</label>
+  1046→              <Input
+  1047→                type="date"
+  1048→                value={dateTo}
+  1049→                onChange={(e) => setDateTo(e.target.value)}
+  1050→                className="bg-ub-background border-ub-border text-ub-text-primary text-sm h-9"
+  1051→              />
+  1052→            </div>
+  1053→            <div className="space-y-1">
+  1054→              <label className="text-[10px] uppercase tracking-wider text-ub-text-muted">Strategy</label>
+  1055→              <Select value={strategyFilter} onValueChange={setStrategyFilter}>
+  1056→                <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary text-sm h-9">
+  1057→                  <SelectValue />
+  1058→                </SelectTrigger>
+  1059→                <SelectContent className="bg-ub-surface border-ub-border">
+  1060→                  {STRATEGIES.map((s) => (
+  1061→                    <SelectItem key={s} value={s} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary">
+  1062→                      {s}
+  1063→                    </SelectItem>
+  1064→                  ))}
+  1065→                </SelectContent>
+  1066→              </Select>
+  1067→            </div>
+  1068→            <div className="space-y-1">
+  1069→              <label className="text-[10px] uppercase tracking-wider text-ub-text-muted">Symbol</label>
+  1070→              <div className="relative">
+  1071→                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ub-text-muted" />
+  1072→                <Input
+  1073→                  type="text"
+  1074→                  placeholder="Search symbol..."
+  1075→                  value={symbolFilter}
+  1076→                  onChange={(e) => setSymbolFilter(e.target.value)}
+  1077→                  className="bg-ub-background border-ub-border text-ub-text-primary text-sm h-9 pl-8"
+  1078→                />
+  1079→              </div>
+  1080→            </div>
+  1081→            <div className="space-y-1">
+  1082→              <label className="text-[10px] uppercase tracking-wider text-ub-text-muted">Result</label>
+  1083→              <Select value={resultFilter} onValueChange={(v) => setResultFilter(v as ResultFilter)}>
+  1084→                <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary text-sm h-9">
+  1085→                  <SelectValue />
+  1086→                </SelectTrigger>
+  1087→                <SelectContent className="bg-ub-surface border-ub-border">
+  1088→                  <SelectItem value="all" className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary">
+  1089→                    All
+  1090→                  </SelectItem>
+  1091→                  <SelectItem value="win" className="text-ub-profit focus:bg-ub-surface-hover focus:text-ub-profit">
+  1092→                    Win
+  1093→                  </SelectItem>
+  1094→                  <SelectItem value="loss" className="text-ub-loss focus:bg-ub-surface-hover focus:text-ub-loss">
+  1095→                    Loss
+  1096→                  </SelectItem>
+  1097→                </SelectContent>
+  1098→              </Select>
+  1099→            </div>
+  1100→          </div>
+  1101→          <div className="flex items-center gap-2 mt-3">
+  1102→            <Button
+  1103→              size="sm"
+  1104→              className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold text-xs h-8 px-4"
+  1105→              onClick={handleApplyFilters}
+  1106→            >
+  1107→              Apply
+  1108→            </Button>
+  1109→            <Button
+  1110→              size="sm"
+  1111→              variant="outline"
+  1112→              className="border-ub-border text-ub-text-muted hover:text-ub-text-primary text-xs h-8 px-4"
+  1113→              onClick={handleResetFilters}
+  1114→            >
+  1115→              <RotateCcw className="h-3 w-3 mr-1" />
+  1116→              Reset
+  1117→            </Button>
+  1118→          </div>
+  1119→        </CardContent>
+  1120→      </Card>
+  1121→
+  1122→      {/* Trade Table */}
+  1123→      {isLoading ? (
+  1124→        <Card className="bg-ub-surface border-ub-border">
+  1125→          <CardContent className="p-4 space-y-3">
+  1126→            {Array.from({ length: 5 }).map((_, i) => (
+  1127→              <div key={i} className="flex gap-4">
+  1128→                {Array.from({ length: 10 }).map((_, j) => (
+  1129→                  <Skeleton key={j} className="h-5 flex-1 bg-ub-surface-active" />
+  1130→                ))}
+  1131→              </div>
+  1132→            ))}
+  1133→          </CardContent>
+  1134→        </Card>
+  1135→      ) : filteredTrades.length === 0 ? (
+  1136→        <div className="flex flex-col items-center justify-center py-20 text-center">
+  1137→          <div className="h-16 w-16 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-4">
+  1138→            <Search className="h-7 w-7 text-ub-text-muted" />
+  1139→          </div>
+  1140→          <h3 className="text-lg font-semibold text-ub-text-primary mb-1">No trades yet</h3>
+  1141→          <p className="text-sm text-ub-text-muted">
+  1142→            {symbolFilter || dateFrom || dateTo || strategyFilter !== 'All Strategies'
+  1143→              ? 'No trades match your filters. Try adjusting them.'
+  1144→              : 'Your completed trades will appear here.'}
+  1145→          </p>
+  1146→        </div>
+  1147→      ) : (
+  1148→        <Card className="bg-ub-surface border-ub-border">
+  1149→          <ScrollArea className="max-h-[420px]">
+  1150→            <Table>
+  1151→                <TableHeader>
+  1152→                  <TableRow className="border-ub-border hover:bg-transparent">
+  1153→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Time</TableHead>
+  1154→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Symbol</TableHead>
+  1155→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Dir</TableHead>
+  1156→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Strategy</TableHead>
+  1157→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Entry</TableHead>
+  1158→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Exit</TableHead>
+  1159→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Qty</TableHead>
+  1160→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Gross P&L</TableHead>
+  1161→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Fees</TableHead>
+  1162→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Net P&L</TableHead>
+  1163→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Duration</TableHead>
+  1164→                    <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Exit Reason</TableHead>
+  1165→                  </TableRow>
+  1166→                </TableHeader>
+  1167→                <TableBody>
+  1168→                  {paginatedTrades.map((trade) => (
+  1169→                    <TableRow
+  1170→                      key={trade.id}
+  1171→                      className="border-ub-border/50 hover:bg-ub-surface-hover transition-colors"
+  1172→                    >
+  1173→                      <TableCell className="text-xs text-ub-text-muted font-mono whitespace-nowrap">
+  1174→                        {format(parseISO(trade.time), 'dd MMM HH:mm')}
+  1175→                      </TableCell>
+  1176→                      <TableCell className="font-bold text-ub-text-primary text-sm">
+  1177→                        {trade.symbol}
+  1178→                      </TableCell>
+  1179→                      <TableCell>
+  1180→                        <Badge
+  1181→                          className={`text-[10px] font-semibold px-1.5 py-0 h-5 ${
+  1182→                            trade.direction === 'BUY'
+  1183→                              ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30'
+  1184→                              : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30'
+  1185→                          }`}
+  1186→                          variant="outline"
+  1187→                        >
+  1188→                          {trade.direction}
+  1189→                        </Badge>
+  1190→                      </TableCell>
+  1191→                      <TableCell className="text-xs text-ub-text-muted">{trade.strategy}</TableCell>
+  1192→                      <TableCell className="text-right font-mono text-sm text-ub-text-primary">
+  1193→                        {INR(trade.entry)}
+  1194→                      </TableCell>
+  1195→                      <TableCell className="text-right font-mono text-sm text-ub-text-primary">
+  1196→                        {INR(trade.exit)}
+  1197→                      </TableCell>
+  1198→                      <TableCell className="text-right font-mono text-sm text-ub-text-muted">
+  1199→                        {trade.quantity}
+  1200→                      </TableCell>
+  1201→                      <TableCell
+  1202→                        className={`text-right font-mono text-sm ${
+  1203→                          trade.grossPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+  1204→                        }`}
+  1205→                      >
+  1206→                        {trade.grossPnl >= 0 ? '+' : ''}
+  1207→                        {INR(trade.grossPnl)}
+  1208→                      </TableCell>
+  1209→                      <TableCell className="text-right font-mono text-sm text-ub-text-muted">
+  1210→                        {INR(trade.fees)}
+  1211→                      </TableCell>
+  1212→                      <TableCell
+  1213→                        className={`text-right font-mono text-sm font-bold ${
+  1214→                          trade.netPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+  1215→                        }`}
+  1216→                      >
+  1217→                        {trade.netPnl >= 0 ? '+' : ''}
+  1218→                        {INR(trade.netPnl)}
+  1219→                      </TableCell>
+  1220→                      <TableCell className="text-xs text-ub-text-muted whitespace-nowrap">
+  1221→                        {trade.duration}
+  1222→                      </TableCell>
+  1223→                      <TableCell>
+  1224→                        <Badge
+  1225→                          className={`text-[10px] px-1.5 py-0 h-5 ${
+  1226→                            trade.exitReason === 'Target Hit'
+  1227→                              ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30'
+  1228→                              : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30'
+  1229→                          }`}
+  1230→                          variant="outline"
+  1231→                        >
+  1232→                          {trade.exitReason}
+  1233→                        </Badge>
+  1234→                      </TableCell>
+  1235→                    </TableRow>
+  1236→                  ))}
+  1237→                </TableBody>
+  1238→              </Table>
+  1239→            </ScrollArea>
+  1240→
+  1241→            {/* Footer: Summary + Pagination + Export */}
+  1242→            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-ub-border">
+  1243→              <div className="flex flex-wrap items-center gap-4 text-sm">
+  1244→                <div className="text-ub-text-muted">
+  1245→                  Total Trades:{' '}
+  1246→                  <span className="font-semibold text-ub-text-primary">{totals.totalTrades}</span>
+  1247→                </div>
+  1248→                <Separator orientation="vertical" className="h-4 bg-ub-border" />
+  1249→                <div className="text-ub-text-muted">
+  1250→                  Total P&L:{' '}
+  1251→                  <span
+  1252→                    className={`font-bold ${
+  1253→                      totals.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'
+  1254→                    }`}
+  1255→                  >
+  1256→                    {totals.totalPnl >= 0 ? '+' : ''}
+  1257→                    {INR(totals.totalPnl)}
+  1258→                  </span>
+  1259→                </div>
+  1260→                <Separator orientation="vertical" className="h-4 bg-ub-border" />
+  1261→                <div className="text-ub-text-muted">
+  1262→                  Win Rate:{' '}
+  1263→                  <span
+  1264→                    className={`font-bold ${
+  1265→                      totals.winRate >= 50 ? 'text-ub-profit' : 'text-ub-loss'
+  1266→                    }`}
+  1267→                  >
+  1268→                    {totals.winRate.toFixed(1)}%
+  1269→                  </span>
+  1270→                </div>
+  1271→              </div>
+  1272→
+  1273→              <div className="flex items-center gap-2">
+  1274→                <Button
+  1275→                  size="sm"
+  1276→                  variant="outline"
+  1277→                  className="border-ub-border text-ub-text-muted hover:text-ub-text-primary text-xs h-8"
+  1278→                  onClick={handleExportCSV}
+  1279→                >
+  1280→                  <Download className="h-3.5 w-3.5 mr-1.5" />
+  1281→                  Export CSV
+  1282→                </Button>
+  1283→                <div className="flex items-center gap-1">
+  1284→                  <Button
+  1285→                    size="sm"
+  1286→                    variant="outline"
+  1287→                    className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
+  1288→                    onClick={() => setPage(Math.max(1, safePage - 1))}
+  1289→                    disabled={safePage <= 1}
+  1290→                  >
+  1291→                    <ChevronLeft className="h-4 w-4" />
+  1292→                  </Button>
+  1293→                  <span className="text-xs text-ub-text-muted px-2">
+  1294→                    {safePage} / {totalPages}
+  1295→                  </span>
+  1296→                  <Button
+  1297→                    size="sm"
+  1298→                    variant="outline"
+  1299→                    className="border-ub-border text-ub-text-muted hover:text-ub-text-primary h-8 w-8 p-0"
+  1300→                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+  1301→                    disabled={safePage >= totalPages}
+  1302→                  >
+  1303→                    <ChevronRight className="h-4 w-4" />
+  1304→                  </Button>
+  1305→                </div>
+  1306→              </div>
+  1307→            </div>
+  1308→          </Card>
+  1309→      )}
+  1310→    </div>
+  1311→  );
+  1312→}
+  1313→
+  1314→// ─────────────────────────────────────────────
+  1315→// Main Page
+  1316→// ─────────────────────────────────────────────
+  1317→
+  1318→export default function TradesPage() {
+  1319→  return (
+  1320→    <div className="space-y-6">
+  1321→      {/* Header */}
+  1322→      <div className="flex items-center gap-3">
+  1323→        <ArrowLeftRight className="h-6 w-6 text-ub-accent" />
+  1324→        <h1 className="text-2xl font-bold text-ub-text-primary">Trades</h1>
+  1325→      </div>
+  1326→
+  1327→      {/* Tabs */}
+  1328→      <Tabs defaultValue="positions" className="w-full">
+  1329→        <TabsList className="bg-ub-background border border-ub-border">
+  1330→          <TabsTrigger
+  1331→            value="positions"
+  1332→            className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-sm"
+  1333→          >
+  1334→            Open Positions
+  1335→          </TabsTrigger>
+  1336→          <TabsTrigger
+  1337→            value="history"
+  1338→            className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-sm"
+  1339→          >
+  1340→            Trade History
+  1341→          </TabsTrigger>
+  1342→        </TabsList>
+  1343→
+  1344→        <TabsContent value="positions" className="mt-4">
+  1345→          <PositionsTab />
+  1346→        </TabsContent>
+  1347→
+  1348→        <TabsContent value="history" className="mt-4">
+  1349→          <HistoryTab />
+  1350→        </TabsContent>
+  1351→      </Tabs>
+  1352→    </div>
+  1353→  );
+  1354→}
+  1355→
