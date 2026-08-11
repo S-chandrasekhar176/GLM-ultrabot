@@ -28,17 +28,35 @@ import { useStore, BROKER_LIST, BROKER_FIELDS, type BrokerCredentialFields } fro
 import { theme } from '@/styles/theme';
 
 /* ─────────────────────────────────────────────
+   Stable constants (avoid new refs on every render)
+   ───────────────────────────────────────────── */
+
+const EMPTY_CREDENTIALS: BrokerCredentialFields = {};
+
+/* ─────────────────────────────────────────────
+   Pure helper — checks if a broker's credentials
+   are filled directly from the state snapshot.
+   ───────────────────────────────────────────── */
+
+function isBrokerCredsComplete(creds: BrokerCredentialFields | undefined, brokerId: string): boolean {
+  if (!creds) return false;
+  const fields = BROKER_FIELDS[brokerId];
+  if (!fields || fields.length === 0) return true;
+  return fields.every((f) => creds[f.key]?.trim() !== '');
+}
+
+/* ─────────────────────────────────────────────
    Broker Card Component
    ───────────────────────────────────────────── */
 
 function BrokerCredentialCard({ brokerId }: { brokerId: string }) {
-  const credentials = useStore((s) => s.brokers.credentials[brokerId] || {});
+  const credentials = useStore((s) => s.brokers.credentials[brokerId] ?? EMPTY_CREDENTIALS);
+  const isConfigured = useStore((s) => isBrokerCredsComplete(s.brokers.credentials[brokerId], brokerId));
   const saveCreds = useStore((s) => s.brokers.saveBrokerCredentials);
   const clearCreds = useStore((s) => s.brokers.clearBrokerCredentials);
 
   const brokerMeta = BROKER_LIST.find((b) => b.id === brokerId);
   const fields = BROKER_FIELDS[brokerId] || [];
-  const isConfigured = useStore((s) => s.brokers.isBrokerConfigured(brokerId));
   const needsCreds = brokerMeta?.needsCredentials ?? true;
 
   const [localCreds, setLocalCreds] = useState<BrokerCredentialFields>(credentials);

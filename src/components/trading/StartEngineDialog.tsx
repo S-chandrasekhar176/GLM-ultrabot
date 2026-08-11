@@ -26,7 +26,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
-import { useStore, BROKER_LIST, type EngineMode } from '@/lib/store';
+import { useStore, BROKER_LIST, BROKER_FIELDS, type BrokerCredentialFields, type EngineMode } from '@/lib/store';
+
+/* ─────────────────────────────────────────────
+   Pure helper — no side-effects, safe for selectors
+   ───────────────────────────────────────────── */
+
+function isBrokerCredsComplete(creds: BrokerCredentialFields | undefined, brokerId: string): boolean {
+  if (!creds) return false;
+  const fields = BROKER_FIELDS[brokerId];
+  if (!fields || fields.length === 0) return true;
+  return fields.every((f) => creds[f.key]?.trim() !== '');
+}
 
 /* ─────────────────────────────────────────────
    Broker Definitions
@@ -340,9 +351,12 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
   const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
   const [attemptedStart, setAttemptedStart] = useState(false);
 
+  // Subscribe to all broker credentials once — avoids per-item getState() in the map
+  const allCredentials = useStore((s) => s.brokers.credentials);
+
   const isConfigured = useStore((s) => {
     if (!selectedBroker) return true;
-    return s.brokers.isBrokerConfigured(selectedBroker);
+    return isBrokerCredsComplete(s.brokers.credentials[selectedBroker], selectedBroker);
   });
 
   const isLive = selectedMode === 'live';
@@ -590,7 +604,7 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
                   broker={broker}
                   selected={selectedBroker === broker.id}
                   isLive={isLive}
-                  isConfigured={useStore.getState().brokers.isBrokerConfigured(broker.id)}
+                  isConfigured={isBrokerCredsComplete(allCredentials[broker.id], broker.id)}
                   onSelect={() => { setSelectedBroker(broker.id); setAttemptedStart(false); }}
                 />
               ))}
