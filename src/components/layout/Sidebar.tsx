@@ -71,7 +71,7 @@ function EngineIndicator({ collapsed }: { collapsed: boolean }) {
 export default function Sidebar() {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggle, setMobileOpen } = useSidebar();
-  const logout = useAuth((s) => s.logout);
+  const { logout } = useAuth();
   const router = useRouter();
 
   const isActive = (path: string) => {

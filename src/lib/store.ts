@@ -126,14 +126,14 @@ export const useStore = create<StoreState>((set, get) => ({
         localStorage.removeItem('ultrabot_token');
         localStorage.removeItem('ultrabot_username');
       }
-      set({ auth: { token: null, username: null, isAuthenticated: false } });
+      set({ auth: { ...get().auth, token: null, username: null, isAuthenticated: false } });
     },
 
     hydrate() {
       if (typeof window === 'undefined') return;
       const token = localStorage.getItem('ultrabot_token');
       const username = localStorage.getItem('ultrabot_username');
-      set({ auth: { token, username, isAuthenticated: !!token } });
+      set({ auth: { ...get().auth, token, username, isAuthenticated: !!token } });
     },
   },
 

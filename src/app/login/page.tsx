@@ -57,11 +57,25 @@ export default function LoginPage() {
       storeLogin(result.token, result.username);
       router.push('/');
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } };
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string | Array<{ loc?: unknown; msg?: string }> | Record<string, unknown> } } };
       if (axiosErr.response?.status === 401) {
         setError('Invalid username or password. Please try again.');
       } else if (axiosErr.response?.data?.detail) {
-        setError(axiosErr.response.data.detail);
+        const detail = axiosErr.response.data.detail;
+        if (typeof detail === 'string') {
+          setError(detail);
+        } else if (Array.isArray(detail)) {
+          const messages = detail.map((e) => {
+            const field = Array.isArray(e.loc) ? (e.loc as string[]).join('.') : '';
+            const msg = e.msg || 'Validation error';
+            return field ? `${field}: ${msg}` : msg;
+          }).join(', ');
+          setError(messages || 'Validation error occurred.');
+        } else if (typeof detail === 'object' && detail !== null) {
+          setError(JSON.stringify(detail));
+        } else {
+          setError(String(detail));
+        }
       } else {
         setError('Unable to connect to the server. Please try again later.');
       }
