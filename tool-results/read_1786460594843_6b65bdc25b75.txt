@@ -1,0 +1,1088 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import { getOpportunities, confirmOpportunity, skipOpportunity, runBacktest, getBacktestStatus, getBacktestResult } from '@/lib/api';
+     7→import {
+     8→  Clock,
+     9→  TrendingUp,
+    10→  TrendingDown,
+    11→  CheckCircle2,
+    12→  XCircle,
+    13→  ChevronDown,
+    14→  ChevronUp,
+    15→  Zap,
+    16→  ShieldCheck,
+    17→  Timer,
+    18→  BarChart3,
+    19→  Bell,
+    20→  SkipForward,
+    21→  AlertTriangle,
+    22→  Activity,
+    23→  Target,
+    24→  Layers,
+    25→  Gauge,
+    26→  Loader2,
+    27→} from 'lucide-react';
+    28→import { Badge } from '@/components/ui/badge';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Card, CardContent } from '@/components/ui/card';
+    31→import { Skeleton } from '@/components/ui/skeleton';
+    32→import { Progress } from '@/components/ui/progress';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    35→import {
+    36→  Dialog,
+    37→  DialogContent,
+    38→  DialogHeader,
+    39→  DialogTitle,
+    40→  DialogDescription,
+    41→  DialogFooter,
+    42→} from '@/components/ui/dialog';
+    43→import {
+    44→  AlertDialog,
+    45→  AlertDialogAction,
+    46→  AlertDialogCancel,
+    47→  AlertDialogContent,
+    48→  AlertDialogDescription,
+    49→  AlertDialogFooter,
+    50→  AlertDialogHeader,
+    51→  AlertDialogTitle,
+    52→} from '@/components/ui/alert-dialog';
+    53→import { ScrollArea } from '@/components/ui/scroll-area';
+    54→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    55→
+    56→// ─────────────────────────────────────────────
+    57→// Types
+    58→// ─────────────────────────────────────────────
+    59→
+    60→type OppStatus = 'pending' | 'confirmed' | 'skipped' | 'expired';
+    61→type Direction = 'BUY' | 'SELL';
+    62→type NiftyTrend = 'Bullish' | 'Bearish' | 'Sideways';
+    63→
+    64→interface RiskGate {
+    65→  name: string;
+    66→  passed: boolean;
+    67→  detail: string;
+    68→}
+    69→
+    70→interface OpportunityData {
+    71→  id: string;
+    72→  symbol: string;
+    73→  direction: Direction;
+    74→  strategy: string;
+    75→  kronosScore: number;
+    76→  entry: number;
+    77→  stopLoss: number;
+    78→  target: number;
+    79→  riskReward: number;
+    80→  capitalRequired: number;
+    81→  expiryAt: string;
+    82→  riskGates: RiskGate[];
+    83→  vix: number;
+    84→  niftyTrend: NiftyTrend;
+    85→  sector: string;
+    86→  winRate: number;
+    87→  status: OppStatus;
+    88→  type: string;
+    89→  lotSize: number;
+    90→  quantity: number;
+    91→  margin: number;
+    92→  strike?: string;
+    93→  optionExpiry?: string;
+    94→  premium?: number;
+    95→  createdAt: string;
+    96→}
+    97→
+    98→// ─────────────────────────────────────────────
+    99→// Mock Data
+   100→// ─────────────────────────────────────────────
+   101→
+   102→const MOCK_OPPORTUNITIES: OpportunityData[] = [
+   103→  {
+   104→    id: 'opp-001',
+   105→    symbol: 'RELIANCE',
+   106→    direction: 'BUY',
+   107→    strategy: 'Momentum Breakout',
+   108→    kronosScore: 0.87,
+   109→    entry: 2945.50,
+   110→    stopLoss: 2910.00,
+   111→    target: 3020.00,
+   112→    riskReward: 2.0,
+   113→    capitalRequired: 147275,
+   114→    expiryAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+   115→    riskGates: [
+   116→      { name: 'Trend Align', passed: true, detail: 'RELIANCE is in a strong uptrend, 20 EMA above 50 EMA, ADX > 25' },
+   117→      { name: 'Volume Confirm', passed: true, detail: 'Volume surge 2.3x above 20-day average' },
+   118→      { name: 'RSI Check', passed: true, detail: 'RSI at 58.2, not overbought, room for upside' },
+   119→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, below 16 threshold, low volatility environment' },
+   120→      { name: 'Sector Flow', passed: true, detail: 'Energy sector seeing net positive fund flow of ₹420 Cr' },
+   121→      { name: 'Max Drawdown', passed: true, detail: 'Max portfolio drawdown at 3.2%, well within 8% limit' },
+   122→      { name: 'Correlation', passed: true, detail: 'Low correlation (0.23) with existing positions' },
+   123→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹4,200 Cr, easily fills market order' },
+   124→      { name: 'Spread Check', passed: false, detail: 'Bid-ask spread at 0.08%, slightly above 0.05% ideal' },
+   125→      { name: 'News Filter', passed: true, detail: 'No negative news events in last 24 hours' },
+   126→      { name: 'Time Window', passed: true, detail: 'Within active trading hours (9:30 AM - 2:30 PM)' },
+   127→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹1.47L capital' },
+   128→      { name: 'Daily Limit', passed: false, detail: 'Already 3 trades today, limit is 5 but risk budget tight' },
+   129→    ],
+   130→    vix: 13.2,
+   131→    niftyTrend: 'Bullish',
+   132→    sector: 'Energy',
+   133→    winRate: 72.5,
+   134→    status: 'pending',
+   135→    type: 'EQUITY',
+   136→    lotSize: 250,
+   137→    quantity: 50,
+   138→    margin: 147275,
+   139→    createdAt: new Date(Date.now() - 120_000).toISOString(),
+   140→  },
+   141→  {
+   142→    id: 'opp-002',
+   143→    symbol: 'INFY',
+   144→    direction: 'SELL',
+   145→    strategy: 'Mean Reversion',
+   146→    kronosScore: 0.74,
+   147→    entry: 1872.30,
+   148→    stopLoss: 1905.00,
+   149→    target: 1810.00,
+   150→    riskReward: 1.7,
+   151→    capitalRequired: 93615,
+   152→    expiryAt: new Date(Date.now() + 8 * 60 * 1000).toISOString(),
+   153→    riskGates: [
+   154→      { name: 'Trend Align', passed: true, detail: 'INFY showing bearish divergence on RSI, price failing at resistance' },
+   155→      { name: 'Volume Confirm', passed: true, detail: 'Selling volume increasing on red candles' },
+   156→      { name: 'RSI Check', passed: true, detail: 'RSI at 68.4, approaching overbought zone' },
+   157→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, favorable for short positions' },
+   158→      { name: 'Sector Flow', passed: false, detail: 'IT sector mixed signals, some buying in large caps' },
+   159→      { name: 'Max Drawdown', passed: true, detail: 'Max portfolio drawdown at 3.2%, within limits' },
+   160→      { name: 'Correlation', passed: true, detail: 'Negative correlation with energy positions provides hedging' },
+   161→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹2,800 Cr' },
+   162→      { name: 'Spread Check', passed: true, detail: 'Bid-ask spread at 0.03%, excellent liquidity' },
+   163→      { name: 'News Filter', passed: true, detail: 'No significant news, quarterly results already priced in' },
+   164→      { name: 'Time Window', passed: true, detail: 'Within active trading hours' },
+   165→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹93.6K' },
+   166→      { name: 'Daily Limit', passed: true, detail: 'Within daily trade limit and risk budget' },
+   167→    ],
+   168→    vix: 13.2,
+   169→    niftyTrend: 'Bullish',
+   170→    sector: 'IT',
+   171→    winRate: 65.8,
+   172→    status: 'pending',
+   173→    type: 'EQUITY',
+   174→    lotSize: 300,
+   175→    quantity: 50,
+   176→    margin: 93615,
+   177→    createdAt: new Date(Date.now() - 300_000).toISOString(),
+   178→  },
+   179→  {
+   180→    id: 'opp-003',
+   181→    symbol: 'HDFCBANK',
+   182→    direction: 'BUY',
+   183→    strategy: 'VWAP Bounce',
+   184→    kronosScore: 0.91,
+   185→    entry: 1685.75,
+   186→    stopLoss: 1665.00,
+   187→    target: 1735.00,
+   188→    riskReward: 2.5,
+   189→    capitalRequired: 84288,
+   190→    expiryAt: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+   191→    riskGates: [
+   192→      { name: 'Trend Align', passed: true, detail: 'HDFCBANK bouncing off VWAP with bullish hammer candle' },
+   193→      { name: 'Volume Confirm', passed: true, detail: 'Volume spike 3.1x at VWAP support level' },
+   194→      { name: 'RSI Check', passed: true, detail: 'RSI at 45.3, oversold bounce setup' },
+   195→      { name: 'VIX Filter', passed: true, detail: 'VIX at 13.2, favorable environment' },
+   196→      { name: 'Sector Flow', passed: true, detail: 'Banking sector strong with RBI dovish stance' },
+   197→      { name: 'Max Drawdown', passed: true, detail: 'Drawdown at 3.2%, well within limits' },
+   198→      { name: 'Correlation', passed: true, detail: 'Moderate correlation (0.41) with financial holdings' },
+   199→      { name: 'Liquidity', passed: true, detail: 'Average daily turnover ₹5,100 Cr, highest in NSE' },
+   200→      { name: 'Spread Check', passed: true, detail: 'Bid-ask spread at 0.02%, extremely liquid' },
+   201→      { name: 'News Filter', passed: true, detail: 'Positive regulatory environment for banks' },
+   202→      { name: 'Time Window', passed: true, detail: 'Within active trading hours' },
+   203→      { name: 'Capital Avail', passed: true, detail: '₹2.8L available, requires ₹84.3K' },
+   204→      { name: 'Daily Limit', passed: true, detail: 'Within all risk and capital limits' },
+   205→    ],
+   206→    vix: 13.2,
+   207→    niftyTrend: 'Bullish',
+   208→    sector: 'Banking',
+   209→    winRate: 78.2,
+   210→    status: 'pending',
+   211→    type: 'EQUITY',
+   212→    lotSize: 550,
+   213→    quantity: 50,
+   214→    margin: 84288,
+   215→    createdAt: new Date(Date.now() - 60_000).toISOString(),
+   216→  },
+   217→];
+   218→
+   219→// ─────────────────────────────────────────────
+   220→// Transform backend opportunity to page format
+   221→// ─────────────────────────────────────────────
+   222→
+   223→function transformOpportunity(opp: any): OpportunityData {
+   224→  return {
+   225→    id: opp.id || String(Math.random()),
+   226→    symbol: opp.symbol || 'N/A',
+   227→    direction: (opp.direction || 'BUY').toUpperCase() as Direction,
+   228→    strategy: opp.strategy || 'N/A',
+   229→    kronosScore: opp.confidence ?? opp.kronos_score ?? 0.5,
+   230→    entry: parseFloat(opp.entry ?? 0),
+   231→    stopLoss: parseFloat(opp.stop_loss ?? opp.stopLoss ?? 0),
+   232→    target: parseFloat(opp.target ?? 0),
+   233→    riskReward: opp.risk_reward ?? 1.5,
+   234→    capitalRequired: opp.capital_required ?? 0,
+   235→    expiryAt: opp.expiry_at || opp.timestamp || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+   236→    riskGates: opp.risk_gates || [
+   237→      { name: 'Trend Align', passed: true, detail: 'No data from backend' },
+   238→      { name: 'Volume Confirm', passed: true, detail: 'No data from backend' },
+   239→      { name: 'RSI Check', passed: true, detail: 'No data from backend' },
+   240→      { name: 'VIX Filter', passed: true, detail: 'No data from backend' },
+   241→      { name: 'Capital Avail', passed: true, detail: 'No data from backend' },
+   242→      { name: 'Daily Limit', passed: true, detail: 'No data from backend' },
+   243→    ],
+   244→    vix: opp.vix ?? 13.2,
+   245→    niftyTrend: (opp.nifty_trend || 'Sideways') as NiftyTrend,
+   246→    sector: opp.sector || 'N/A',
+   247→    winRate: opp.win_rate ?? opp.confidence ? (opp.confidence * 100) : 60,
+   248→    status: opp.status || 'pending',
+   249→    type: opp.type || 'EQUITY',
+   250→    lotSize: opp.lot_size ?? 1,
+   251→    quantity: opp.quantity ?? 1,
+   252→    margin: opp.margin ?? opp.capital_required ?? 0,
+   253→    strike: opp.strike,
+   254→    optionExpiry: opp.option_expiry,
+   255→    premium: opp.premium,
+   256→    createdAt: opp.created_at || opp.timestamp || new Date().toISOString(),
+   257→  };
+   258→}
+   259→
+   260→// ─────────────────────────────────────────────
+   261→// Helpers
+   262→// ─────────────────────────────────────────────
+   263→
+   264→const INR = (n: number) =>
+   265→  new Intl.NumberFormat('en-IN', {
+   266→    style: 'currency',
+   267→    currency: 'INR',
+   268→    minimumFractionDigits: 2,
+   269→    maximumFractionDigits: 2,
+   270→  }).format(n);
+   271→
+   272→const INR_SHORT = (n: number) =>
+   273→  new Intl.NumberFormat('en-IN', {
+   274→    style: 'currency',
+   275→    currency: 'INR',
+   276→    minimumFractionDigits: 0,
+   277→    maximumFractionDigits: 0,
+   278→  }).format(n);
+   279→
+   280→function getScoreColor(score: number): string {
+   281→  if (score >= 0.8) return 'text-ub-profit';
+   282→  if (score >= 0.6) return 'text-ub-warning';
+   283→  return 'text-ub-loss';
+   284→}
+   285→
+   286→function getProgressColor(score: number): string {
+   287→  if (score >= 0.8) return 'bg-ub-profit';
+   288→  if (score >= 0.6) return 'bg-ub-warning';
+   289→  return 'bg-ub-loss';
+   290→}
+   291→
+   292→function getWinRateColor(rate: number): string {
+   293→  if (rate >= 70) return 'text-ub-profit';
+   294→  if (rate >= 55) return 'text-ub-warning';
+   295→  return 'text-ub-loss';
+   296→}
+   297→
+   298→// ─────────────────────────────────────────────
+   299→// TimerCountdown Component
+   300→// ─────────────────────────────────────────────
+   301→
+   302→function TimerCountdown({ expiryAt }: { expiryAt: string }) {
+   303→  const [timeLeft, setTimeLeft] = useState('');
+   304→  const [isExpired, setIsExpired] = useState(false);
+   305→
+   306→  useEffect(() => {
+   307→    const update = () => {
+   308→      const diff = new Date(expiryAt).getTime() - Date.now();
+   309→      if (diff <= 0) {
+   310→        setIsExpired(true);
+   311→        setTimeLeft('Expired');
+   312→        return;
+   313→      }
+   314→      const mins = Math.floor(diff / 60_000);
+   315→      const secs = Math.floor((diff % 60_000) / 1000);
+   316→      setTimeLeft(`${mins}:${secs.toString().padStart(2, '0')}`);
+   317→    };
+   318→    update();
+   319→    const interval = setInterval(update, 1000);
+   320→    return () => clearInterval(interval);
+   321→  }, [expiryAt]);
+   322→
+   323→  return (
+   324→    <span
+   325→      className={`flex items-center gap-1 text-xs font-mono font-medium ${
+   326→        isExpired ? 'text-ub-loss' : timeLeft.includes('0:') || timeLeft.includes('1:') ? 'text-ub-warning' : 'text-ub-text-muted'
+   327→      }`}
+   328→    >
+   329→      <Timer className="h-3 w-3" />
+   330→      {timeLeft}
+   331→    </span>
+   332→  );
+   333→}
+   334→
+   335→// ─────────────────────────────────────────────
+   336→// RiskGatesPanel Component
+   337→// ─────────────────────────────────────────────
+   338→
+   339→function RiskGatesPanel({ gates }: { gates: RiskGate[] }) {
+   340→  const [expandedGate, setExpandedGate] = useState<number | null>(null);
+   341→  const passedCount = gates.filter((g) => g.passed).length;
+   342→
+   343→  return (
+   344→    <div>
+   345→      <div className="flex items-center gap-2 mb-2">
+   346→        <ShieldCheck className="h-3.5 w-3.5 text-ub-text-muted" />
+   347→        <span className="text-xs font-medium text-ub-text-muted">
+   348→          Risk Gates ({passedCount}/{gates.length})
+   349→        </span>
+   350→        <div className="ml-auto flex items-center gap-1">
+   351→          <span className="text-xs font-semibold text-ub-profit">{passedCount} PASS</span>
+   352→          <span className="text-ub-border">|</span>
+   353→          <span className="text-xs font-semibold text-ub-loss">{gates.length - passedCount} FAIL</span>
+   354→        </div>
+   355→      </div>
+   356→      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+   357→        {gates.map((gate, idx) => (
+   358→          <button
+   359→            key={gate.name}
+   360→            onClick={() => setExpandedGate(expandedGate === idx ? null : idx)}
+   361→            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-ub-background/50 border border-ub-border/50 hover:border-ub-border-hover transition-colors text-left"
+   362→          >
+   363→            <span
+   364→              className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+   365→                gate.passed ? 'bg-ub-profit' : 'bg-ub-loss'
+   366→              }`}
+   367→            />
+   368→            <span className="text-[11px] text-ub-text-muted truncate">{gate.name}</span>
+   369→            {expandedGate === idx ? (
+   370→              <ChevronUp className="h-2.5 w-2.5 text-ub-text-muted ml-auto flex-shrink-0" />
+   371→            ) : (
+   372→              <ChevronDown className="h-2.5 w-2.5 text-ub-text-muted ml-auto flex-shrink-0" />
+   373→            )}
+   374→          </button>
+   375→        ))}
+   376→      </div>
+   377→      <AnimatePresence>
+   378→        {expandedGate !== null && (
+   379→          <motion.div
+   380→            initial={{ height: 0, opacity: 0 }}
+   381→            animate={{ height: 'auto', opacity: 1 }}
+   382→            exit={{ height: 0, opacity: 0 }}
+   383→            transition={{ duration: 0.2 }}
+   384→            className="overflow-hidden"
+   385→          >
+   386→            <div className="mt-2 p-2.5 rounded-md bg-ub-background/70 border border-ub-border/50">
+   387→              <div className="flex items-center gap-2 mb-1">
+   388→                <span
+   389→                  className={`h-2 w-2 rounded-full ${
+   390→                    gates[expandedGate].passed ? 'bg-ub-profit' : 'bg-ub-loss'
+   391→                  }`}
+   392→                />
+   393→                <span className="text-xs font-medium text-ub-text-primary">
+   394→                  {gates[expandedGate].name}
+   395→                </span>
+   396→                <Badge
+   397→                  variant="outline"
+   398→                  className={`text-[10px] px-1.5 py-0 h-4 ${
+   399→                    gates[expandedGate].passed
+   400→                      ? 'text-ub-profit border-ub-profit/30'
+   401→                      : 'text-ub-loss border-ub-loss/30'
+   402→                  }`}
+   403→                >
+   404→                  {gates[expandedGate].passed ? 'PASS' : 'FAIL'}
+   405→                </Badge>
+   406→              </div>
+   407→              <p className="text-[11px] text-ub-text-muted leading-relaxed">
+   408→                {gates[expandedGate].detail}
+   409→              </p>
+   410→            </div>
+   411→          </motion.div>
+   412→        )}
+   413→      </AnimatePresence>
+   414→    </div>
+   415→  );
+   416→}
+   417→
+   418→// ─────────────────────────────────────────────
+   419→// OpportunityCard Component
+   420→// ─────────────────────────────────────────────
+   421→
+   422→function OpportunityCard({
+   423→  opp,
+   424→  onConfirm,
+   425→  onSkip,
+   426→  isConfirming,
+   427→  isSkipping,
+   428→  isBacktestLoading,
+   429→  backtestResult,
+   430→  onQuickBacktest,
+   431→}: {
+   432→  opp: OpportunityData;
+   433→  onConfirm: (id: string) => void;
+   434→  onSkip: (id: string) => void;
+   435→  isConfirming: boolean;
+   436→  isSkipping: boolean;
+   437→  isBacktestLoading?: boolean;
+   438→  backtestResult?: any;
+   439→  onQuickBacktest?: (id: string) => void;
+   440→}) {
+   441→  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+   442→  const [remindDialogOpen, setRemindDialogOpen] = useState(false);
+   443→
+   444→  const handleConfirm = () => {
+   445→    onConfirm(opp.id);
+   446→    setConfirmDialogOpen(false);
+   447→  };
+   448→
+   449→  const handleSkip = () => {
+   450→    onSkip(opp.id);
+   451→  };
+   452→
+   453→  const handleRemindLater = () => {
+   454→    setRemindDialogOpen(false);
+   455→    toast.info(`Reminder set for ${opp.symbol}`, {
+   456→      description: 'You\'ll be notified again in 15 minutes.',
+   457→    });
+   458→  };
+   459→
+   460→  const riskPerTrade = Math.abs(opp.entry - opp.stopLoss) * opp.quantity;
+   461→  const potentialProfit = Math.abs(opp.target - opp.entry) * opp.quantity;
+   462→
+   463→  return (
+   464→    <>
+   465→      <motion.div
+   466→        initial={{ opacity: 0, y: 12 }}
+   467→        animate={{ opacity: 1, y: 0 }}
+   468→        transition={{ duration: 0.3 }}
+   469→      >
+   470→        <Card className="bg-ub-surface border-ub-border rounded-lg overflow-hidden hover:border-ub-border-hover transition-colors">
+   471→          <CardContent className="p-5 space-y-4">
+   472→            {/* Top row: Symbol, Direction, Strategy, Kronos Score, Expiry */}
+   473→            <div className="flex flex-wrap items-center gap-3">
+   474→              <h3 className="text-lg font-bold text-ub-text-primary tracking-tight">{opp.symbol}</h3>
+   475→              <Badge
+   476→                className={`text-[11px] font-semibold px-2 py-0.5 ${
+   477→                  opp.direction === 'BUY'
+   478→                    ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30 hover:bg-ub-profit/25'
+   479→                    : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30 hover:bg-ub-loss/25'
+   480→                }`}
+   481→                variant="outline"
+   482→              >
+   483→                {opp.direction === 'BUY' ? (
+   484→                  <TrendingUp className="h-3 w-3 mr-1" />
+   485→                ) : (
+   486→                  <TrendingDown className="h-3 w-3 mr-1" />
+   487→                )}
+   488→                {opp.direction}
+   489→              </Badge>
+   490→              <Badge variant="outline" className="text-[11px] text-ub-text-muted border-ub-border">
+   491→                <Zap className="h-3 w-3 mr-1" />
+   492→                {opp.strategy}
+   493→              </Badge>
+   494→              <div className="flex items-center gap-2 ml-auto">
+   495→                <TooltipProvider>
+   496→                  <Tooltip>
+   497→                    <TooltipTrigger asChild>
+   498→                      <div className="flex items-center gap-1.5">
+   499→                        <Gauge className="h-3 w-3 text-ub-text-muted" />
+   500→                        <span className={`text-xs font-semibold ${getScoreColor(opp.kronosScore)}`}>
+   501→                          {(opp.kronosScore * 100).toFixed(0)}%
+   502→                        </span>
+   503→                      </div>
+   504→                    </TooltipTrigger>
+   505→                    <TooltipContent>
+   506→                      <p>Kronos Confidence Score</p>
+   507→                    </TooltipContent>
+   508→                  </Tooltip>
+   509→                </TooltipProvider>
+   510→                <div className="w-16 h-1.5 bg-ub-background rounded-full overflow-hidden">
+   511→                  <div
+   512→                    className={`h-full rounded-full transition-all ${getProgressColor(opp.kronosScore)}`}
+   513→                    style={{ width: `${opp.kronosScore * 100}%` }}
+   514→                  />
+   515→                </div>
+   516→              </div>
+   517→              <TimerCountdown expiryAt={opp.expiryAt} />
+   518→            </div>
+   519→
+   520→            {/* Price details row */}
+   521→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+   522→              <div>
+   523→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Entry</p>
+   524→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{INR(opp.entry)}</p>
+   525→              </div>
+   526→              <div>
+   527→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Stop Loss</p>
+   528→                <p className="text-sm font-semibold text-ub-loss font-mono">{INR(opp.stopLoss)}</p>
+   529→              </div>
+   530→              <div>
+   531→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Target</p>
+   532→                <p className="text-sm font-semibold text-ub-profit font-mono">{INR(opp.target)}</p>
+   533→              </div>
+   534→              <div>
+   535→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Risk:Reward</p>
+   536→                <p className="text-sm font-semibold text-ub-accent font-mono">1:{opp.riskReward.toFixed(1)}</p>
+   537→              </div>
+   538→              <div>
+   539→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Capital Required</p>
+   540→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{INR_SHORT(opp.capitalRequired)}</p>
+   541→              </div>
+   542→              <div>
+   543→                <p className="text-[10px] uppercase tracking-wider text-ub-text-muted mb-0.5">Qty</p>
+   544→                <p className="text-sm font-semibold text-ub-text-primary font-mono">{opp.quantity}</p>
+   545→              </div>
+   546→            </div>
+   547→
+   548→            <Separator className="bg-ub-border/50" />
+   549→
+   550→            {/* Risk Gates Panel */}
+   551→            <RiskGatesPanel gates={opp.riskGates} />
+   552→
+   553→            <Separator className="bg-ub-border/50" />
+   554→
+   555→            {/* Market context + Win rate */}
+   556→            <div className="flex flex-wrap items-center gap-2">
+   557→              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   558→                <Activity className="h-3 w-3 text-ub-warning" />
+   559→                <span className="text-[11px] text-ub-text-muted">VIX</span>
+   560→                <span className="text-xs font-semibold text-ub-text-primary font-mono">{opp.vix.toFixed(1)}</span>
+   561→              </div>
+   562→              <div
+   563→                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50 ${
+   564→                  opp.niftyTrend === 'Bullish'
+   565→                    ? 'border-ub-profit/30'
+   566→                    : opp.niftyTrend === 'Bearish'
+   567→                    ? 'border-ub-loss/30'
+   568→                    : 'border-ub-warning/30'
+   569→                }`}
+   570→              >
+   571→                {opp.niftyTrend === 'Bullish' ? (
+   572→                  <TrendingUp className="h-3 w-3 text-ub-profit" />
+   573→                ) : opp.niftyTrend === 'Bearish' ? (
+   574→                  <TrendingDown className="h-3 w-3 text-ub-loss" />
+   575→                ) : (
+   576→                  <Activity className="h-3 w-3 text-ub-warning" />
+   577→                )}
+   578→                <span className="text-[11px] text-ub-text-muted">Nifty</span>
+   579→                <span
+   580→                  className={`text-xs font-semibold ${
+   581→                    opp.niftyTrend === 'Bullish'
+   582→                      ? 'text-ub-profit'
+   583→                      : opp.niftyTrend === 'Bearish'
+   584→                      ? 'text-ub-loss'
+   585→                      : 'text-ub-warning'
+   586→                  }`}
+   587→                >
+   588→                  {opp.niftyTrend}
+   589→                </span>
+   590→              </div>
+   591→              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   592→                <Layers className="h-3 w-3 text-ub-text-muted" />
+   593→                <span className="text-[11px] text-ub-text-muted">Sector</span>
+   594→                <span className="text-xs font-semibold text-ub-text-primary">{opp.sector}</span>
+   595→              </div>
+   596→              <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-ub-background/50 border border-ub-border/50">
+   597→                <BarChart3 className="h-3 w-3 text-ub-accent" />
+   598→                <span className="text-[11px] text-ub-text-muted">Win Rate</span>
+   599→                <span className={`text-xs font-bold ${getWinRateColor(opp.winRate)}`}>
+   600→                  {opp.winRate.toFixed(1)}%
+   601→                </span>
+   602→              </div>
+   603→            </div>
+   604→
+   605→            {/* Action buttons */}
+   606→            <div className="flex items-center gap-2 pt-1">
+   607→              <Button
+   608→                size="sm"
+   609→                className="bg-ub-profit hover:bg-ub-profit/90 text-white font-semibold text-xs h-9 px-5"
+   610→                onClick={() => setConfirmDialogOpen(true)}
+   611→                disabled={isConfirming || isSkipping}
+   612→              >
+   613→                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+   614→                {isConfirming ? 'Confirming...' : 'CONFIRM'}
+   615→              </Button>
+   616→              <Button
+   617→                size="sm"
+   618→                variant="outline"
+   619→                className="border-ub-border text-ub-text-muted hover:text-ub-text-primary hover:border-ub-border-hover font-medium text-xs h-9 px-5"
+   620→                onClick={handleSkip}
+   621→                disabled={isConfirming || isSkipping}
+   622→              >
+   623→                <SkipForward className="h-3.5 w-3.5 mr-1.5" />
+   624→                {isSkipping ? 'Skipping...' : 'SKIP'}
+   625→              </Button>
+   626→              {onQuickBacktest && (
+   627→                <TooltipProvider>
+   628→                  <Tooltip>
+   629→                    <TooltipTrigger asChild>
+   630→                      <Button
+   631→                        size="sm"
+   632→                        variant="outline"
+   633→                        className={`border-ub-accent/40 text-ub-accent hover:bg-ub-accent/10 hover:border-ub-accent/60 font-medium text-xs h-9 px-4 ${isBacktestLoading ? 'animate-pulse' : ''}`}
+   634→                        onClick={() => onQuickBacktest(opp.id)}
+   635→                        disabled={isConfirming || isSkipping || isBacktestLoading}
+   636→                      >
+   637→                        {isBacktestLoading ? (
+   638→                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+   639→                        ) : (
+   640→                          <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+   641→                        )}
+   642→                        {isBacktestLoading ? 'Running...' : 'QUICK BACKTEST'}
+   643→                      </Button>
+   644→                    </TooltipTrigger>
+   645→                    <TooltipContent>
+   646→                      <p>Run a 30-day backtest for {opp.symbol} with {opp.strategy}</p>
+   647→                    </TooltipContent>
+   648→                  </Tooltip>
+   649→                </TooltipProvider>
+   650→              )}
+   651→              <Button
+   652→                size="sm"
+   653→                variant="outline"
+   654→                className="border-ub-warning/40 text-ub-warning hover:bg-ub-warning/10 hover:border-ub-warning/60 font-medium text-xs h-9 px-5"
+   655→                onClick={() => setRemindDialogOpen(true)}
+   656→                disabled={isConfirming || isSkipping}
+   657→              >
+   658→                <Bell className="h-3.5 w-3.5 mr-1.5" />
+   659→                REMIND LATER
+   660→              </Button>
+   661→            </div>
+   662→
+   663→            {/* Quick Backtest Result Badge */}
+   664→            {backtestResult && (
+   665→              <div className="flex items-center gap-3 p-2.5 rounded-md bg-ub-background/50 border border-ub-border/50">
+   666→                <BarChart3 className="h-3.5 w-3.5 text-ub-accent flex-shrink-0" />
+   667→                <span className="text-[11px] text-ub-text-muted">30d Backtest</span>
+   668→                <span className={`text-xs font-bold ${backtestResult.winRate >= 55 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   669→                  WR: {backtestResult.winRate?.toFixed(1)}%
+   670→                </span>
+   671→                <span className="text-ub-border">|</span>
+   672→                <span className={`text-xs font-bold ${backtestResult.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   673→                  P&L: {backtestResult.totalPnl >= 0 ? '+' : ''}₹{Math.round(backtestResult.totalPnl).toLocaleString('en-IN')}
+   674→                </span>
+   675→                <span className="text-ub-border">|</span>
+   676→                <span className={`text-xs font-semibold ${(backtestResult.sharpe ?? 0) >= 1 ? 'text-ub-profit' : 'text-ub-warning'}`}>
+   677→                  Sharpe: {(backtestResult.sharpe ?? 0).toFixed(2)}
+   678→                </span>
+   679→              </div>
+   680→            )}
+   681→          </CardContent>
+   682→        </Card>
+   683→      </motion.div>
+   684→
+   685→      {/* Confirm Dialog */}
+   686→      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+   687→        <DialogContent className="bg-ub-surface border-ub-border max-w-md">
+   688→          <DialogHeader>
+   689→            <DialogTitle className="text-ub-text-primary">Confirm Opportunity</DialogTitle>
+   690→            <DialogDescription className="text-ub-text-muted">
+   691→              Review the details before confirming this trade.
+   692→            </DialogDescription>
+   693→          </DialogHeader>
+   694→          <div className="space-y-3 py-2">
+   695→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   696→              <span className="text-sm text-ub-text-muted">Symbol</span>
+   697→              <span className="text-sm font-bold text-ub-text-primary">{opp.symbol}</span>
+   698→            </div>
+   699→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   700→              <span className="text-sm text-ub-text-muted">Direction</span>
+   701→              <Badge
+   702→                className={`text-[11px] font-semibold ${
+   703→                  opp.direction === 'BUY'
+   704→                    ? 'bg-ub-profit/15 text-ub-profit border-ub-profit/30'
+   705→                    : 'bg-ub-loss/15 text-ub-loss border-ub-loss/30'
+   706→                }`}
+   707→                variant="outline"
+   708→              >
+   709→                {opp.direction}
+   710→              </Badge>
+   711→            </div>
+   712→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   713→              <span className="text-sm text-ub-text-muted">Type</span>
+   714→              <span className="text-sm font-semibold text-ub-text-primary">{opp.type}</span>
+   715→            </div>
+   716→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   717→              <span className="text-sm text-ub-text-muted">Lot Size / Qty</span>
+   718→              <span className="text-sm font-semibold text-ub-text-primary">
+   719→                {opp.lotSize} / {opp.quantity}
+   720→              </span>
+   721→            </div>
+   722→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   723→              <span className="text-sm text-ub-text-muted">Entry Price</span>
+   724→              <span className="text-sm font-semibold text-ub-text-primary font-mono">{INR(opp.entry)}</span>
+   725→            </div>
+   726→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   727→              <span className="text-sm text-ub-text-muted">Stop Loss</span>
+   728→              <span className="text-sm font-semibold text-ub-loss font-mono">{INR(opp.stopLoss)}</span>
+   729→            </div>
+   730→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   731→              <span className="text-sm text-ub-text-muted">Target</span>
+   732→              <span className="text-sm font-semibold text-ub-profit font-mono">{INR(opp.target)}</span>
+   733→            </div>
+   734→            {opp.strike && (
+   735→              <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   736→                <span className="text-sm text-ub-text-muted">Strike / Expiry</span>
+   737→                <span className="text-sm font-semibold text-ub-text-primary font-mono">
+   738→                  {opp.strike} / {opp.optionExpiry}
+   739→                </span>
+   740→              </div>
+   741→            )}
+   742→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   743→              <span className="text-sm text-ub-text-muted">Risk per Trade</span>
+   744→              <span className="text-sm font-semibold text-ub-loss font-mono">{INR(riskPerTrade)}</span>
+   745→            </div>
+   746→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   747→              <span className="text-sm text-ub-text-muted">Potential Profit</span>
+   748→              <span className="text-sm font-semibold text-ub-profit font-mono">{INR(potentialProfit)}</span>
+   749→            </div>
+   750→            <div className="flex items-center justify-between p-3 rounded-lg bg-ub-background border border-ub-border/50">
+   751→              <span className="text-sm text-ub-text-muted">Margin Required</span>
+   752→              <span className="text-sm font-bold text-ub-warning font-mono">{INR(opp.margin)}</span>
+   753→            </div>
+   754→          </div>
+   755→          <DialogFooter className="gap-2">
+   756→            <Button
+   757→              variant="outline"
+   758→              className="border-ub-border text-ub-text-muted hover:text-ub-text-primary"
+   759→              onClick={() => setConfirmDialogOpen(false)}
+   760→            >
+   761→              Cancel
+   762→            </Button>
+   763→            <Button
+   764→              className="bg-ub-profit hover:bg-ub-profit/90 text-white font-semibold"
+   765→              onClick={handleConfirm}
+   766→            >
+   767→              <CheckCircle2 className="h-4 w-4 mr-1.5" />
+   768→              Confirm Trade
+   769→            </Button>
+   770→          </DialogFooter>
+   771→        </DialogContent>
+   772→      </Dialog>
+   773→
+   774→      {/* Remind Later Dialog */}
+   775→      <Dialog open={remindDialogOpen} onOpenChange={setRemindDialogOpen}>
+   776→        <DialogContent className="bg-ub-surface border-ub-border max-w-sm">
+   777→          <DialogHeader>
+   778→            <DialogTitle className="text-ub-text-primary">Set Reminder</DialogTitle>
+   779→            <DialogDescription className="text-ub-text-muted">
+   780→              We\'ll notify you about this opportunity again.
+   781→            </DialogDescription>
+   782→          </DialogHeader>
+   783→          <p className="text-sm text-ub-text-primary">
+   784→            <span className="font-bold">{opp.symbol}</span> — {opp.strategy}
+   785→          </p>
+   786→          <DialogFooter>
+   787→            <Button
+   788→              variant="outline"
+   789→              className="border-ub-border text-ub-text-muted"
+   790→              onClick={() => setRemindDialogOpen(false)}
+   791→            >
+   792→              Cancel
+   793→            </Button>
+   794→            <Button
+   795→              className="bg-ub-warning hover:bg-ub-warning/90 text-ub-background font-semibold"
+   796→              onClick={handleRemindLater}
+   797→            >
+   798→              <Bell className="h-4 w-4 mr-1.5" />
+   799→              Remind in 15 min
+   800→            </Button>
+   801→          </DialogFooter>
+   802→        </DialogContent>
+   803→      </Dialog>
+   804→    </>
+   805→  );
+   806→}
+   807→
+   808→// ─────────────────────────────────────────────
+   809→// Loading Skeleton
+   810→// ─────────────────────────────────────────────
+   811→
+   812→function OpportunityCardSkeleton() {
+   813→  return (
+   814→    <Card className="bg-ub-surface border-ub-border rounded-lg">
+   815→      <CardContent className="p-5 space-y-4">
+   816→        <div className="flex items-center gap-3">
+   817→          <Skeleton className="h-6 w-28 bg-ub-surface-active" />
+   818→          <Skeleton className="h-5 w-14 bg-ub-surface-active" />
+   819→          <Skeleton className="h-5 w-32 bg-ub-surface-active" />
+   820→          <div className="ml-auto flex items-center gap-2">
+   821→            <Skeleton className="h-4 w-10 bg-ub-surface-active" />
+   822→            <Skeleton className="h-1.5 w-16 bg-ub-surface-active" />
+   823→          </div>
+   824→          <Skeleton className="h-4 w-12 bg-ub-surface-active" />
+   825→        </div>
+   826→        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+   827→          {Array.from({ length: 6 }).map((_, i) => (
+   828→            <div key={i} className="space-y-1">
+   829→              <Skeleton className="h-3 w-16 bg-ub-surface-active" />
+   830→              <Skeleton className="h-4 w-20 bg-ub-surface-active" />
+   831→            </div>
+   832→          ))}
+   833→        </div>
+   834→        <Skeleton className="h-px w-full bg-ub-surface-active" />
+   835→        <div className="grid grid-cols-4 gap-1.5">
+   836→          {Array.from({ length: 12 }).map((_, i) => (
+   837→            <Skeleton key={i} className="h-7 w-full bg-ub-surface-active" />
+   838→          ))}
+   839→        </div>
+   840→        <Skeleton className="h-px w-full bg-ub-surface-active" />
+   841→        <div className="flex gap-2">
+   842→          <Skeleton className="h-9 w-28 bg-ub-surface-active" />
+   843→          <Skeleton className="h-9 w-20 bg-ub-surface-active" />
+   844→          <Skeleton className="h-9 w-32 bg-ub-surface-active" />
+   845→        </div>
+   846→      </CardContent>
+   847→    </Card>
+   848→  );
+   849→}
+   850→
+   851→// ─────────────────────────────────────────────
+   852→// Main Page
+   853→// ─────────────────────────────────────────────
+   854→
+   855→type FilterTab = 'all' | 'pending' | 'confirmed' | 'skipped' | 'expired';
+   856→
+   857→export default function OpportunitiesPage() {
+   858→  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+   859→  const [opportunities, setOpportunities] = useState<OpportunityData[]>(MOCK_OPPORTUNITIES);
+   860→  const [isLoading, setIsLoading] = useState(false);
+   861→  const [isConfirming, setIsConfirming] = useState(false);
+   862→  const [isSkipping, setIsSkipping] = useState(false);
+   863→  const [backtestLoading, setBacktestLoading] = useState<Record<string, boolean>>({});
+   864→  const [backtestResults, setBacktestResults] = useState<Record<string, any>>({});
+   865→  const backtestPollRef = useRef<Record<string, NodeJS.Timeout>>({});
+   866→
+   867→  // Load opportunities on mount
+   868→  const loadOpportunities = useCallback(async () => {
+   869→    setIsLoading(true);
+   870→    try {
+   871→      const data = await getOpportunities();
+   872→      if (Array.isArray(data) && data.length > 0) {
+   873→        setOpportunities(data.map(transformOpportunity));
+   874→      }
+   875→      // If backend returns empty or fails, keep MOCK_OPPORTUNITIES as fallback
+   876→    } catch {
+   877→      // Backend not available — keep mock data
+   878→    } finally {
+   879→      setIsLoading(false);
+   880→    }
+   881→  }, []);
+   882→
+   883→  useEffect(() => {
+   884→    loadOpportunities();
+   885→  }, [loadOpportunities]);
+   886→
+   887→  // Clean up polling timers on unmount
+   888→  useEffect(() => {
+   889→    return () => {
+   890→      Object.values(backtestPollRef.current).forEach(clearTimeout);
+   891→    };
+   892→  }, []);
+   893→
+   894→  const filtered = useMemo(() => {
+   895→    if (activeTab === 'all') return opportunities;
+   896→    return opportunities.filter((o) => o.status === activeTab);
+   897→  }, [opportunities, activeTab]);
+   898→
+   899→  const pendingCount = opportunities.filter((o) => o.status === 'pending').length;
+   900→
+   901→  const handleConfirm = useCallback(async (id: string) => {
+   902→    // Optimistic update
+   903→    setOpportunities(prev =>
+   904→      prev.map(o => o.id === id ? { ...o, status: 'confirmed' as OppStatus } : o),
+   905→    );
+   906→    try {
+   907→      await confirmOpportunity(id);
+   908→      toast.success('Opportunity confirmed — engine will execute');
+   909→    } catch (err: any) {
+   910→      // Revert on failure
+   911→      setOpportunities(prev =>
+   912→        prev.map(o => o.id === id ? { ...o, status: 'pending' as OppStatus } : o),
+   913→      );
+   914→      toast.error(err?.response?.data?.detail || 'Failed to confirm opportunity');
+   915→    }
+   916→  }, []);
+   917→
+   918→  const handleSkip = useCallback(async (id: string) => {
+   919→    setOpportunities(prev =>
+   920→      prev.map(o => o.id === id ? { ...o, status: 'skipped' as OppStatus } : o),
+   921→    );
+   922→    try {
+   923→      await skipOpportunity(id);
+   924→      toast.success('Opportunity skipped');
+   925→    } catch (err: any) {
+   926→      setOpportunities(prev =>
+   927→        prev.map(o => o.id === id ? { ...o, status: 'pending' as OppStatus } : o),
+   928→      );
+   929→      toast.error(err?.response?.data?.detail || 'Failed to skip opportunity');
+   930→    }
+   931→  }, []);
+   932→
+   933→  // Quick backtest: run a 30-day backtest for the opportunity's strategy + symbol
+   934→  const handleQuickBacktest = useCallback(async (id: string) => {
+   935→    const opp = opportunities.find(o => o.id === id);
+   936→    if (!opp) return;
+   937→
+   938→    setBacktestLoading(prev => ({ ...prev, [id]: true }));
+   939→    setBacktestResults(prev => { const next = { ...prev }; delete next[id]; return next; });
+   940→
+   941→    // Cancel any existing poll for this id
+   942→    if (backtestPollRef.current[id]) clearTimeout(backtestPollRef.current[id]);
+   943→
+   944→    try {
+   945→      const endDate = new Date().toISOString().split('T')[0];
+   946→      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+   947→      const strategyKey = opp.strategy.toLowerCase().replace(/ /g, '_');
+   948→
+   949→      const response: any = await runBacktest({
+   950→        strategy: strategyKey,
+   951→        symbol: opp.symbol,
+   952→        start_date: startDate,
+   953→        end_date: endDate,
+   954→        timeframe: '5min',
+   955→        initial_capital: 100000,
+   956→      });
+   957→
+   958→      if (response?.run_id) {
+   959→        const pollStatus = async () => {
+   960→          try {
+   961→            const status: any = await getBacktestStatus(response.run_id);
+   962→            if (status?.status === 'completed') {
+   963→              const result: any = await getBacktestResult(response.run_id);
+   964→              setBacktestResults(prev => ({
+   965→                ...prev,
+   966→                [id]: {
+   967→                  winRate: (status.win_rate ?? result?.win_rate ?? 0) * 100,
+   968→                  totalPnl: result?.total_pnl ?? 0,
+   969→                  sharpe: result?.sharpe_ratio ?? status?.sharpe_ratio ?? 0,
+   970→                },
+   971→              }));
+   972→              setBacktestLoading(prev => ({ ...prev, [id]: false }));
+   973→              toast.success(`${opp.symbol} backtest completed`);
+   974→              return;
+   975→            } else if (status?.status === 'error') {
+   976→              toast.error(status?.error_message || 'Quick backtest failed');
+   977→              setBacktestLoading(prev => ({ ...prev, [id]: false }));
+   978→              return;
+   979→            }
+   980→          } catch {
+   981→            // Ignore polling errors
+   982→          }
+   983→          backtestPollRef.current[id] = setTimeout(pollStatus, 2000);
+   984→        };
+   985→        pollStatus();
+   986→      } else {
+   987→        throw new Error('No run_id returned');
+   988→      }
+   989→    } catch (err: any) {
+   990→      console.error('Quick backtest failed:', err);
+   991→      toast.error(err?.response?.data?.detail || err?.message || 'Quick backtest failed');
+   992→      setBacktestLoading(prev => ({ ...prev, [id]: false }));
+   993→    }
+   994→  }, [opportunities]);
+   995→
+   996→  return (
+   997→    <div className="space-y-6">
+   998→      {/* Header */}
+   999→      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+  1000→        <div className="flex items-center gap-3">
+  1001→          <Target className="h-6 w-6 text-ub-accent" />
+  1002→          <h1 className="text-2xl font-bold text-ub-text-primary">Opportunities</h1>
+  1003→          {pendingCount > 0 && (
+  1004→            <Badge className="bg-ub-accent/15 text-ub-accent border-ub-accent/30 font-semibold">
+  1005→              {pendingCount}
+  1006→            </Badge>
+  1007→          )}
+  1008→        </div>
+  1009→        <Tabs
+  1010→          value={activeTab}
+  1011→          onValueChange={(v) => setActiveTab(v as FilterTab)}
+  1012→          className="ml-auto"
+  1013→        >
+  1014→          <TabsList className="bg-ub-background border border-ub-border">
+  1015→            <TabsTrigger
+  1016→              value="all"
+  1017→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+  1018→            >
+  1019→              All ({opportunities.length})
+  1020→            </TabsTrigger>
+  1021→            <TabsTrigger
+  1022→              value="pending"
+  1023→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+  1024→            >
+  1025→              Pending ({pendingCount})
+  1026→            </TabsTrigger>
+  1027→            <TabsTrigger
+  1028→              value="confirmed"
+  1029→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+  1030→            >
+  1031→              Confirmed ({opportunities.filter((o) => o.status === 'confirmed').length})
+  1032→            </TabsTrigger>
+  1033→            <TabsTrigger
+  1034→              value="skipped"
+  1035→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+  1036→            >
+  1037→              Skipped ({opportunities.filter((o) => o.status === 'skipped').length})
+  1038→            </TabsTrigger>
+  1039→            <TabsTrigger
+  1040→              value="expired"
+  1041→              className="data-[state=active]:bg-ub-surface-active data-[state=active]:text-ub-text-primary text-ub-text-muted text-xs"
+  1042→            >
+  1043→              Expired ({opportunities.filter((o) => o.status === 'expired').length})
+  1044→            </TabsTrigger>
+  1045→          </TabsList>
+  1046→        </Tabs>
+  1047→      </div>
+  1048→
+  1049→      {/* Content */}
+  1050→      {isLoading ? (
+  1051→        <div className="space-y-4">
+  1052→          {Array.from({ length: 3 }).map((_, i) => (
+  1053→            <OpportunityCardSkeleton key={i} />
+  1054→          ))}
+  1055→        </div>
+  1056→      ) : filtered.length === 0 ? (
+  1057→        <div className="flex flex-col items-center justify-center py-20 text-center">
+  1058→          <div className="h-16 w-16 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-4">
+  1059→            <Clock className="h-7 w-7 text-ub-text-muted" />
+  1060→          </div>
+  1061→          <h3 className="text-lg font-semibold text-ub-text-primary mb-1">No {activeTab === 'all' ? 'pending' : activeTab} opportunities</h3>
+  1062→          <p className="text-sm text-ub-text-muted max-w-md">
+  1063→            Engine will push new ones when found. Make sure the engine is running and strategies are enabled.
+  1064→          </p>
+  1065→        </div>
+  1066→      ) : (
+  1067→        <div className="space-y-4">
+  1068→          <AnimatePresence mode="popLayout">
+  1069→            {filtered.map((opp) => (
+  1070→              <OpportunityCard
+  1071→                key={opp.id}
+  1072→                opp={opp}
+  1073→                onConfirm={handleConfirm}
+  1074→                onSkip={handleSkip}
+  1075→                isConfirming={isConfirming}
+  1076→                isSkipping={isSkipping}
+  1077→                isBacktestLoading={backtestLoading[opp.id] ?? false}
+  1078→                backtestResult={backtestResults[opp.id]}
+  1079→                onQuickBacktest={handleQuickBacktest}
+  1080→              />
+  1081→            ))}
+  1082→          </AnimatePresence>
+  1083→        </div>
+  1084→      )}
+  1085→    </div>
+  1086→  );
+  1087→}
+  1088→
