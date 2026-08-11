@@ -1,0 +1,780 @@
+   310→    if (!startedAt) { setUptime('00:00:00'); return; }
+   311→    const tick = () => {
+   312→      const diff = Math.floor((Date.now() - startedAt) / 1000);
+   313→      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+   314→      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+   315→      const s = String(diff % 60).padStart(2, '0');
+   316→      setUptime(`${h}:${m}:${s}`);
+   317→    };
+   318→    tick();
+   319→    const interval = setInterval(tick, 1000);
+   320→    return () => clearInterval(interval);
+   321→  }, [startedAt]);
+   322→
+   323→  return (
+   324→    <span className="font-mono text-xs" style={{ color: '#00D09C' }}>
+   325→      {uptime}
+   326→    </span>
+   327→  );
+   328→}
+   329→
+   330→// ─────────────────────────────────────────────
+   331→// Skeleton Loaders
+   332→// ─────────────────────────────────────────────
+   333→
+   334→function StatsRowSkeleton() {
+   335→  return (
+   336→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   337→      {Array.from({ length: 4 }).map((_, i) => (
+   338→        <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   339→          <CardContent className="p-4 space-y-3">
+   340→            <Skeleton className="h-4 w-28 bg-ub-border" />
+   341→            <Skeleton className="h-8 w-32 bg-ub-border" />
+   342→            <Skeleton className="h-3 w-20 bg-ub-border" />
+   343→          </CardContent>
+   344→        </Card>
+   345→      ))}
+   346→    </div>
+   347→  );
+   348→}
+   349→
+   350→function MainContentSkeleton() {
+   351→  return (
+   352→    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+   353→      <div className="lg:col-span-3 space-y-4">
+   354→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   355→          <CardContent className="p-4 space-y-3">
+   356→            <Skeleton className="h-5 w-32 bg-ub-border" />
+   357→            {Array.from({ length: 4 }).map((_, i) => (
+   358→              <Skeleton key={i} className="h-4 w-full bg-ub-border" />
+   359→            ))}
+   360→          </CardContent>
+   361→        </Card>
+   362→        <Card className="bg-ub-surface border-ub-border rounded-lg">
+   363→          <CardContent className="p-4 space-y-3">
+   364→            <Skeleton className="h-5 w-36 bg-ub-border" />
+   365→            {Array.from({ length: 5 }).map((_, i) => (
+   366→              <Skeleton key={i} className="h-10 w-full bg-ub-border" />
+   367→            ))}
+   368→          </CardContent>
+   369→        </Card>
+   370→      </div>
+   371→      <div className="lg:col-span-2 space-y-4">
+   372→        {Array.from({ length: 4 }).map((_, i) => (
+   373→          <Card key={i} className="bg-ub-surface border-ub-border rounded-lg">
+   374→            <CardContent className="p-4 space-y-3">
+   375→              <Skeleton className="h-5 w-28 bg-ub-border" />
+   376→              <Skeleton className="h-4 w-20 bg-ub-border" />
+   377→            </CardContent>
+   378→          </Card>
+   379→        ))}
+   380→      </div>
+   381→    </div>
+   382→  );
+   383→}
+   384→
+   385→// ─────────────────────────────────────────────
+   386→// Market Timer Component
+   387→// ─────────────────────────────────────────────
+   388→
+   389→function MarketTimer() {
+   390→  const [now, setNow] = useState(() => new Date());
+   391→  const engine = useEngineStore();
+   392→
+   393→  useEffect(() => {
+   394→    const interval = setInterval(() => setNow(new Date()), 1_000);
+   395→    return () => clearInterval(interval);
+   396→  }, []);
+   397→
+   398→  const istString = now.toLocaleTimeString('en-IN', {
+   399→    timeZone: 'Asia/Kolkata',
+   400→    hour12: false,
+   401→    hour: '2-digit',
+   402→    minute: '2-digit',
+   403→    second: '2-digit',
+   404→  });
+   405→
+   406→  const marketCloseSeconds = engine.marketCloseSeconds;
+   407→  const hours = Math.floor(marketCloseSeconds / 3600);
+   408→  const minutes = Math.floor((marketCloseSeconds % 3600) / 60);
+   409→  const seconds = Math.floor(marketCloseSeconds % 60);
+   410→  const pad = (n: number) => String(n).padStart(2, '0');
+   411→  const timeToClose = marketCloseSeconds > 0
+   412→    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+   413→    : 'Market Closed';
+   414→
+   415→  const isUrgent = marketCloseSeconds > 0 && marketCloseSeconds < 1800;
+   416→
+   417→  return (
+   418→    <div className="flex flex-col gap-2">
+   419→      <div className="flex items-center gap-2">
+   420→        <Clock className="h-4 w-4 text-ub-text-muted" />
+   421→        <span className="text-lg font-mono font-bold text-ub-text-primary tracking-wider">
+   422→          {istString}
+   423→        </span>
+   424→        <Badge variant="outline" className="text-[10px] font-medium border-ub-border text-ub-text-muted">
+   425→          IST
+   426→        </Badge>
+   427→      </div>
+   428→      <Separator className="bg-ub-border" />
+   429→      <div className="flex items-center justify-between">
+   430→        <span className="text-xs text-ub-text-muted">Time to Close</span>
+   431→        <span className={`text-sm font-mono font-semibold ${isUrgent ? 'text-ub-warning' : 'text-ub-text-primary'}`}>
+   432→          {timeToClose}
+   433→        </span>
+   434→      </div>
+   435→    </div>
+   436→  );
+   437→}
+   438→
+   439→// ─────────────────────────────────────────────
+   440→// Stat Card Component
+   441→// ─────────────────────────────────────────────
+   442→
+   443→function StatCard({ title, children }: { title: string; children: React.ReactNode }) {
+   444→  return (
+   445→    <Card className="bg-ub-surface border-ub-border rounded-lg">
+   446→      <CardContent className="p-4">
+   447→        <p className="text-xs font-medium text-ub-text-muted uppercase tracking-wider mb-2">
+   448→          {title}
+   449→        </p>
+   450→        {children}
+   451→      </CardContent>
+   452→    </Card>
+   453→  );
+   454→}
+   455→
+   456→// ─────────────────────────────────────────────
+   457→// Dashboard Section Card
+   458→// ─────────────────────────────────────────────
+   459→
+   460→function SectionCard({ title, icon: Icon, children, className = '' }: {
+   461→  title: string;
+   462→  icon: React.ElementType;
+   463→  children: React.ReactNode;
+   464→  className?: string;
+   465→}) {
+   466→  return (
+   467→    <Card className={`bg-ub-surface border-ub-border rounded-lg ${className}`}>
+   468→      <CardHeader className="pb-3 pt-4 px-4">
+   469→        <CardTitle className="text-sm font-semibold text-ub-text-primary flex items-center gap-2">
+   470→          <Icon className="h-4 w-4 text-ub-accent" />
+   471→          {title}
+   472→        </CardTitle>
+   473→      </CardHeader>
+   474→      <CardContent className="px-4 pb-4 pt-0">
+   475→        {children}
+   476→      </CardContent>
+   477→    </Card>
+   478→  );
+   479→}
+   480→
+   481→// ─────────────────────────────────────────────
+   482→// MAIN DASHBOARD
+   483→// ─────────────────────────────────────────────
+   484→
+   485→export default function DashboardPage() {
+   486→  const { data: apiData, isLoading } = useDashboard();
+   487→  const engine = useEngine();
+   488→  const engineStore = useEngineStore();
+   489→
+   490→  // Merge API data with store state, fall back to mock
+   491→  const data: DashboardData = useMemo(() => {
+   492→    const raw = apiData as Record<string, unknown> | undefined;
+   493→    if (!raw || !raw.todayPnl) return MOCK_DATA;
+   494→    return {
+   495→      todayPnl: (raw.todayPnl as number) ?? MOCK_DATA.todayPnl,
+   496→      todayPnlPercent: (raw.todayPnlPercent as number) ?? MOCK_DATA.todayPnlPercent,
+   497→      activePositions: (raw.activePositions as number) ?? MOCK_DATA.activePositions,
+   498→      longCount: (raw.longCount as number) ?? MOCK_DATA.longCount,
+   499→      shortCount: (raw.shortCount as number) ?? MOCK_DATA.shortCount,
+   500→      winRate: (raw.winRate as number) ?? MOCK_DATA.winRate,
+   501→      riskUsed: (raw.riskUsed as number) ?? MOCK_DATA.riskUsed,
+   502→      totalCapital: (raw.totalCapital as number) ?? MOCK_DATA.totalCapital,
+   503→      capitalUsed: (raw.capitalUsed as number) ?? MOCK_DATA.capitalUsed,
+   504→      freeCapital: (raw.freeCapital as number) ?? MOCK_DATA.freeCapital,
+   505→      dayPnl: (raw.dayPnl as number) ?? MOCK_DATA.dayPnl,
+   506→      totalPnl: (raw.totalPnl as number) ?? MOCK_DATA.totalPnl,
+   507→      positions: (Array.isArray(raw.positions) && raw.positions.length > 0 ? raw.positions : MOCK_DATA.positions) as Position[],
+   508→      recentTrades: (Array.isArray(raw.recentTrades) && raw.recentTrades.length > 0 ? raw.recentTrades : MOCK_DATA.recentTrades) as Trade[],
+   509→      engineStatus: (raw.engineStatus as string) ?? engineStore.status ?? MOCK_DATA.engineStatus,
+   510→      engineMode: (raw.engineMode as string) ?? engineStore.mode ?? MOCK_DATA.engineMode,
+   511→      regime: (raw.regime as MarketRegime) ?? engineStore.regime ?? MOCK_DATA.regime,
+   512→      regimeConfidence: (raw.regimeConfidence as number) ?? MOCK_DATA.regimeConfidence,
+   513→      activeStrategies: (Array.isArray(raw.activeStrategies) && raw.activeStrategies.length > 0 ? raw.activeStrategies : MOCK_DATA.activeStrategies) as string[],
+   514→      signalsGenerated: (raw.signalsGenerated as number) ?? MOCK_DATA.signalsGenerated,
+   515→      signalsConfirmed: (raw.signalsConfirmed as number) ?? MOCK_DATA.signalsConfirmed,
+   516→      signalsSkipped: (raw.signalsSkipped as number) ?? MOCK_DATA.signalsSkipped,
+   517→    };
+   518→  }, [apiData, engineStore.status, engineStore.mode, engineStore.regime]);
+   519→
+   520→  const pnlIsPositive = data.todayPnl >= 0;
+   521→  const pnlColor = data.todayPnl > 0 ? 'text-ub-profit' : data.todayPnl < 0 ? 'text-ub-loss' : 'text-ub-text-muted';
+   522→  const riskColor = getRiskColor(data.riskUsed);
+   523→  const capitalUsedPct = data.totalCapital > 0 ? (data.capitalUsed / data.totalCapital) * 100 : 0;
+   524→
+   525→  const engineStatus = (engineStore.status || data.engineStatus || 'stopped') as 'running' | 'stopped' | 'paused' | 'error';
+   526→  const engineMode = (engineStore.mode || data.engineMode || 'paper') as 'paper' | 'live';
+   527→  const activeBrokerId = engineStore.activeBroker;
+   528→  const activeBrokerName = activeBrokerId ? (BROKER_LIST.find((b) => b.id === activeBrokerId)?.name ?? activeBrokerId) : null;
+   529→  const startedAt = engineStore.startedAt;
+   530→  const regime = (engineStore.regime || data.regime || 'sideways') as MarketRegime;
+   531→  const regimeConf = data.regimeConfidence;
+   532→  const regimeCfg = REGIME_CONFIG[regime];
+   533→
+   534→  const [engineDialogOpen, setEngineDialogOpen] = useState(false);
+   535→
+   536→  // Heartbeat: simulate a pulse every 5s when engine is running
+   537→  useEffect(() => {
+   538→    if (engineStatus !== 'running') return;
+   539→    const interval = setInterval(() => {
+   540→      useStore.getState().engine.heartbeat();
+   541→    }, 5000);
+   542→    return () => clearInterval(interval);
+   543→  }, [engineStatus]);
+   544→
+   545→  const handleStartStop = useCallback(() => {
+   546→    if (engineStatus === 'running' || engineStatus === 'paused') {
+   547→      useStore.getState().engine.stop();
+   548→    } else {
+   549→      setEngineDialogOpen(true);
+   550→    }
+   551→  }, [engineStatus]);
+   552→
+   553→  const handleEngineStart = useCallback((mode: 'paper' | 'live', brokerId: string) => {
+   554→    useStore.getState().engine.start(mode, brokerId);
+   555→    setEngineDialogOpen(false);
+   556→  }, []);
+   557→
+   558→  return (
+   559→    <TooltipProvider delayDuration={300}>
+   560→        {isLoading ? (
+   561→          <div className="space-y-4">
+   562→            <StatsRowSkeleton />
+   563→            <MainContentSkeleton />
+   564→          </div>
+   565→        ) : (
+   566→          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+   567→            {/* ────────────────────────────────────────
+   568→                SECTION 1: TOP STATS ROW
+   569→            ──────────────────────────────────────── */}
+   570→
+   571→            {/* Card 1: Today's P&L */}
+   572→            <StatCard title="Today's P&L">
+   573→              <div className="flex items-center gap-3">
+   574→                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${pnlIsPositive ? 'bg-ub-profit/10' : 'bg-ub-loss/10'}`}>
+   575→                  {pnlIsPositive ? (
+   576→                    <TrendingUp className="h-5 w-5 text-ub-profit" />
+   577→                  ) : (
+   578→                    <TrendingDown className="h-5 w-5 text-ub-loss" />
+   579→                  )}
+   580→                </div>
+   581→                <div>
+   582→                  <p className={`text-xl font-bold font-mono ${pnlColor}`}>
+   583→                    {formatINR(data.todayPnl)}
+   584→                  </p>
+   585→                  <p className={`text-xs font-medium ${pnlColor}`}>
+   586→                    {formatPercent(data.todayPnlPercent)}
+   587→                  </p>
+   588→                </div>
+   589→              </div>
+   590→            </StatCard>
+   591→
+   592→            {/* Card 2: Active Positions */}
+   593→            <StatCard title="Active Positions">
+   594→              <div className="flex items-center gap-3">
+   595→                <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   596→                  <Activity className="h-5 w-5 text-ub-accent" />
+   597→                </div>
+   598→                <div>
+   599→                  <p className="text-xl font-bold text-ub-text-primary font-mono">
+   600→                    {data.activePositions}
+   601→                  </p>
+   602→                  <div className="flex items-center gap-2 mt-0.5">
+   603→                    <span className="text-xs text-ub-profit font-medium">
+   604→                      {data.longCount} Long
+   605→                    </span>
+   606→                    <span className="text-ub-border">|</span>
+   607→                    <span className="text-xs text-ub-loss font-medium">
+   608→                      {data.shortCount} Short
+   609→                    </span>
+   610→                  </div>
+   611→                </div>
+   612→              </div>
+   613→            </StatCard>
+   614→
+   615→            {/* Card 3: Day Win Rate */}
+   616→            <StatCard title="Day Win Rate">
+   617→              <div className="flex items-center gap-4">
+   618→                <CircularProgress
+   619→                  value={data.winRate}
+   620→                  size={68}
+   621→                  strokeWidth={5}
+   622→                  color={data.winRate >= 60 ? '#22c55e' : data.winRate >= 40 ? '#f59e0b' : '#ef4444'}
+   623→                />
+   624→                <div className="flex flex-col">
+   625→                  <span className="text-xs text-ub-text-muted">Trades Won</span>
+   626→                  <span className={`text-sm font-semibold ${data.winRate >= 60 ? 'text-ub-profit' : data.winRate >= 40 ? 'text-ub-warning' : 'text-ub-loss'}`}>
+   627→                    {data.winRate >= 60 ? 'Good' : data.winRate >= 40 ? 'Average' : 'Poor'}
+   628→                  </span>
+   629→                </div>
+   630→              </div>
+   631→            </StatCard>
+   632→
+   633→            {/* Card 4: Risk Used */}
+   634→            <StatCard title="Risk Used">
+   635→              <div className="space-y-3">
+   636→                <div className="flex items-center justify-between">
+   637→                  <div className="flex items-center gap-2">
+   638→                    <ShieldAlert className={`h-5 w-5`} style={{ color: riskColor }} />
+   639→                    <span className="text-xl font-bold font-mono" style={{ color: riskColor }}>
+   640→                      {data.riskUsed}%
+   641→                    </span>
+   642→                  </div>
+   643→                  <Badge
+   644→                    variant="outline"
+   645→                    className="text-[10px] font-semibold"
+   646→                    style={{
+   647→                      color: riskColor,
+   648→                      borderColor: riskColor + '40',
+   649→                      backgroundColor: riskColor + '15',
+   650→                    }}
+   651→                  >
+   652→                    {getRiskLabel(data.riskUsed)}
+   653→                  </Badge>
+   654→                </div>
+   655→                <div className="h-2 w-full rounded-full bg-ub-border overflow-hidden">
+   656→                  <div
+   657→                    className="h-full rounded-full transition-all duration-500"
+   658→                    style={{
+   659→                      width: `${Math.min(data.riskUsed, 100)}%`,
+   660→                      backgroundColor: riskColor,
+   661→                    }}
+   662→                  />
+   663→                </div>
+   664→                <p className="text-[11px] text-ub-text-muted">
+   665→                  {data.riskUsed < 50
+   666→                    ? 'Healthy risk utilization'
+   667→                    : data.riskUsed <= 80
+   668→                      ? 'Approaching limit — exercise caution'
+   669→                      : 'High risk — consider reducing exposure'}
+   670→                </p>
+   671→              </div>
+   672→            </StatCard>
+   673→
+   674→            {/* ────────────────────────────────────────
+   675→                SECTION 2: MAIN CONTENT — LEFT (3/5)
+   676→            ──────────────────────────────────────── */}
+   677→
+   678→            {/* Capital Panel */}
+   679→            <SectionCard title="Capital Overview" icon={BarChart3} className="md:col-span-1 xl:col-span-3">
+   680→              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+   681→                <div>
+   682→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Total Capital</p>
+   683→                  <p className="text-sm font-bold text-ub-text-primary font-mono mt-0.5">
+   684→                    {formatINR(data.totalCapital)}
+   685→                  </p>
+   686→                </div>
+   687→                <div>
+   688→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Capital Used</p>
+   689→                  <p className="text-sm font-bold text-ub-warning font-mono mt-0.5">
+   690→                    {formatINR(data.capitalUsed)}
+   691→                  </p>
+   692→                </div>
+   693→                <div>
+   694→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Free Capital</p>
+   695→                  <p className="text-sm font-bold text-ub-profit font-mono mt-0.5">
+   696→                    {formatINR(data.freeCapital)}
+   697→                  </p>
+   698→                </div>
+   699→                <div>
+   700→                  <p className="text-[11px] text-ub-text-muted uppercase tracking-wider">Day P&L</p>
+   701→                  <p className={`text-sm font-bold font-mono mt-0.5 ${data.dayPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   702→                    {formatINR(data.dayPnl)}
+   703→                  </p>
+   704→                </div>
+   705→              </div>
+   706→              <div className="space-y-1.5">
+   707→                <div className="flex items-center justify-between text-xs">
+   708→                  <span className="text-ub-text-muted">Capital Utilization</span>
+   709→                  <span className="text-ub-text-primary font-medium font-mono">{capitalUsedPct.toFixed(1)}%</span>
+   710→                </div>
+   711→                <Progress
+   712→                  value={capitalUsedPct}
+   713→                  className="h-2 bg-ub-border [&>div]:bg-ub-accent"
+   714→                />
+   715→              </div>
+   716→              <Separator className="my-3 bg-ub-border" />
+   717→              <div className="flex items-center justify-between">
+   718→                <span className="text-xs text-ub-text-muted">Total P&L (All Time)</span>
+   719→                <span className={`text-base font-bold font-mono ${data.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   720→                  {formatINR(data.totalPnl)}
+   721→                </span>
+   722→              </div>
+   723→            </SectionCard>
+   724→
+   725→            {/* ────────────────────────────────────────
+   726→                SECTION 2: MAIN CONTENT — RIGHT (2/5)
+   727→            ──────────────────────────────────────── */}
+   728→
+   729→            {/* Engine Status */}
+   730→            <SectionCard title="Engine Status" icon={Zap} className="xl:col-span-2">
+   731→              <div className="space-y-3">
+   732→                {/* Top row: Status + Mode + Broker */}
+   733→                <div className="flex items-center justify-between">
+   734→                  <div className="flex items-center gap-2">
+   735→                    <div
+   736→                      className={`h-2.5 w-2.5 rounded-full ${
+   737→                        engineStatus === 'running'
+   738→                          ? 'bg-ub-profit animate-pulse'
+   739→                          : engineStatus === 'error'
+   740→                            ? 'bg-ub-loss animate-pulse'
+   741→                            : engineStatus === 'paused'
+   742→                              ? 'bg-ub-warning'
+   743→                              : 'bg-ub-text-disabled'
+   744→                      }`}
+   745→                    />
+   746→                    <Badge
+   747→                      variant="outline"
+   748→                      className={`text-xs font-semibold ${
+   749→                        engineStatus === 'running'
+   750→                          ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   751→                          : engineStatus === 'error'
+   752→                            ? 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   753→                            : engineStatus === 'paused'
+   754→                              ? 'border-ub-warning/30 text-ub-warning bg-ub-warning/10'
+   755→                              : 'border-ub-text-disabled/30 text-ub-text-disabled bg-ub-text-disabled/10'
+   756→                      }`}
+   757→                    >
+   758→                      {engineStatus.charAt(0).toUpperCase() + engineStatus.slice(1)}
+   759→                    </Badge>
+   760→                  </div>
+   761→                  <Badge
+   762→                    variant="outline"
+   763→                    className={`text-[10px] font-semibold ${
+   764→                      engineMode === 'live'
+   765→                        ? 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   766→                        : 'border-ub-accent/30 text-ub-accent bg-ub-accent/10'
+   767→                    }`}
+   768→                  >
+   769→                    {engineMode === 'live' ? '🔴 ' : '🟢 '}
+   770→                    {engineMode.charAt(0).toUpperCase() + engineMode.slice(1)}
+   771→                  </Badge>
+   772→                </div>
+   773→
+   774→                {/* Active broker + uptime (shown when running) */}
+   775→                {engineStatus === 'running' && (
+   776→                  <div className="flex items-center justify-between px-3 py-2 rounded-md" style={{ backgroundColor: 'rgba(0, 208, 156, 0.06)', border: '1px solid rgba(0, 208, 156, 0.12)' }}>
+   777→                    <div className="flex items-center gap-3">
+   778→                      <div className="flex items-center gap-1.5">
+   779→                        <Wifi size={13} className="text-ub-profit" />
+   780→                        <span className="text-[11px] text-ub-text-muted">Connected via</span>
+   781→                      </div>
+   782→                      <span className="text-xs font-semibold text-ub-text-primary">
+   783→                        {activeBrokerName || 'Unknown'}
+   784→                      </span>
+   785→                    </div>
+   786→                    <div className="flex items-center gap-1.5">
+   787→                      <Timer size={13} className="text-ub-text-disabled" />
+   788→                      <span className="text-[11px] text-ub-text-muted">Uptime</span>
+   789→                      <UptimeTicker startedAt={startedAt} />
+   790→                    </div>
+   791→                  </div>
+   792→                )}
+   793→
+   794→                {/* Error message */}
+   795→                {engineStatus === 'error' && engineStore.errorMessage && (
+   796→                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-md" style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+   797→                    <AlertTriangle size={14} className="shrink-0 mt-0.5 text-ub-loss" />
+   798→                    <p className="text-[11px] text-ub-loss leading-relaxed">{engineStore.errorMessage}</p>
+   799→                  </div>
+   800→                )}
+   801→
+   802→                {/* Stopped: show reason if available */}
+   803→                {engineStatus === 'stopped' && !activeBrokerId && (
+   804→                  <p className="text-[11px] text-ub-text-disabled">Engine is idle. Select a mode and broker to start trading.</p>
+   805→                )}
+   806→
+   807→                <div className="flex gap-2">
+   808→                  <Tooltip>
+   809→                    <TooltipTrigger asChild>
+   810→                      <Button
+   811→                        size="sm"
+   812→                        variant="outline"
+   813→                        disabled={engineStatus === 'running'}
+   814→                        onClick={() => setEngineDialogOpen(true)}
+   815→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   816→                          engineStatus !== 'running'
+   817→                            ? 'hover:bg-ub-profit/15 hover:text-ub-profit hover:border-ub-profit/40 text-ub-text-muted'
+   818→                            : 'opacity-40 cursor-not-allowed'
+   819→                        }`}
+   820→                      >
+   821→                        <Power className="h-3.5 w-3.5 mr-1.5" />
+   822→                        Start Engine
+   823→                      </Button>
+   824→                    </TooltipTrigger>
+   825→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   826→                      Choose mode & broker to start
+   827→                    </TooltipContent>
+   828→                  </Tooltip>
+   829→                  <Tooltip>
+   830→                    <TooltipTrigger asChild>
+   831→                      <Button
+   832→                        size="sm"
+   833→                        variant="outline"
+   834→                        disabled={engineStatus === 'stopped'}
+   835→                        onClick={() => useStore.getState().engine.stop()}
+   836→                        className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
+   837→                          engineStatus !== 'stopped'
+   838→                            ? 'hover:bg-ub-loss/15 hover:text-ub-loss hover:border-ub-loss/40 text-ub-text-muted'
+   839→                            : 'opacity-40 cursor-not-allowed'
+   840→                        }`}
+   841→                      >
+   842→                        <Square className="h-3.5 w-3.5 mr-1.5" />
+   843→                        Stop
+   844→                      </Button>
+   845→                    </TooltipTrigger>
+   846→                    <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
+   847→                      Stop the trading engine
+   848→                    </TooltipContent>
+   849→                  </Tooltip>
+   850→                </div>
+   851→              </div>
+   852→            </SectionCard>
+   853→
+   854→            {/* Open Positions Table */}
+   855→            <SectionCard title="Open Positions" icon={Activity} className="md:col-span-1 xl:col-span-3">
+   856→              <ScrollArea className="max-h-[300px]">
+   857→                <Table>
+   858→                  <TableHeader>
+   859→                    <TableRow className="border-ub-border hover:bg-transparent">
+   860→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+   861→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Dir</TableHead>
+   862→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Entry</TableHead>
+   863→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">Current</TableHead>
+   864→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Qty</TableHead>
+   865→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+   866→                      <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center hidden sm:table-cell">Booked</TableHead>
+   867→                    </TableRow>
+   868→                  </TableHeader>
+   869→                  <TableBody>
+   870→                    {data.positions.map((pos) => {
+   871→                      const pnlPositive = pos.pnl >= 0;
+   872→                      return (
+   873→                        <TableRow key={pos.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+   874→                          <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+   875→                            {pos.symbol}
+   876→                          </TableCell>
+   877→                          <TableCell className="py-2.5 text-center">
+   878→                            <Badge
+   879→                              variant="outline"
+   880→                              className={`text-[10px] font-bold ${
+   881→                                pos.direction === 'BUY'
+   882→                                  ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+   883→                                  : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+   884→                              }`}
+   885→                            >
+   886→                              {pos.direction === 'BUY' ? (
+   887→                                <ArrowUpRight className="h-3 w-3 mr-0.5" />
+   888→                              ) : (
+   889→                                <ArrowDownRight className="h-3 w-3 mr-0.5" />
+   890→                              )}
+   891→                              {pos.direction}
+   892→                            </Badge>
+   893→                          </TableCell>
+   894→                          <TableCell className="text-xs font-mono text-ub-text-muted py-2.5 text-right">
+   895→                            {pos.entry.toFixed(2)}
+   896→                          </TableCell>
+   897→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-right">
+   898→                            {pos.current.toFixed(2)}
+   899→                          </TableCell>
+   900→                          <TableCell className="text-xs font-mono text-ub-text-primary py-2.5 text-center">
+   901→                            {pos.qty}
+   902→                          </TableCell>
+   903→                          <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+   904→                            pnlPositive ? 'text-ub-profit' : 'text-ub-loss'
+   905→                          }`}>
+   906→                            {pnlPositive ? '+' : ''}{formatINR(pos.pnl)}
+   907→                          </TableCell>
+   908→                          <TableCell className="py-2.5 text-center hidden sm:table-cell">
+   909→                            {pos.bookedLevels.length > 0 ? (
+   910→                              <div className="flex flex-wrap gap-1 justify-center">
+   911→                                {pos.bookedLevels.map((level, idx) => (
+   912→                                  <Badge
+   913→                                    key={idx}
+   914→                                    variant="outline"
+   915→                                    className="text-[9px] font-mono border-ub-accent/30 text-ub-accent bg-ub-accent/5"
+   916→                                  >
+   917→                                    {level.toFixed(1)}
+   918→                                  </Badge>
+   919→                                ))}
+   920→                              </div>
+   921→                            ) : (
+   922→                              <span className="text-[11px] text-ub-text-muted">—</span>
+   923→                            )}
+   924→                          </TableCell>
+   925→                        </TableRow>
+   926→                      );
+   927→                    })}
+   928→                  </TableBody>
+   929→                </Table>
+   930→              </ScrollArea>
+   931→              {data.positions.length === 0 && (
+   932→                <div className="flex flex-col items-center justify-center py-8 text-ub-text-muted">
+   933→                  <Activity className="h-8 w-8 mb-2 opacity-30" />
+   934→                  <p className="text-xs">No open positions</p>
+   935→                </div>
+   936→              )}
+   937→            </SectionCard>
+   938→
+   939→            {/* Market Regime */}
+   940→            <SectionCard title="Market Regime" icon={Radio} className="xl:col-span-2">
+   941→              <div className="space-y-3">
+   942→                <div className="flex items-center justify-between">
+   943→                  <Badge
+   944→                    variant="outline"
+   945→                    className={`text-xs font-bold px-3 py-1 ${regimeCfg.colorClass} ${regimeCfg.bgClass} ${regimeCfg.borderClass}`}
+   946→                  >
+   947→                    {regime === 'bull' && <TrendingUp className="h-3.5 w-3.5 mr-1" />}
+   948→                    {regime === 'bear' && <TrendingDown className="h-3.5 w-3.5 mr-1" />}
+   949→                    {regime === 'sideways' && <BarChart3 className="h-3.5 w-3.5 mr-1" />}
+   950→                    {regime === 'volatile' && <AlertTriangle className="h-3.5 w-3.5 mr-1" />}
+   951→                    {regimeCfg.label} Market
+   952→                  </Badge>
+   953→                  <div className="flex items-center gap-1.5">
+   954→                    <span className="text-[11px] text-ub-text-muted">Confidence</span>
+   955→                    <span className="text-xs font-mono font-bold text-ub-text-primary">{regimeConf}%</span>
+   956→                  </div>
+   957→                </div>
+   958→                <Progress
+   959→                  value={regimeConf}
+   960→                  className="h-1.5 bg-ub-border"
+   961→                  style={{ '--progress-color': regimeCfg.colorClass.includes('profit') ? '#22c55e' : regimeCfg.colorClass.includes('loss') ? '#ef4444' : regimeCfg.colorClass.includes('volatile') ? '#a855f7' : '#f59e0b' } as React.CSSProperties}
+   962→                />
+   963→                <Separator className="bg-ub-border" />
+   964→                <div>
+   965→                  <p className="text-[11px] text-ub-text-muted mb-2">Active Strategies</p>
+   966→                  <div className="flex flex-wrap gap-1.5">
+   967→                    {data.activeStrategies.map((strategy, idx) => (
+   968→                      <Badge
+   969→                        key={idx}
+   970→                        variant="outline"
+   971→                        className="text-[10px] font-medium border-ub-accent/20 text-ub-accent bg-ub-accent/5"
+   972→                      >
+   973→                        {strategy}
+   974→                      </Badge>
+   975→                    ))}
+   976→                  </div>
+   977→                </div>
+   978→              </div>
+   979→            </SectionCard>
+   980→
+   981→            {/* Quick Signals */}
+   982→            <SectionCard title="Quick Signals" icon={SignalHigh} className="xl:col-span-2">
+   983→              <div className="grid grid-cols-3 gap-3">
+   984→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   985→                  <p className="text-lg font-bold font-mono text-ub-accent">{data.signalsGenerated}</p>
+   986→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Generated</p>
+   987→                </div>
+   988→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   989→                  <p className="text-lg font-bold font-mono text-ub-profit">{data.signalsConfirmed}</p>
+   990→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Confirmed</p>
+   991→                </div>
+   992→                <div className="text-center p-2 rounded-lg bg-ub-background/50">
+   993→                  <p className="text-lg font-bold font-mono text-ub-warning">{data.signalsSkipped}</p>
+   994→                  <p className="text-[10px] text-ub-text-muted mt-0.5">Skipped</p>
+   995→                </div>
+   996→              </div>
+   997→              <div className="mt-3 flex items-center gap-1.5 text-[11px] text-ub-text-muted">
+   998→                <SignalHigh className="h-3 w-3" />
+   999→                <span>
+  1000→                  {data.signalsGenerated > 0
+  1001→                    ? `${((data.signalsConfirmed / data.signalsGenerated) * 100).toFixed(0)}% confirmation rate`
+  1002→                    : 'No signals today'}
+  1003→                </span>
+  1004→              </div>
+  1005→            </SectionCard>
+  1006→
+  1007→            {/* Market Timer */}
+  1008→            <SectionCard title="Market Timer" icon={Clock} className="xl:col-span-2">
+  1009→              <MarketTimer />
+  1010→            </SectionCard>
+  1011→
+  1012→            {/* ────────────────────────────────────────
+  1013→                SECTION 3: RECENT TRADES
+  1014→            ──────────────────────────────────────── */}
+  1015→
+  1016→            {/* Recent Trades - spans full width */}
+  1017→            <SectionCard title="Recent Trades" icon={Eye} className="md:col-span-2 xl:col-span-4">
+  1018→              <Table>
+  1019→                <TableHeader>
+  1020→                  <TableRow className="border-ub-border hover:bg-transparent">
+  1021→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Time</TableHead>
+  1022→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8">Symbol</TableHead>
+  1023→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-center">Direction</TableHead>
+  1024→                    <TableHead className="text-[11px] text-ub-text-muted font-semibold uppercase tracking-wider h-8 text-right">P&L</TableHead>
+  1025→                  </TableRow>
+  1026→                </TableHeader>
+  1027→                <TableBody>
+  1028→                  {data.recentTrades.slice(0, 5).map((trade) => {
+  1029→                    const isProfit = trade.pnl >= 0;
+  1030→                    return (
+  1031→                      <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover transition-colors">
+  1032→                        <TableCell className="text-xs font-mono text-ub-text-muted py-2.5">
+  1033→                          {trade.time}
+  1034→                        </TableCell>
+  1035→                        <TableCell className="text-xs font-semibold text-ub-text-primary py-2.5">
+  1036→                          {trade.symbol}
+  1037→                        </TableCell>
+  1038→                        <TableCell className="py-2.5 text-center">
+  1039→                          <Badge
+  1040→                            variant="outline"
+  1041→                            className={`text-[10px] font-bold ${
+  1042→                              trade.direction === 'BUY'
+  1043→                                ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
+  1044→                                : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+  1045→                            }`}
+  1046→                          >
+  1047→                            {trade.direction}
+  1048→                          </Badge>
+  1049→                        </TableCell>
+  1050→                        <TableCell className={`text-xs font-mono font-semibold py-2.5 text-right ${
+  1051→                          isProfit ? 'text-ub-profit' : 'text-ub-loss'
+  1052→                        }`}>
+  1053→                          {isProfit ? '+' : ''}{formatINR(trade.pnl)}
+  1054→                        </TableCell>
+  1055→                      </TableRow>
+  1056→                    );
+  1057→                  })}
+  1058→                </TableBody>
+  1059→              </Table>
+  1060→              {data.recentTrades.length === 0 && (
+  1061→                <div className="flex flex-col items-center justify-center py-6 text-ub-text-muted">
+  1062→                  <Eye className="h-8 w-8 mb-2 opacity-30" />
+  1063→                  <p className="text-xs">No trades today</p>
+  1064→                </div>
+  1065→              )}
+  1066→              <div className="mt-3 flex justify-end">
+  1067→                <Button
+  1068→                  variant="ghost"
+  1069→                  size="sm"
+  1070→                  className="text-xs text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 h-7"
+  1071→                >
+  1072→                  View All Trades
+  1073→                  <ArrowUpRight className="h-3 w-3 ml-1" />
+  1074→                </Button>
+  1075→              </div>
+  1076→            </SectionCard>
+  1077→          </div>
+  1078→        )}
+  1079→
+  1080→      <StartEngineDialog
+  1081→        open={engineDialogOpen}
+  1082→        onOpenChange={setEngineDialogOpen}
+  1083→        onStart={handleEngineStart}
+  1084→        isStarting={engine.isStarting}
+  1085→      />
+  1086→    </TooltipProvider>
+  1087→  );
+  1088→}
+  1089→
