@@ -17,6 +17,7 @@ import {
   SignalHigh,
   Eye,
   AlertTriangle,
+  Power,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useDashboard } from '@/hooks/useApi';
 import { useEngine } from '@/hooks/useEngine';
 import { useEngine as useEngineStore, type MarketRegime } from '@/lib/store';
+import StartEngineDialog from '@/components/trading/StartEngineDialog';
 
 // ─────────────────────────────────────────────
 // Types
@@ -496,13 +498,20 @@ export default function DashboardPage() {
   const regimeConf = data.regimeConfidence;
   const regimeCfg = REGIME_CONFIG[regime];
 
+  const [engineDialogOpen, setEngineDialogOpen] = useState(false);
+
   const handleStartStop = useCallback(() => {
     if (engineStatus === 'running' || engineStatus === 'paused') {
       engine.stop();
     } else {
-      engine.start();
+      setEngineDialogOpen(true);
     }
   }, [engineStatus, engine]);
+
+  const handleEngineStart = useCallback((_mode: 'paper' | 'live', _brokerId: string) => {
+    engine.start();
+    setEngineDialogOpen(false);
+  }, [engine]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -721,19 +730,19 @@ export default function DashboardPage() {
                         size="sm"
                         variant="outline"
                         disabled={engineStatus === 'running'}
-                        onClick={handleStartStop}
+                        onClick={() => setEngineDialogOpen(true)}
                         className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
                           engineStatus !== 'running'
                             ? 'hover:bg-ub-profit/15 hover:text-ub-profit hover:border-ub-profit/40 text-ub-text-muted'
                             : 'opacity-40 cursor-not-allowed'
                         }`}
                       >
-                        <Play className="h-3.5 w-3.5 mr-1.5" />
-                        Start
+                        <Power className="h-3.5 w-3.5 mr-1.5" />
+                        Start Engine
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent className="bg-ub-surface border-ub-border text-ub-text-primary text-xs">
-                      Start the trading engine
+                      Choose mode & broker to start
                     </TooltipContent>
                   </Tooltip>
                   <Tooltip>
@@ -742,7 +751,7 @@ export default function DashboardPage() {
                         size="sm"
                         variant="outline"
                         disabled={engineStatus === 'stopped'}
-                        onClick={handleStartStop}
+                        onClick={() => engine.stop()}
                         className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
                           engineStatus !== 'stopped'
                             ? 'hover:bg-ub-loss/15 hover:text-ub-loss hover:border-ub-loss/40 text-ub-text-muted'
@@ -991,6 +1000,13 @@ export default function DashboardPage() {
             </SectionCard>
           </div>
         )}
+
+      <StartEngineDialog
+        open={engineDialogOpen}
+        onOpenChange={setEngineDialogOpen}
+        onStart={handleEngineStart}
+        isStarting={engine.isStarting}
+      />
     </TooltipProvider>
   );
 }
