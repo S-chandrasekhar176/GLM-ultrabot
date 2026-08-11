@@ -1,0 +1,554 @@
+   330→    timeframe: '5m',
+   331→    capital: 100000,
+   332→    includeFees: true,
+   333→    applyRiskGates: true,
+   334→  });
+   335→
+   336→  const handleRun = useCallback(() => {
+   337→    if (!form.symbols.trim()) {
+   338→      toast.error('Please enter at least one symbol');
+   339→      return;
+   340→    }
+   341→    setIsRunning(true);
+   342→    setResults(null);
+   343→    setTimeout(() => {
+   344→      const mockResult = generateMockResult(form);
+   345→      setResults(mockResult);
+   346→      setIsRunning(false);
+   347→      toast.success('Backtest completed successfully');
+   348→    }, 2000);
+   349→  }, [form]);
+   350→
+   351→  const handleViewRun = useCallback((run: PreviousRun) => {
+   352→    setForm((prev) => ({
+   353→      ...prev,
+   354→      strategy: run.strategy,
+   355→      symbols: run.symbol,
+   356→    }));
+   357→    setResults(null);
+   358→    setIsRunning(true);
+   359→    setTimeout(() => {
+   360→      const mockResult = generateMockResult({
+   361→        ...form,
+   362→        strategy: run.strategy,
+   363→        symbols: run.symbol,
+   364→      });
+   365→      setResults(mockResult);
+   366→      setIsRunning(false);
+   367→      setFormOpen(false);
+   368→      toast.success(`Loaded results for ${run.strategy}`);
+   369→    }, 1500);
+   370→  }, [form]);
+   371→
+   372→  const metricCards: MetricCard[] = useMemo(() => {
+   373→    if (!results) return [];
+   374→    const m = results.metrics;
+   375→    return [
+   376→      { label: 'Total Return', value: `${m.totalReturn > 0 ? '+' : ''}${m.totalReturn}%`, color: m.totalReturn >= 0 ? '#22c55e' : '#ef4444', icon: <TrendingUp className="h-4 w-4" /> },
+   377→      { label: 'Annualized Return', value: `${m.annualizedReturn > 0 ? '+' : ''}${m.annualizedReturn}%`, color: m.annualizedReturn >= 0 ? '#22c55e' : '#ef4444', icon: <Activity className="h-4 w-4" /> },
+   378→      { label: 'Max Drawdown', value: `${m.maxDrawdown}%`, color: '#ef4444', icon: <TrendingDown className="h-4 w-4" /> },
+   379→      { label: 'Sharpe Ratio', value: `${m.sharpe}`, color: m.sharpe >= 1.5 ? '#22c55e' : m.sharpe >= 1 ? '#f59e0b' : '#ef4444', icon: <BarChart3 className="h-4 w-4" /> },
+   380→      { label: 'Sortino Ratio', value: `${m.sortino}`, color: m.sortino >= 1.5 ? '#22c55e' : m.sortino >= 1 ? '#f59e0b' : '#ef4444', icon: <ShieldCheck className="h-4 w-4" /> },
+   381→      { label: 'Win Rate', value: `${m.winRate}%`, color: m.winRate >= 60 ? '#22c55e' : '#f59e0b', icon: <Target className="h-4 w-4" /> },
+   382→      { label: 'Profit Factor', value: `${m.profitFactor}`, color: m.profitFactor >= 1.5 ? '#22c55e' : m.profitFactor >= 1 ? '#f59e0b' : '#ef4444', icon: <ArrowUpRight className="h-4 w-4" /> },
+   383→      { label: 'Total Trades', value: `${m.totalTrades}`, color: '#00d09c', icon: <BarChart3 className="h-4 w-4" /> },
+   384→      { label: 'Total Fees', value: `₹${m.totalFees.toLocaleString('en-IN')}`, color: '#94a3b8', icon: <CalendarDays className="h-4 w-4" /> },
+   385→      { label: 'Avg Trade P&L', value: `₹${m.avgTradePnl.toLocaleString('en-IN')}`, color: m.avgTradePnl >= 0 ? '#22c55e' : '#ef4444', icon: m.avgTradePnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" /> },
+   386→    ];
+   387→  }, [results]);
+   388→
+   389→  // Monthly returns grouped by year (only 2025 in mock)
+   390→  const monthlyYears = useMemo(() => {
+   391→    if (!results) return [];
+   392→    const years = [...new Set(results.monthlyReturns.map(m => m.year))];
+   393→    return years;
+   394→  }, [results]);
+   395→
+   396→  return (
+   397→    <div className="space-y-6">
+   398→      {/* Page Header */}
+   399→      <div className="flex items-center gap-3">
+   400→        <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   401→          <Activity className="h-5 w-5 text-ub-accent" />
+   402→        </div>
+   403→        <div>
+   404→          <h1 className="text-2xl font-bold text-ub-text-primary">Backtesting</h1>
+   405→          <p className="text-sm text-ub-text-muted">Run strategy backtests and analyze performance</p>
+   406→        </div>
+   407→      </div>
+   408→
+   409→      {/* ── New Backtest Form ── */}
+   410→      <Collapsible open={formOpen} onOpenChange={setFormOpen}>
+   411→        <Card className="bg-ub-surface border-ub-border">
+   412→          <CollapsibleTrigger asChild>
+   413→            <CardHeader className="cursor-pointer hover:bg-ub-surface-hover transition-colors rounded-t-lg">
+   414→              <div className="flex items-center justify-between">
+   415→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   416→                  <Play className="h-4 w-4 text-ub-accent" />
+   417→                  New Backtest
+   418→                </CardTitle>
+   419→                <ChevronDown
+   420→                  className={`h-4 w-4 text-ub-text-muted transition-transform ${formOpen ? 'rotate-180' : ''}`}
+   421→                />
+   422→              </div>
+   423→            </CardHeader>
+   424→          </CollapsibleTrigger>
+   425→          <CollapsibleContent>
+   426→            <CardContent className="pt-0 space-y-4">
+   427→              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   428→                {/* Strategy */}
+   429→                <div className="space-y-2">
+   430→                  <Label className="text-ub-text-muted text-sm">Strategy</Label>
+   431→                  <Select
+   432→                    value={form.strategy}
+   433→                    onValueChange={(v) => setForm((p) => ({ ...p, strategy: v }))}
+   434→                  >
+   435→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   436→                      <SelectValue placeholder="Select strategy" />
+   437→                    </SelectTrigger>
+   438→                    <SelectContent className="bg-ub-surface border-ub-border">
+   439→                      {STRATEGIES.map((s) => (
+   440→                        <SelectItem key={s} value={s} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   441→                          {s}
+   442→                        </SelectItem>
+   443→                      ))}
+   444→                    </SelectContent>
+   445→                  </Select>
+   446→                </div>
+   447→
+   448→                {/* Symbols */}
+   449→                <div className="space-y-2">
+   450→                  <Label className="text-ub-text-muted text-sm">Symbol(s)</Label>
+   451→                  <Input
+   452→                    placeholder="RELIANCE, INFY, TCS"
+   453→                    value={form.symbols}
+   454→                    onChange={(e) => setForm((p) => ({ ...p, symbols: e.target.value }))}
+   455→                    className="bg-ub-background border-ub-border text-ub-text-primary placeholder:text-ub-text-disabled"
+   456→                  />
+   457→                </div>
+   458→
+   459→                {/* Timeframe */}
+   460→                <div className="space-y-2">
+   461→                  <Label className="text-ub-text-muted text-sm">Timeframe</Label>
+   462→                  <Select
+   463→                    value={form.timeframe}
+   464→                    onValueChange={(v) => setForm((p) => ({ ...p, timeframe: v }))}
+   465→                  >
+   466→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   467→                      <SelectValue />
+   468→                    </SelectTrigger>
+   469→                    <SelectContent className="bg-ub-surface border-ub-border">
+   470→                      {TIMEFRAMES.map((tf) => (
+   471→                        <SelectItem key={tf} value={tf} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   472→                          {tf}
+   473→                        </SelectItem>
+   474→                      ))}
+   475→                    </SelectContent>
+   476→                  </Select>
+   477→                </div>
+   478→
+   479→                {/* From Date */}
+   480→                <div className="space-y-2">
+   481→                  <Label className="text-ub-text-muted text-sm">From Date</Label>
+   482→                  <Input
+   483→                    type="date"
+   484→                    value={form.fromDate}
+   485→                    onChange={(e) => setForm((p) => ({ ...p, fromDate: e.target.value }))}
+   486→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   487→                  />
+   488→                </div>
+   489→
+   490→                {/* To Date */}
+   491→                <div className="space-y-2">
+   492→                  <Label className="text-ub-text-muted text-sm">To Date</Label>
+   493→                  <Input
+   494→                    type="date"
+   495→                    value={form.toDate}
+   496→                    onChange={(e) => setForm((p) => ({ ...p, toDate: e.target.value }))}
+   497→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   498→                  />
+   499→                </div>
+   500→
+   501→                {/* Initial Capital */}
+   502→                <div className="space-y-2">
+   503→                  <Label className="text-ub-text-muted text-sm">Initial Capital (₹)</Label>
+   504→                  <Input
+   505→                    type="number"
+   506→                    value={form.capital}
+   507→                    onChange={(e) => setForm((p) => ({ ...p, capital: Number(e.target.value) }))}
+   508→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   509→                  />
+   510→                </div>
+   511→              </div>
+   512→
+   513→              {/* Checkboxes and Run */}
+   514→              <div className="flex flex-wrap items-center gap-6 pt-2">
+   515→                <div className="flex items-center gap-2">
+   516→                  <Checkbox
+   517→                    id="includeFees"
+   518→                    checked={form.includeFees}
+   519→                    onCheckedChange={(v) => setForm((p) => ({ ...p, includeFees: v === true }))}
+   520→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   521→                  />
+   522→                  <Label htmlFor="includeFees" className="text-sm text-ub-text-muted cursor-pointer">
+   523→                    Include fees
+   524→                  </Label>
+   525→                </div>
+   526→                <div className="flex items-center gap-2">
+   527→                  <Checkbox
+   528→                    id="applyRiskGates"
+   529→                    checked={form.applyRiskGates}
+   530→                    onCheckedChange={(v) => setForm((p) => ({ ...p, applyRiskGates: v === true }))}
+   531→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   532→                  />
+   533→                  <Label htmlFor="applyRiskGates" className="text-sm text-ub-text-muted cursor-pointer">
+   534→                    Apply risk gates
+   535→                  </Label>
+   536→                </div>
+   537→                <div className="ml-auto">
+   538→                  <Button
+   539→                    onClick={handleRun}
+   540→                    disabled={isRunning}
+   541→                    className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold px-6"
+   542→                  >
+   543→                    {isRunning ? (
+   544→                      <>
+   545→                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   546→                        Running...
+   547→                      </>
+   548→                    ) : (
+   549→                      <>
+   550→                        <Play className="h-4 w-4 mr-2" />
+   551→                        Run Backtest
+   552→                      </>
+   553→                    )}
+   554→                  </Button>
+   555→                </div>
+   556→              </div>
+   557→            </CardContent>
+   558→          </CollapsibleContent>
+   559→        </Card>
+   560→      </Collapsible>
+   561→
+   562→      {/* ── Loading Skeleton ── */}
+   563→      {isRunning && (
+   564→        <motion.div
+   565→          initial={{ opacity: 0 }}
+   566→          animate={{ opacity: 1 }}
+   567→          className="space-y-6"
+   568→        >
+   569→          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+   570→            {Array.from({ length: 10 }).map((_, i) => (
+   571→              <Skeleton key={i} className="h-24 bg-ub-surface rounded-lg" />
+   572→            ))}
+   573→          </div>
+   574→          <Skeleton className="h-[300px] bg-ub-surface rounded-lg" />
+   575→          <Skeleton className="h-[200px] bg-ub-surface rounded-lg" />
+   576→        </motion.div>
+   577→      )}
+   578→
+   579→      {/* ── Results Section ── */}
+   580→      <AnimatePresence>
+   581→        {results && !isRunning && (
+   582→          <motion.div
+   583→            initial={{ opacity: 0, y: 20 }}
+   584→            animate={{ opacity: 1, y: 0 }}
+   585→            transition={{ duration: 0.4 }}
+   586→            className="space-y-6"
+   587→          >
+   588→            {/* Key Metrics */}
+   589→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+   590→              {metricCards.map((card) => (
+   591→                <Card key={card.label} className="bg-ub-surface border-ub-border">
+   592→                  <CardContent className="p-4">
+   593→                    <div className="flex items-center justify-between mb-2">
+   594→                      <span className="text-xs font-medium text-ub-text-muted uppercase tracking-wider">
+   595→                        {card.label}
+   596→                      </span>
+   597→                      <div style={{ color: card.color }}>{card.icon}</div>
+   598→                    </div>
+   599→                    <p className="text-xl font-bold" style={{ color: card.color }}>
+   600→                      {card.value}
+   601→                    </p>
+   602→                  </CardContent>
+   603→                </Card>
+   604→              ))}
+   605→            </div>
+   606→
+   607→            {/* Equity Curve */}
+   608→            <Card className="bg-ub-surface border-ub-border">
+   609→              <CardHeader className="pb-2">
+   610→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   611→                  <TrendingUp className="h-4 w-4 text-ub-accent" />
+   612→                  Equity Curve
+   613→                </CardTitle>
+   614→              </CardHeader>
+   615→              <CardContent>
+   616→                <div className="h-[300px] w-full">
+   617→                  <ResponsiveContainer width="100%" height="100%">
+   618→                    <AreaChart data={results.equityCurve} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   619→                      <defs>
+   620→                        <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+   621→                          <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+   622→                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+   623→                        </linearGradient>
+   624→                      </defs>
+   625→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   626→                      <XAxis
+   627→                        dataKey="trade"
+   628→                        stroke="#94a3b8"
+   629→                        tick={{ fontSize: 11 }}
+   630→                        label={{ value: 'Trade #', position: 'insideBottomRight', offset: -5, style: { fill: '#94a3b8', fontSize: 11 } }}
+   631→                      />
+   632→                      <YAxis
+   633→                        stroke="#94a3b8"
+   634→                        tick={{ fontSize: 11 }}
+   635→                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+   636→                      />
+   637→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Equity']) as never} />
+   638→                      <ReferenceLine y={form.capital} stroke="#94a3b8" strokeDasharray="5 5" strokeOpacity={0.5} />
+   639→                      <Area
+   640→                        type="monotone"
+   641→                        dataKey="equity"
+   642→                        stroke="#00d09c"
+   643→                        strokeWidth={2}
+   644→                        fill="url(#equityGradient)"
+   645→                      />
+   646→                    </AreaChart>
+   647→                  </ResponsiveContainer>
+   648→                </div>
+   649→              </CardContent>
+   650→            </Card>
+   651→
+   652→            {/* Monthly Returns Heatmap */}
+   653→            <Card className="bg-ub-surface border-ub-border">
+   654→              <CardHeader className="pb-2">
+   655→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   656→                  <CalendarDays className="h-4 w-4 text-ub-accent" />
+   657→                  Monthly Returns Heatmap
+   658→                </CardTitle>
+   659→              </CardHeader>
+   660→              <CardContent>
+   661→                <div className="overflow-x-auto">
+   662→                  <div className="inline-grid gap-1" style={{ gridTemplateColumns: `60px repeat(12, 1fr)` }}>
+   663→                    {/* Header row */}
+   664→                    <div className="p-1" />
+   665→                    {MONTHS.map((m) => (
+   666→                      <div key={m} className="p-1 text-center text-xs font-medium text-ub-text-muted">
+   667→                        {m}
+   668→                      </div>
+   669→                    ))}
+   670→                    {/* Data rows */}
+   671→                    {monthlyYears.map((year) => (
+   672→                      <>
+   673→                        <div key={`year-${year}`} className="p-1 flex items-center text-xs font-medium text-ub-text-muted">
+   674→                          {year}
+   675→                        </div>
+   676→                        {results.monthlyReturns
+   677→                          .filter((mr) => mr.year === year)
+   678→                          .map((mr) => (
+   679→                            <div
+   680→                              key={`${year}-${mr.month}`}
+   681→                              className="p-1.5 text-center text-xs font-semibold rounded min-w-[60px] flex items-center justify-center"
+   682→                              style={getCellColor(mr.value)}
+   683→                            >
+   684→                              {mr.value > 0 ? '+' : ''}{mr.value}%
+   685→                            </div>
+   686→                          ))}
+   687→                      </>
+   688→                    ))}
+   689→                  </div>
+   690→                </div>
+   691→              </CardContent>
+   692→            </Card>
+   693→
+   694→            {/* Drawdown Chart */}
+   695→            <Card className="bg-ub-surface border-ub-border">
+   696→              <CardHeader className="pb-2">
+   697→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   698→                  <TrendingDown className="h-4 w-4 text-ub-loss" />
+   699→                  Drawdown Chart
+   700→                </CardTitle>
+   701→              </CardHeader>
+   702→              <CardContent>
+   703→                <div className="h-[200px] w-full">
+   704→                  <ResponsiveContainer width="100%" height="100%">
+   705→                    <AreaChart data={results.drawdownChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   706→                      <defs>
+   707→                        <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
+   708→                          <stop offset="0%" stopColor="#ef4444" stopOpacity={0.05} />
+   709→                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+   710→                        </linearGradient>
+   711→                      </defs>
+   712→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   713→                      <XAxis
+   714→                        dataKey="date"
+   715→                        stroke="#94a3b8"
+   716→                        tick={{ fontSize: 10 }}
+   717→                        interval="preserveStartEnd"
+   718→                      />
+   719→                      <YAxis
+   720→                        stroke="#94a3b8"
+   721→                        tick={{ fontSize: 11 }}
+   722→                        tickFormatter={(v: number) => `${v}%`}
+   723→                      />
+   724→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}%`, 'Drawdown']) as never} />
+   725→                      <ReferenceLine y={0} stroke="#94a3b8" strokeOpacity={0.3} />
+   726→                      <Area
+   727→                        type="monotone"
+   728→                        dataKey="drawdown"
+   729→                        stroke="#ef4444"
+   730→                        strokeWidth={1.5}
+   731→                        fill="url(#drawdownGradient)"
+   732→                      />
+   733→                    </AreaChart>
+   734→                  </ResponsiveContainer>
+   735→                </div>
+   736→              </CardContent>
+   737→            </Card>
+   738→
+   739→            {/* Trade List */}
+   740→            <Card className="bg-ub-surface border-ub-border">
+   741→              <CardHeader className="pb-2">
+   742→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   743→                  <Clock className="h-4 w-4 text-ub-accent" />
+   744→                  Trade List
+   745→                </CardTitle>
+   746→              </CardHeader>
+   747→              <CardContent className="p-0">
+   748→                <ScrollArea className="max-h-64">
+   749→                  <Table>
+   750→                    <TableHeader>
+   751→                      <TableRow className="border-ub-border hover:bg-transparent">
+   752→                        <TableHead className="text-ub-text-muted text-xs">#</TableHead>
+   753→                        <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+   754→                        <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+   755→                        <TableHead className="text-ub-text-muted text-xs">Direction</TableHead>
+   756→                        <TableHead className="text-ub-text-muted text-xs text-right">Entry</TableHead>
+   757→                        <TableHead className="text-ub-text-muted text-xs text-right">Exit</TableHead>
+   758→                        <TableHead className="text-ub-text-muted text-xs text-right">P&L</TableHead>
+   759→                        <TableHead className="text-ub-text-muted text-xs">Duration</TableHead>
+   760→                        <TableHead className="text-ub-text-muted text-xs">Exit Reason</TableHead>
+   761→                      </TableRow>
+   762→                    </TableHeader>
+   763→                    <TableBody>
+   764→                      {results.trades.map((trade) => (
+   765→                        <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover">
+   766→                          <TableCell className="text-ub-text-muted text-xs">{trade.id}</TableCell>
+   767→                          <TableCell className="text-ub-text-primary text-xs">{trade.date}</TableCell>
+   768→                          <TableCell className="text-ub-text-primary text-xs font-medium">{trade.symbol}</TableCell>
+   769→                          <TableCell>
+   770→                            <Badge
+   771→                              variant="outline"
+   772→                              className={`text-[10px] font-semibold ${
+   773→                                trade.direction === 'BUY'
+   774→                                  ? 'border-ub-profit/40 text-ub-profit'
+   775→                                  : 'border-ub-loss/40 text-ub-loss'
+   776→                              }`}
+   777→                            >
+   778→                              {trade.direction}
+   779→                            </Badge>
+   780→                          </TableCell>
+   781→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.entry}</TableCell>
+   782→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.exit}</TableCell>
+   783→                          <TableCell className={`text-xs text-right font-semibold ${trade.pnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   784→                            {trade.pnl >= 0 ? '+' : ''}₹{trade.pnl.toLocaleString('en-IN')}
+   785→                          </TableCell>
+   786→                          <TableCell className="text-ub-text-muted text-xs">{trade.duration}</TableCell>
+   787→                          <TableCell className="text-ub-text-muted text-xs">{trade.exitReason}</TableCell>
+   788→                        </TableRow>
+   789→                      ))}
+   790→                    </TableBody>
+   791→                  </Table>
+   792→                </ScrollArea>
+   793→              </CardContent>
+   794→            </Card>
+   795→
+   796→            {/* Risk Gate Stats */}
+   797→            <Card className="bg-ub-surface border-ub-border">
+   798→              <CardHeader className="pb-2">
+   799→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   800→                  <ShieldCheck className="h-4 w-4 text-ub-accent" />
+   801→                  Risk Gate Stats
+   802→                </CardTitle>
+   803→              </CardHeader>
+   804→              <CardContent>
+   805→                <div className="space-y-3">
+   806→                  {results.riskGateStats.map((gate) => {
+   807→                    const total = gate.passed + gate.rejected;
+   808→                    const passPct = Math.round((gate.passed / total) * 100);
+   809→                    return (
+   810→                      <div key={gate.name} className="space-y-1">
+   811→                        <div className="flex items-center justify-between text-sm">
+   812→                          <span className="text-ub-text-muted">{gate.name}</span>
+   813→                          <div className="flex items-center gap-3 text-xs">
+   814→                            <span className="text-ub-profit">{gate.passed} passed</span>
+   815→                            <span className="text-ub-loss">{gate.rejected} rejected</span>
+   816→                          </div>
+   817→                        </div>
+   818→                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-ub-background">
+   819→                          <div className="bg-ub-profit transition-all duration-500" style={{ width: `${passPct}%` }} />
+   820→                          <div className="bg-ub-loss transition-all duration-500" style={{ width: `${100 - passPct}%` }} />
+   821→                        </div>
+   822→                      </div>
+   823→                    );
+   824→                  })}
+   825→                </div>
+   826→              </CardContent>
+   827→            </Card>
+   828→          </motion.div>
+   829→        )}
+   830→      </AnimatePresence>
+   831→
+   832→      {/* ── Previous Runs ── */}
+   833→      <Card className="bg-ub-surface border-ub-border">
+   834→        <CardHeader className="pb-2">
+   835→          <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   836→            <BarChart3 className="h-4 w-4 text-ub-accent" />
+   837→            Previous Runs
+   838→          </CardTitle>
+   839→        </CardHeader>
+   840→        <CardContent className="p-0">
+   841→          <Table>
+   842→            <TableHeader>
+   843→              <TableRow className="border-ub-border hover:bg-transparent">
+   844→                <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+   845→                <TableHead className="text-ub-text-muted text-xs">Strategy</TableHead>
+   846→                <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+   847→                <TableHead className="text-ub-text-muted text-xs text-right">Return %</TableHead>
+   848→                <TableHead className="text-ub-text-muted text-xs text-right">Sharpe</TableHead>
+   849→                <TableHead className="text-ub-text-muted text-xs text-right">Trades</TableHead>
+   850→                <TableHead className="text-ub-text-muted text-xs text-right">Action</TableHead>
+   851→              </TableRow>
+   852→            </TableHeader>
+   853→            <TableBody>
+   854→              {PREVIOUS_RUNS.map((run) => (
+   855→                <TableRow key={run.id} className="border-ub-border hover:bg-ub-surface-hover">
+   856→                  <TableCell className="text-ub-text-primary text-xs">{run.date}</TableCell>
+   857→                  <TableCell className="text-ub-text-primary text-xs font-medium">{run.strategy}</TableCell>
+   858→                  <TableCell className="text-ub-text-muted text-xs">{run.symbol}</TableCell>
+   859→                  <TableCell className={`text-xs text-right font-semibold ${run.returnPct >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   860→                    {run.returnPct > 0 ? '+' : ''}{run.returnPct}%
+   861→                  </TableCell>
+   862→                  <TableCell className="text-ub-text-primary text-xs text-right">{run.sharpe}</TableCell>
+   863→                  <TableCell className="text-ub-text-muted text-xs text-right">{run.trades}</TableCell>
+   864→                  <TableCell className="text-right">
+   865→                    <Button
+   866→                      variant="ghost"
+   867→                      size="sm"
+   868→                      className="text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 text-xs h-7 px-3"
+   869→                      onClick={() => handleViewRun(run)}
+   870→                    >
+   871→                      View
+   872→                    </Button>
+   873→                  </TableCell>
+   874→                </TableRow>
+   875→              ))}
+   876→            </TableBody>
+   877→          </Table>
+   878→        </CardContent>
+   879→      </Card>
+   880→    </div>
+   881→  );
+   882→}
+   883→

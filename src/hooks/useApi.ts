@@ -18,7 +18,7 @@ import {
   getEngineStatus,
   getSettings,
   updateSettings,
-  getBacktestResults,
+  getBacktestHistory,
 } from '@/lib/api';
 
 // ─────────────────────────────────────────────
@@ -132,7 +132,7 @@ export function useStrategies() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => toggleStrategy(id, enabled),
+    mutationFn: ({ name, isEnabled }: { name: string; isEnabled: boolean }) => toggleStrategy(name, isEnabled),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['strategies'] }),
   });
 
@@ -231,10 +231,10 @@ export function useSettings() {
 // Backtest
 // ─────────────────────────────────────────────
 
-export function useBacktestResults() {
+export function useBacktestHistory(params?: { strategy?: string; limit?: number; offset?: number }) {
   return useQuery({
-    queryKey: ['backtest-results'],
-    queryFn: getBacktestResults,
+    queryKey: ['backtest-history', params],
+    queryFn: () => getBacktestHistory(params),
     staleTime: 60_000,
   });
 }

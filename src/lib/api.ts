@@ -6,8 +6,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const API_BASE_URL =
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
-    : 'http://localhost:8000';
+    ? (process.env.NEXT_PUBLIC_API_URL || '')
+    : '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -67,8 +67,12 @@ type ApiResponse<T = unknown> = Promise<T>;
 // Auth
 // ─────────────────────────────────────────────
 
-export async function login(username: string, password: string): ApiResponse<{ token: string; username: string }> {
-  const { data } = await api.post('/api/auth/login', { username, password });
+export async function login(username: string, password: string): ApiResponse<{ access_token: string; token_type: string; expires_in_hours: number }> {
+  const { data } = await api.post(
+    '/api/auth/login',
+    new URLSearchParams({ username, password }).toString(),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+  );
   return data;
 }
 
@@ -132,8 +136,8 @@ export async function getStrategies(): ApiResponse {
   return data;
 }
 
-export async function toggleStrategy(id: string, enabled: boolean): ApiResponse {
-  const { data } = await api.patch(`/api/strategies/${id}`, { enabled });
+export async function toggleStrategy(name: string, isEnabled: boolean): ApiResponse {
+  const { data } = await api.put(`/api/strategies/${name}/toggle`, { is_enabled: isEnabled });
   return data;
 }
 
@@ -178,8 +182,25 @@ export async function getEngineStatus(): ApiResponse {
   return data;
 }
 
-export async function startEngine(): ApiResponse {
-  const { data } = await api.post('/api/engine/start');
+export interface EngineStartParams {
+  mode: string;
+  broker: string;
+  strategies?: string[];
+  initial_capital?: number;
+}
+
+export async function startEngine(params: EngineStartParams): ApiResponse {
+  const { data } = await api.post('/api/engine/start', params);
+  return data;
+}
+
+export async function pauseEngine(): ApiResponse {
+  const { data } = await api.post('/api/engine/pause');
+  return data;
+}
+
+export async function resumeEngine(): ApiResponse {
+  const { data } = await api.post('/api/engine/resume');
   return data;
 }
 
@@ -206,8 +227,18 @@ export async function updateSettings(settings: Record<string, unknown>): ApiResp
 // Backtest
 // ─────────────────────────────────────────────
 
-export async function getBacktestResults(): ApiResponse {
-  const { data } = await api.get('/api/backtest');
+export async function getBacktestHistory(params?: { strategy?: string; limit?: number; offset?: number }): ApiResponse {
+  const { data } = await api.get('/api/backtest/history', { params });
+  return data;
+}
+
+export async function getBacktestStatus(runId: string): ApiResponse {
+  const { data } = await api.get(`/api/backtest/${runId}/status`);
+  return data;
+}
+
+export async function getBacktestResult(runId: string): ApiResponse {
+  const { data } = await api.get(`/api/backtest/${runId}/results`);
   return data;
 }
 

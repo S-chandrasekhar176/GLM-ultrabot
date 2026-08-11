@@ -48,13 +48,13 @@ export default function LoginPage() {
 
     try {
       const result = await loginApi(username, password);
-      localStorage.setItem('ultrabot_token', result.token);
+      localStorage.setItem('ultrabot_token', result.access_token);
       if (rememberMe) {
         localStorage.setItem('ultrabot_remember_username', username);
       } else {
         localStorage.removeItem('ultrabot_remember_username');
       }
-      storeLogin(result.token, result.username);
+      storeLogin(result.access_token, username);
       router.push('/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number; data?: { detail?: string | Array<{ loc?: unknown; msg?: string }> | Record<string, unknown> } } };

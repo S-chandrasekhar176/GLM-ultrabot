@@ -1,0 +1,815 @@
+     1→    69→// ─────────────────────────────────────────────
+     2→    70→// Types
+     3→    71→// ─────────────────────────────────────────────
+     4→    72→
+     5→    73→interface BacktestForm {
+     6→    74→  strategy: string;
+     7→    75→  symbols: string;
+     8→    76→  fromDate: string;
+     9→    77→  toDate: string;
+    10→    78→  timeframe: string;
+    11→    79→  capital: number;
+    12→    80→  includeFees: boolean;
+    13→    81→  applyRiskGates: boolean;
+    14→    82→}
+    15→    83→
+    16→    84→interface MetricCard {
+    17→    85→  label: string;
+    18→    86→  value: string;
+    19→    87→  color: string;
+    20→    88→  icon: React.ReactNode;
+    21→    89→}
+    22→    90→
+    23→    91→interface Trade {
+    24→    92→  id: number;
+    25→    93→  date: string;
+    26→    94→  symbol: string;
+    27→    95→  direction: 'BUY' | 'SELL';
+    28→    96→  entry: number;
+    29→    97→  exit: number;
+    30→    98→  pnl: number;
+    31→    99→  duration: string;
+    32→   100→  exitReason: string;
+    33→   101→}
+    34→   102→
+    35→   103→interface EquityPoint {
+    36→   104→  trade: number;
+    37→   105→  equity: number;
+    38→   106→}
+    39→   107→
+    40→   108→interface DrawdownPoint {
+    41→   109→  date: string;
+    42→   110→  drawdown: number;
+    43→   111→}
+    44→   112→
+    45→   113→interface MonthlyReturn {
+    46→   114→  month: string;
+    47→   115→  year: number;
+    48→   116→  value: number;
+    49→   117→}
+    50→   118→
+    51→   119→interface PreviousRun {
+    52→   120→  id: string;
+    53→   121→  date: string;
+    54→   122→  strategy: string;
+    55→   123→  symbol: string;
+    56→   124→  returnPct: number;
+    57→   125→  sharpe: number;
+    58→   126→  trades: number;
+    59→   127→}
+    60→   128→
+    61→   129→interface RiskGateStat {
+    62→   130→  name: string;
+    63→   131→  passed: number;
+    64→   132→  rejected: number;
+    65→   133→}
+    66→   134→
+    67→   135→interface BacktestResult {
+    68→   136→  metrics: Record<string, number>;
+    69→   137→  equityCurve: EquityPoint[];
+    70→   138→  drawdownChart: DrawdownPoint[];
+    71→   139→  monthlyReturns: MonthlyReturn[];
+    72→   140→  trades: Trade[];
+    73→   141→  riskGateStats: RiskGateStat[];
+    74→   142→}
+    75→   143→
+    76→   144→// ─────────────────────────────────────────────
+    77→   145→// Constants
+    78→   146→// ─────────────────────────────────────────────
+    79→   147→
+    80→   148→const STRATEGIES = [
+    81→   149→  'Breakout Momentum',
+    82→   150→  'Mean Reversion',
+    83→   151→  'VWAP Bounce',
+    84→   152→  'ORB (Opening Range Breakout)',
+    85→   153→  'Supertrend',
+    86→   154→  'EMA Crossover',
+    87→   155→  'RSI Divergence',
+    88→   156→  'Bollinger Squeeze',
+    89→   157→  'MACD Signal Cross',
+    90→   158→  'Ichimoku Cloud',
+    91→   159→  'Volume Profile',
+    92→   160→  'Fibonacci Retracement',
+    93→   161→  'ADX Trend Strength',
+    94→   162→  'Heikin Ashi Smooth',
+    95→   163→];
+    96→   164→
+    97→   165→const TIMEFRAMES = ['1m', '5m', '15m', '1h', '1d'];
+    98→   166→
+    99→   167→const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+   100→   168→
+   101→   169→// ─────────────────────────────────────────────
+   102→   170→// Mock Data Generators
+   103→   171→// ─────────────────────────────────────────────
+   104→   172→
+   105→   173→function generateMockResult(form: BacktestForm): BacktestResult {
+   106→   174→  const totalTrades = Math.floor(Math.random() * 80) + 40;
+   107→   175→  const winRate = 55 + Math.random() * 20;
+   108→   176→  const winningTrades = Math.floor(totalTrades * winRate / 100);
+   109→   177→  const losingTrades = totalTrades - winningTrades;
+   110→   178→  const avgWin = (Math.random() * 3000 + 1500);
+   111→   179→  const avgLoss = (Math.random() * 1500 + 500);
+   112→   180→  const totalProfit = winningTrades * avgWin;
+   113→   181→  const totalLoss = losingTrades * avgLoss;
+   114→   182→  const totalPnl = totalProfit - totalLoss;
+   115→   183→  const totalReturn = (totalPnl / form.capital) * 100;
+   116→   184→  const annualizedReturn = totalReturn * (365 / 365);
+   117→   185→  const maxDrawdown = -(Math.random() * 15 + 5);
+   118→   186→  const sharpe = (Math.random() * 2 + 0.5);
+   119→   187→  const sortino = sharpe * (1 + Math.random() * 0.5);
+   120→   188→  const profitFactor = totalProfit / totalLoss;
+   121→   189→  const totalFees = form.includeFees ? totalTrades * (Math.random() * 50 + 20) : 0;
+   122→   190→  const avgTradePnl = totalPnl / totalTrades;
+   123→   191→
+   124→   192→  // Equity curve
+   125→   193→  const equityCurve: EquityPoint[] = [];
+   126→   194→  let equity = form.capital;
+   127→   195→  for (let i = 0; i <= totalTrades; i++) {
+   128→   196→    if (i > 0) {
+   129→   197→      const isWin = Math.random() * 100 < winRate;
+   130→   198→      equity += isWin ? avgWin * (0.5 + Math.random()) : -(avgLoss * (0.5 + Math.random()));
+   131→   199→    }
+   132→   200→    equityCurve.push({ trade: i, equity: Math.round(equity) });
+   133→   201→  }
+   134→   202→
+   135→   203→  // Drawdown chart
+   136→   204→  const drawdownChart: DrawdownPoint[] = [];
+   137→   205→  let peak = form.capital;
+   138→   206→  const dates: string[] = [];
+   139→   207→  for (let i = 0; i < totalTrades; i++) {
+   140→   208→    const d = new Date(2025, 0, 1 + i * 3);
+   141→   209→    dates.push(d.toISOString().split('T')[0]);
+   142→   210→  }
+   143→   211→  for (let i = 0; i < totalTrades; i++) {
+   144→   212→    const eq = equityCurve[i + 1]?.equity ?? equity;
+   145→   213→    peak = Math.max(peak, eq);
+   146→   214→    const dd = ((eq - peak) / peak) * 100;
+   147→   215→    drawdownChart.push({ date: dates[i] || `Day ${i}`, drawdown: Math.round(dd * 100) / 100 });
+   148→   216→  }
+   149→   217→
+   150→   218→  // Monthly returns
+   151→   219→  const monthlyReturns: MonthlyReturn[] = [];
+   152→   220→  for (let m = 0; m < 12; m++) {
+   153→   221→    monthlyReturns.push({
+   154→   222→      month: MONTHS[m],
+   155→   223→      year: 2025,
+   156→   224→      value: Math.round((Math.random() * 16 - 6) * 100) / 100,
+   157→   225→    });
+   158→   226→  }
+   159→   227→
+   160→   228→  // Trades
+   161→   229→  const symbols = form.symbols.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+   162→   230→  const trades: Trade[] = [];
+   163→   231→  const exitReasons = ['Target Hit', 'Stop Loss', 'Signal Reverse', 'EOD Square-off', 'Trailing SL'];
+   164→   232→  for (let i = 0; i < Math.min(totalTrades, 50); i++) {
+   165→   233→    const isBuy = Math.random() > 0.5;
+   166→   234→    const entry = Math.random() * 3000 + 200;
+   167→   235→    const isWin = Math.random() * 100 < winRate;
+   168→   236→    const pnlVal = isWin
+   169→   237→      ? (Math.random() * 4000 + 500)
+   170→   238→      : -(Math.random() * 2000 + 200);
+   171→   239→    const exit = isBuy ? entry + pnlVal / 100 : entry - pnlVal / 100;
+   172→   240→    const durH = Math.floor(Math.random() * 8 + 0.5);
+   173→   241→    const durM = Math.floor(Math.random() * 59);
+   174→   242→    const tradeDate = new Date(2025, 0, 2 + i * 2);
+   175→   243→
+   176→   244→    trades.push({
+   177→   245→      id: i + 1,
+   178→   246→      date: tradeDate.toLocaleDateString('en-IN'),
+   179→   247→      symbol: symbols[Math.floor(Math.random() * symbols.length)] || 'RELIANCE',
+   180→   248→      direction: isBuy ? 'BUY' : 'SELL',
+   181→   249→      entry: Math.round(entry * 100) / 100,
+   182→   250→      exit: Math.round(exit * 100) / 100,
+   183→   251→      pnl: Math.round(pnlVal),
+   184→   252→      duration: `${durH}h ${durM}m`,
+   185→   253→      exitReason: exitReasons[Math.floor(Math.random() * exitReasons.length)],
+   186→   254→    });
+   187→   255→  }
+   188→   256→
+   189→   257→  // Risk gate stats
+   190→   258→  const riskGateStats: RiskGateStat[] = [
+   191→   259→    { name: 'VIX Filter', passed: Math.floor(Math.random() * 30 + 20), rejected: Math.floor(Math.random() * 10 + 2) },
+   192→   260→    { name: 'Daily Loss Limit', passed: Math.floor(Math.random() * 25 + 25), rejected: Math.floor(Math.random() * 8 + 1) },
+   193→   261→    { name: 'Position Limit', passed: Math.floor(Math.random() * 28 + 15), rejected: Math.floor(Math.random() * 6 + 3) },
+   194→   262→    { name: 'Confidence Filter', passed: Math.floor(Math.random() * 22 + 20), rejected: Math.floor(Math.random() * 12 + 2) },
+   195→   263→    { name: 'Sector Exposure', passed: Math.floor(Math.random() * 30 + 18), rejected: Math.floor(Math.random() * 5 + 1) },
+   196→   264→  ];
+   197→   265→
+   198→   266→  return {
+   199→   267→    metrics: {
+   200→   268→      totalReturn: Math.round(totalReturn * 100) / 100,
+   201→   269→      annualizedReturn: Math.round(annualizedReturn * 100) / 100,
+   202→   270→      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+   203→   271→      sharpe: Math.round(sharpe * 100) / 100,
+   204→   272→      sortino: Math.round(sortino * 100) / 100,
+   205→   273→      winRate: Math.round(winRate * 100) / 100,
+   206→   274→      profitFactor: Math.round(profitFactor * 100) / 100,
+   207→   275→      totalTrades,
+   208→   276→      totalFees: Math.round(totalFees),
+   209→   277→      avgTradePnl: Math.round(avgTradePnl),
+   210→   278→    },
+   211→   279→    equityCurve,
+   212→   280→    drawdownChart,
+   213→   281→    monthlyReturns,
+   214→   282→    trades,
+   215→   283→    riskGateStats,
+   216→   284→  };
+   217→   285→}
+   218→   286→
+   219→   287→const PREVIOUS_RUNS: PreviousRun[] = [
+   220→   288→  { id: 'run-1', date: '2025-08-08', strategy: 'Breakout Momentum', symbol: 'RELIANCE, TCS', returnPct: 18.4, sharpe: 1.82, trades: 67 },
+   221→   289→  { id: 'run-2', date: '2025-08-05', strategy: 'VWAP Bounce', symbol: 'INFY', returnPct: 12.1, sharpe: 1.45, trades: 43 },
+   222→   290→  { id: 'run-3', date: '2025-08-02', strategy: 'Mean Reversion', symbol: 'HDFCBANK, SBIN', returnPct: -3.2, sharpe: 0.67, trades: 89 },
+   223→   291→  { id: 'run-4', date: '2025-07-29', strategy: 'ORB', symbol: 'NIFTY', returnPct: 8.7, sharpe: 1.21, trades: 55 },
+   224→   292→  { id: 'run-5', date: '2025-07-25', strategy: 'Supertrend', symbol: 'BAJFINANCE', returnPct: 15.3, sharpe: 1.68, trades: 38 },
+   225→   293→];
+   226→   294→
+   227→   295→// ─────────────────────────────────────────────
+   228→   296→// Helpers
+   229→   297→// ─────────────────────────────────────────────
+   230→   298→
+   231→   299→function getCellColor(value: number): React.CSSProperties {
+   232→   300→  if (value <= -5) return { backgroundColor: 'rgba(239, 68, 68, 0.7)', color: '#fff' };
+   233→   301→  if (value <= -2) return { backgroundColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' };
+   234→   302→  if (value < 2) return { backgroundColor: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8' };
+   235→   303→  if (value < 5) return { backgroundColor: 'rgba(34, 197, 94, 0.35)', color: '#86efac' };
+   236→   304→  return { backgroundColor: 'rgba(34, 197, 94, 0.7)', color: '#fff' };
+   237→   305→}
+   238→   306→
+   239→   307→// Custom tooltip style for charts
+   240→   308→const tooltipStyle = {
+   241→   309→  backgroundColor: '#1e293b',
+   242→   310→  border: '1px solid #334155',
+   243→   311→  borderRadius: '8px',
+   244→   312→  color: '#f1f5f9',
+   245→   313→  fontSize: '12px',
+   246→   314→  padding: '8px 12px',
+   247→   315→};
+   248→   316→
+   249→   317→// ─────────────────────────────────────────────
+   250→   318→// Component
+   251→   319→// ─────────────────────────────────────────────
+   252→   320→
+   253→   321→export default function BacktestPage() {
+   254→   322→  const [formOpen, setFormOpen] = useState(true);
+   255→   323→  const [isRunning, setIsRunning] = useState(false);
+   256→   324→  const [results, setResults] = useState<BacktestResult | null>(null);
+   257→   325→  const [form, setForm] = useState<BacktestForm>({
+   258→   326→    strategy: 'Breakout Momentum',
+   259→   327→    symbols: 'RELIANCE, INFY, TCS',
+   260→   328→    fromDate: '2025-01-01',
+   261→   329→    toDate: '2025-08-10',
+   262→   330→    timeframe: '5m',
+   263→   331→    capital: 100000,
+   264→   332→    includeFees: true,
+   265→   333→    applyRiskGates: true,
+   266→   334→  });
+   267→   335→
+   268→   336→  const handleRun = useCallback(() => {
+   269→   337→    if (!form.symbols.trim()) {
+   270→   338→      toast.error('Please enter at least one symbol');
+   271→   339→      return;
+   272→   340→    }
+   273→   341→    setIsRunning(true);
+   274→   342→    setResults(null);
+   275→   343→    setTimeout(() => {
+   276→   344→      const mockResult = generateMockResult(form);
+   277→   345→      setResults(mockResult);
+   278→   346→      setIsRunning(false);
+   279→   347→      toast.success('Backtest completed successfully');
+   280→   348→    }, 2000);
+   281→   349→  }, [form]);
+   282→   350→
+   283→   351→  const handleViewRun = useCallback((run: PreviousRun) => {
+   284→   352→    setForm((prev) => ({
+   285→   353→      ...prev,
+   286→   354→      strategy: run.strategy,
+   287→   355→      symbols: run.symbol,
+   288→   356→    }));
+   289→   357→    setResults(null);
+   290→   358→    setIsRunning(true);
+   291→   359→    setTimeout(() => {
+   292→   360→      const mockResult = generateMockResult({
+   293→   361→        ...form,
+   294→   362→        strategy: run.strategy,
+   295→   363→        symbols: run.symbol,
+   296→   364→      });
+   297→   365→      setResults(mockResult);
+   298→   366→      setIsRunning(false);
+   299→   367→      setFormOpen(false);
+   300→   368→      toast.success(`Loaded results for ${run.strategy}`);
+   301→   369→    }, 1500);
+   302→   370→  }, [form]);
+   303→   371→
+   304→   372→  const metricCards: MetricCard[] = useMemo(() => {
+   305→   373→    if (!results) return [];
+   306→   374→    const m = results.metrics;
+   307→   375→    return [
+   308→   376→      { label: 'Total Return', value: `${m.totalReturn > 0 ? '+' : ''}${m.totalReturn}%`, color: m.totalReturn >= 0 ? '#22c55e' : '#ef4444', icon: <TrendingUp className="h-4 w-4" /> },
+   309→   377→      { label: 'Annualized Return', value: `${m.annualizedReturn > 0 ? '+' : ''}${m.annualizedReturn}%`, color: m.annualizedReturn >= 0 ? '#22c55e' : '#ef4444', icon: <Activity className="h-4 w-4" /> },
+   310→   378→      { label: 'Max Drawdown', value: `${m.maxDrawdown}%`, color: '#ef4444', icon: <TrendingDown className="h-4 w-4" /> },
+   311→   379→      { label: 'Sharpe Ratio', value: `${m.sharpe}`, color: m.sharpe >= 1.5 ? '#22c55e' : m.sharpe >= 1 ? '#f59e0b' : '#ef4444', icon: <BarChart3 className="h-4 w-4" /> },
+   312→   380→      { label: 'Sortino Ratio', value: `${m.sortino}`, color: m.sortino >= 1.5 ? '#22c55e' : m.sortino >= 1 ? '#f59e0b' : '#ef4444', icon: <ShieldCheck className="h-4 w-4" /> },
+   313→   381→      { label: 'Win Rate', value: `${m.winRate}%`, color: m.winRate >= 60 ? '#22c55e' : '#f59e0b', icon: <Target className="h-4 w-4" /> },
+   314→   382→      { label: 'Profit Factor', value: `${m.profitFactor}`, color: m.profitFactor >= 1.5 ? '#22c55e' : m.profitFactor >= 1 ? '#f59e0b' : '#ef4444', icon: <ArrowUpRight className="h-4 w-4" /> },
+   315→   383→      { label: 'Total Trades', value: `${m.totalTrades}`, color: '#00d09c', icon: <BarChart3 className="h-4 w-4" /> },
+   316→   384→      { label: 'Total Fees', value: `₹${m.totalFees.toLocaleString('en-IN')}`, color: '#94a3b8', icon: <CalendarDays className="h-4 w-4" /> },
+   317→   385→      { label: 'Avg Trade P&L', value: `₹${m.avgTradePnl.toLocaleString('en-IN')}`, color: m.avgTradePnl >= 0 ? '#22c55e' : '#ef4444', icon: m.avgTradePnl >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" /> },
+   318→   386→    ];
+   319→   387→  }, [results]);
+   320→   388→
+   321→   389→  // Monthly returns grouped by year (only 2025 in mock)
+   322→   390→  const monthlyYears = useMemo(() => {
+   323→   391→    if (!results) return [];
+   324→   392→    const years = [...new Set(results.monthlyReturns.map(m => m.year))];
+   325→   393→    return years;
+   326→   394→  }, [results]);
+   327→   395→
+   328→   396→  return (
+   329→   397→    <div className="space-y-6">
+   330→   398→      {/* Page Header */}
+   331→   399→      <div className="flex items-center gap-3">
+   332→   400→        <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   333→   401→          <Activity className="h-5 w-5 text-ub-accent" />
+   334→   402→        </div>
+   335→   403→        <div>
+   336→   404→          <h1 className="text-2xl font-bold text-ub-text-primary">Backtesting</h1>
+   337→   405→          <p className="text-sm text-ub-text-muted">Run strategy backtests and analyze performance</p>
+   338→   406→        </div>
+   339→   407→      </div>
+   340→   408→
+   341→   409→      {/* ── New Backtest Form ── */}
+   342→   410→      <Collapsible open={formOpen} onOpenChange={setFormOpen}>
+   343→   411→        <Card className="bg-ub-surface border-ub-border">
+   344→   412→          <CollapsibleTrigger asChild>
+   345→   413→            <CardHeader className="cursor-pointer hover:bg-ub-surface-hover transition-colors rounded-t-lg">
+   346→   414→              <div className="flex items-center justify-between">
+   347→   415→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   348→   416→                  <Play className="h-4 w-4 text-ub-accent" />
+   349→   417→                  New Backtest
+   350→   418→                </CardTitle>
+   351→   419→                <ChevronDown
+   352→   420→                  className={`h-4 w-4 text-ub-text-muted transition-transform ${formOpen ? 'rotate-180' : ''}`}
+   353→   421→                />
+   354→   422→              </div>
+   355→   423→            </CardHeader>
+   356→   424→          </CollapsibleTrigger>
+   357→   425→          <CollapsibleContent>
+   358→   426→            <CardContent className="pt-0 space-y-4">
+   359→   427→              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   360→   428→                {/* Strategy */}
+   361→   429→                <div className="space-y-2">
+   362→   430→                  <Label className="text-ub-text-muted text-sm">Strategy</Label>
+   363→   431→                  <Select
+   364→   432→                    value={form.strategy}
+   365→   433→                    onValueChange={(v) => setForm((p) => ({ ...p, strategy: v }))}
+   366→   434→                  >
+   367→   435→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   368→   436→                      <SelectValue placeholder="Select strategy" />
+   369→   437→                    </SelectTrigger>
+   370→   438→                    <SelectContent className="bg-ub-surface border-ub-border">
+   371→   439→                      {STRATEGIES.map((s) => (
+   372→   440→                        <SelectItem key={s} value={s} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   373→   441→                          {s}
+   374→   442→                        </SelectItem>
+   375→   443→                      ))}
+   376→   444→                    </SelectContent>
+   377→   445→                  </Select>
+   378→   446→                </div>
+   379→   447→
+   380→   448→                {/* Symbols */}
+   381→   449→                <div className="space-y-2">
+   382→   450→                  <Label className="text-ub-text-muted text-sm">Symbol(s)</Label>
+   383→   451→                  <Input
+   384→   452→                    placeholder="RELIANCE, INFY, TCS"
+   385→   453→                    value={form.symbols}
+   386→   454→                    onChange={(e) => setForm((p) => ({ ...p, symbols: e.target.value }))}
+   387→   455→                    className="bg-ub-background border-ub-border text-ub-text-primary placeholder:text-ub-text-disabled"
+   388→   456→                  />
+   389→   457→                </div>
+   390→   458→
+   391→   459→                {/* Timeframe */}
+   392→   460→                <div className="space-y-2">
+   393→   461→                  <Label className="text-ub-text-muted text-sm">Timeframe</Label>
+   394→   462→                  <Select
+   395→   463→                    value={form.timeframe}
+   396→   464→                    onValueChange={(v) => setForm((p) => ({ ...p, timeframe: v }))}
+   397→   465→                  >
+   398→   466→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   399→   467→                      <SelectValue />
+   400→   468→                    </SelectTrigger>
+   401→   469→                    <SelectContent className="bg-ub-surface border-ub-border">
+   402→   470→                      {TIMEFRAMES.map((tf) => (
+   403→   471→                        <SelectItem key={tf} value={tf} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-accent">
+   404→   472→                          {tf}
+   405→   473→                        </SelectItem>
+   406→   474→                      ))}
+   407→   475→                    </SelectContent>
+   408→   476→                  </Select>
+   409→   477→                </div>
+   410→   478→
+   411→   479→                {/* From Date */}
+   412→   480→                <div className="space-y-2">
+   413→   481→                  <Label className="text-ub-text-muted text-sm">From Date</Label>
+   414→   482→                  <Input
+   415→   483→                    type="date"
+   416→   484→                    value={form.fromDate}
+   417→   485→                    onChange={(e) => setForm((p) => ({ ...p, fromDate: e.target.value }))}
+   418→   486→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   419→   487→                  />
+   420→   488→                </div>
+   421→   489→
+   422→   490→                {/* To Date */}
+   423→   491→                <div className="space-y-2">
+   424→   492→                  <Label className="text-ub-text-muted text-sm">To Date</Label>
+   425→   493→                  <Input
+   426→   494→                    type="date"
+   427→   495→                    value={form.toDate}
+   428→   496→                    onChange={(e) => setForm((p) => ({ ...p, toDate: e.target.value }))}
+   429→   497→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   430→   498→                  />
+   431→   499→                </div>
+   432→   500→
+   433→   501→                {/* Initial Capital */}
+   434→   502→                <div className="space-y-2">
+   435→   503→                  <Label className="text-ub-text-muted text-sm">Initial Capital (₹)</Label>
+   436→   504→                  <Input
+   437→   505→                    type="number"
+   438→   506→                    value={form.capital}
+   439→   507→                    onChange={(e) => setForm((p) => ({ ...p, capital: Number(e.target.value) }))}
+   440→   508→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   441→   509→                  />
+   442→   510→                </div>
+   443→   511→              </div>
+   444→   512→
+   445→   513→              {/* Checkboxes and Run */}
+   446→   514→              <div className="flex flex-wrap items-center gap-6 pt-2">
+   447→   515→                <div className="flex items-center gap-2">
+   448→   516→                  <Checkbox
+   449→   517→                    id="includeFees"
+   450→   518→                    checked={form.includeFees}
+   451→   519→                    onCheckedChange={(v) => setForm((p) => ({ ...p, includeFees: v === true }))}
+   452→   520→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   453→   521→                  />
+   454→   522→                  <Label htmlFor="includeFees" className="text-sm text-ub-text-muted cursor-pointer">
+   455→   523→                    Include fees
+   456→   524→                  </Label>
+   457→   525→                </div>
+   458→   526→                <div className="flex items-center gap-2">
+   459→   527→                  <Checkbox
+   460→   528→                    id="applyRiskGates"
+   461→   529→                    checked={form.applyRiskGates}
+   462→   530→                    onCheckedChange={(v) => setForm((p) => ({ ...p, applyRiskGates: v === true }))}
+   463→   531→                    className="border-ub-border data-[state=checked]:bg-ub-accent data-[state=checked]:border-ub-accent"
+   464→   532→                  />
+   465→   533→                  <Label htmlFor="applyRiskGates" className="text-sm text-ub-text-muted cursor-pointer">
+   466→   534→                    Apply risk gates
+   467→   535→                  </Label>
+   468→   536→                </div>
+   469→   537→                <div className="ml-auto">
+   470→   538→                  <Button
+   471→   539→                    onClick={handleRun}
+   472→   540→                    disabled={isRunning}
+   473→   541→                    className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold px-6"
+   474→   542→                  >
+   475→   543→                    {isRunning ? (
+   476→   544→                      <>
+   477→   545→                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   478→   546→                        Running...
+   479→   547→                      </>
+   480→   548→                    ) : (
+   481→   549→                      <>
+   482→   550→                        <Play className="h-4 w-4 mr-2" />
+   483→   551→                        Run Backtest
+   484→   552→                      </>
+   485→   553→                    )}
+   486→   554→                  </Button>
+   487→   555→                </div>
+   488→   556→              </div>
+   489→   557→            </CardContent>
+   490→   558→          </CollapsibleContent>
+   491→   559→        </Card>
+   492→   560→      </Collapsible>
+   493→   561→
+   494→   562→      {/* ── Loading Skeleton ── */}
+   495→   563→      {isRunning && (
+   496→   564→        <motion.div
+   497→   565→          initial={{ opacity: 0 }}
+   498→   566→          animate={{ opacity: 1 }}
+   499→   567→          className="space-y-6"
+   500→   568→        >
+   501→   569→          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+   502→   570→            {Array.from({ length: 10 }).map((_, i) => (
+   503→   571→              <Skeleton key={i} className="h-24 bg-ub-surface rounded-lg" />
+   504→   572→            ))}
+   505→   573→          </div>
+   506→   574→          <Skeleton className="h-[300px] bg-ub-surface rounded-lg" />
+   507→   575→          <Skeleton className="h-[200px] bg-ub-surface rounded-lg" />
+   508→   576→        </motion.div>
+   509→   577→      )}
+   510→   578→
+   511→   579→      {/* ── Results Section ── */}
+   512→   580→      <AnimatePresence>
+   513→   581→        {results && !isRunning && (
+   514→   582→          <motion.div
+   515→   583→            initial={{ opacity: 0, y: 20 }}
+   516→   584→            animate={{ opacity: 1, y: 0 }}
+   517→   585→            transition={{ duration: 0.4 }}
+   518→   586→            className="space-y-6"
+   519→   587→          >
+   520→   588→            {/* Key Metrics */}
+   521→   589→            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+   522→   590→              {metricCards.map((card) => (
+   523→   591→                <Card key={card.label} className="bg-ub-surface border-ub-border">
+   524→   592→                  <CardContent className="p-4">
+   525→   593→                    <div className="flex items-center justify-between mb-2">
+   526→   594→                      <span className="text-xs font-medium text-ub-text-muted uppercase tracking-wider">
+   527→   595→                        {card.label}
+   528→   596→                      </span>
+   529→   597→                      <div style={{ color: card.color }}>{card.icon}</div>
+   530→   598→                    </div>
+   531→   599→                    <p className="text-xl font-bold" style={{ color: card.color }}>
+   532→   600→                      {card.value}
+   533→   601→                    </p>
+   534→   602→                  </CardContent>
+   535→   603→                </Card>
+   536→   604→              ))}
+   537→   605→            </div>
+   538→   606→
+   539→   607→            {/* Equity Curve */}
+   540→   608→            <Card className="bg-ub-surface border-ub-border">
+   541→   609→              <CardHeader className="pb-2">
+   542→   610→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   543→   611→                  <TrendingUp className="h-4 w-4 text-ub-accent" />
+   544→   612→                  Equity Curve
+   545→   613→                </CardTitle>
+   546→   614→              </CardHeader>
+   547→   615→              <CardContent>
+   548→   616→                <div className="h-[300px] w-full">
+   549→   617→                  <ResponsiveContainer width="100%" height="100%">
+   550→   618→                    <AreaChart data={results.equityCurve} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   551→   619→                      <defs>
+   552→   620→                        <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+   553→   621→                          <stop offset="0%" stopColor="#22c55e" stopOpacity={0.4} />
+   554→   622→                          <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+   555→   623→                        </linearGradient>
+   556→   624→                      </defs>
+   557→   625→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   558→   626→                      <XAxis
+   559→   627→                        dataKey="trade"
+   560→   628→                        stroke="#94a3b8"
+   561→   629→                        tick={{ fontSize: 11 }}
+   562→   630→                        label={{ value: 'Trade #', position: 'insideBottomRight', offset: -5, style: { fill: '#94a3b8', fontSize: 11 } }}
+   563→   631→                      />
+   564→   632→                      <YAxis
+   565→   633→                        stroke="#94a3b8"
+   566→   634→                        tick={{ fontSize: 11 }}
+   567→   635→                        tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+   568→   636→                      />
+   569→   637→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`₹${value.toLocaleString('en-IN')}`, 'Equity']) as never} />
+   570→   638→                      <ReferenceLine y={form.capital} stroke="#94a3b8" strokeDasharray="5 5" strokeOpacity={0.5} />
+   571→   639→                      <Area
+   572→   640→                        type="monotone"
+   573→   641→                        dataKey="equity"
+   574→   642→                        stroke="#00d09c"
+   575→   643→                        strokeWidth={2}
+   576→   644→                        fill="url(#equityGradient)"
+   577→   645→                      />
+   578→   646→                    </AreaChart>
+   579→   647→                  </ResponsiveContainer>
+   580→   648→                </div>
+   581→   649→              </CardContent>
+   582→   650→            </Card>
+   583→   651→
+   584→   652→            {/* Monthly Returns Heatmap */}
+   585→   653→            <Card className="bg-ub-surface border-ub-border">
+   586→   654→              <CardHeader className="pb-2">
+   587→   655→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   588→   656→                  <CalendarDays className="h-4 w-4 text-ub-accent" />
+   589→   657→                  Monthly Returns Heatmap
+   590→   658→                </CardTitle>
+   591→   659→              </CardHeader>
+   592→   660→              <CardContent>
+   593→   661→                <div className="overflow-x-auto">
+   594→   662→                  <div className="inline-grid gap-1" style={{ gridTemplateColumns: `60px repeat(12, 1fr)` }}>
+   595→   663→                    {/* Header row */}
+   596→   664→                    <div className="p-1" />
+   597→   665→                    {MONTHS.map((m) => (
+   598→   666→                      <div key={m} className="p-1 text-center text-xs font-medium text-ub-text-muted">
+   599→   667→                        {m}
+   600→   668→                      </div>
+   601→   669→                    ))}
+   602→   670→                    {/* Data rows */}
+   603→   671→                    {monthlyYears.map((year) => (
+   604→   672→                      <>
+   605→   673→                        <div key={`year-${year}`} className="p-1 flex items-center text-xs font-medium text-ub-text-muted">
+   606→   674→                          {year}
+   607→   675→                        </div>
+   608→   676→                        {results.monthlyReturns
+   609→   677→                          .filter((mr) => mr.year === year)
+   610→   678→                          .map((mr) => (
+   611→   679→                            <div
+   612→   680→                              key={`${year}-${mr.month}`}
+   613→   681→                              className="p-1.5 text-center text-xs font-semibold rounded min-w-[60px] flex items-center justify-center"
+   614→   682→                              style={getCellColor(mr.value)}
+   615→   683→                            >
+   616→   684→                              {mr.value > 0 ? '+' : ''}{mr.value}%
+   617→   685→                            </div>
+   618→   686→                          ))}
+   619→   687→                      </>
+   620→   688→                    ))}
+   621→   689→                  </div>
+   622→   690→                </div>
+   623→   691→              </CardContent>
+   624→   692→            </Card>
+   625→   693→
+   626→   694→            {/* Drawdown Chart */}
+   627→   695→            <Card className="bg-ub-surface border-ub-border">
+   628→   696→              <CardHeader className="pb-2">
+   629→   697→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   630→   698→                  <TrendingDown className="h-4 w-4 text-ub-loss" />
+   631→   699→                  Drawdown Chart
+   632→   700→                </CardTitle>
+   633→   701→              </CardHeader>
+   634→   702→              <CardContent>
+   635→   703→                <div className="h-[200px] w-full">
+   636→   704→                  <ResponsiveContainer width="100%" height="100%">
+   637→   705→                    <AreaChart data={results.drawdownChart} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+   638→   706→                      <defs>
+   639→   707→                        <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
+   640→   708→                          <stop offset="0%" stopColor="#ef4444" stopOpacity={0.05} />
+   641→   709→                          <stop offset="100%" stopColor="#ef4444" stopOpacity={0.4} />
+   642→   710→                        </linearGradient>
+   643→   711→                      </defs>
+   644→   712→                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+   645→   713→                      <XAxis
+   646→   714→                        dataKey="date"
+   647→   715→                        stroke="#94a3b8"
+   648→   716→                        tick={{ fontSize: 10 }}
+   649→   717→                        interval="preserveStartEnd"
+   650→   718→                      />
+   651→   719→                      <YAxis
+   652→   720→                        stroke="#94a3b8"
+   653→   721→                        tick={{ fontSize: 11 }}
+   654→   722→                        tickFormatter={(v: number) => `${v}%`}
+   655→   723→                      />
+   656→   724→                      <RTooltip contentStyle={tooltipStyle} formatter={((value: number) => [`${value}%`, 'Drawdown']) as never} />
+   657→   725→                      <ReferenceLine y={0} stroke="#94a3b8" strokeOpacity={0.3} />
+   658→   726→                      <Area
+   659→   727→                        type="monotone"
+   660→   728→                        dataKey="drawdown"
+   661→   729→                        stroke="#ef4444"
+   662→   730→                        strokeWidth={1.5}
+   663→   731→                        fill="url(#drawdownGradient)"
+   664→   732→                      />
+   665→   733→                    </AreaChart>
+   666→   734→                  </ResponsiveContainer>
+   667→   735→                </div>
+   668→   736→              </CardContent>
+   669→   737→            </Card>
+   670→   738→
+   671→   739→            {/* Trade List */}
+   672→   740→            <Card className="bg-ub-surface border-ub-border">
+   673→   741→              <CardHeader className="pb-2">
+   674→   742→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   675→   743→                  <Clock className="h-4 w-4 text-ub-accent" />
+   676→   744→                  Trade List
+   677→   745→                </CardTitle>
+   678→   746→              </CardHeader>
+   679→   747→              <CardContent className="p-0">
+   680→   748→                <ScrollArea className="max-h-64">
+   681→   749→                  <Table>
+   682→   750→                    <TableHeader>
+   683→   751→                      <TableRow className="border-ub-border hover:bg-transparent">
+   684→   752→                        <TableHead className="text-ub-text-muted text-xs">#</TableHead>
+   685→   753→                        <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+   686→   754→                        <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+   687→   755→                        <TableHead className="text-ub-text-muted text-xs">Direction</TableHead>
+   688→   756→                        <TableHead className="text-ub-text-muted text-xs text-right">Entry</TableHead>
+   689→   757→                        <TableHead className="text-ub-text-muted text-xs text-right">Exit</TableHead>
+   690→   758→                        <TableHead className="text-ub-text-muted text-xs text-right">P&L</TableHead>
+   691→   759→                        <TableHead className="text-ub-text-muted text-xs">Duration</TableHead>
+   692→   760→                        <TableHead className="text-ub-text-muted text-xs">Exit Reason</TableHead>
+   693→   761→                      </TableRow>
+   694→   762→                    </TableHeader>
+   695→   763→                    <TableBody>
+   696→   764→                      {results.trades.map((trade) => (
+   697→   765→                        <TableRow key={trade.id} className="border-ub-border hover:bg-ub-surface-hover">
+   698→   766→                          <TableCell className="text-ub-text-muted text-xs">{trade.id}</TableCell>
+   699→   767→                          <TableCell className="text-ub-text-primary text-xs">{trade.date}</TableCell>
+   700→   768→                          <TableCell className="text-ub-text-primary text-xs font-medium">{trade.symbol}</TableCell>
+   701→   769→                          <TableCell>
+   702→   770→                            <Badge
+   703→   771→                              variant="outline"
+   704→   772→                              className={`text-[10px] font-semibold ${
+   705→   773→                                trade.direction === 'BUY'
+   706→   774→                                  ? 'border-ub-profit/40 text-ub-profit'
+   707→   775→                                  : 'border-ub-loss/40 text-ub-loss'
+   708→   776→                              }`}
+   709→   777→                            >
+   710→   778→                              {trade.direction}
+   711→   779→                            </Badge>
+   712→   780→                          </TableCell>
+   713→   781→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.entry}</TableCell>
+   714→   782→                          <TableCell className="text-ub-text-primary text-xs text-right">₹{trade.exit}</TableCell>
+   715→   783→                          <TableCell className={`text-xs text-right font-semibold ${trade.pnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   716→   784→                            {trade.pnl >= 0 ? '+' : ''}₹{trade.pnl.toLocaleString('en-IN')}
+   717→   785→                          </TableCell>
+   718→   786→                          <TableCell className="text-ub-text-muted text-xs">{trade.duration}</TableCell>
+   719→   787→                          <TableCell className="text-ub-text-muted text-xs">{trade.exitReason}</TableCell>
+   720→   788→                        </TableRow>
+   721→   789→                      ))}
+   722→   790→                    </TableBody>
+   723→   791→                  </Table>
+   724→   792→                </ScrollArea>
+   725→   793→              </CardContent>
+   726→   794→            </Card>
+   727→   795→
+   728→   796→            {/* Risk Gate Stats */}
+   729→   797→            <Card className="bg-ub-surface border-ub-border">
+   730→   798→              <CardHeader className="pb-2">
+   731→   799→                <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   732→   800→                  <ShieldCheck className="h-4 w-4 text-ub-accent" />
+   733→   801→                  Risk Gate Stats
+   734→   802→                </CardTitle>
+   735→   803→              </CardHeader>
+   736→   804→              <CardContent>
+   737→   805→                <div className="space-y-3">
+   738→   806→                  {results.riskGateStats.map((gate) => {
+   739→   807→                    const total = gate.passed + gate.rejected;
+   740→   808→                    const passPct = Math.round((gate.passed / total) * 100);
+   741→   809→                    return (
+   742→   810→                      <div key={gate.name} className="space-y-1">
+   743→   811→                        <div className="flex items-center justify-between text-sm">
+   744→   812→                          <span className="text-ub-text-muted">{gate.name}</span>
+   745→   813→                          <div className="flex items-center gap-3 text-xs">
+   746→   814→                            <span className="text-ub-profit">{gate.passed} passed</span>
+   747→   815→                            <span className="text-ub-loss">{gate.rejected} rejected</span>
+   748→   816→                          </div>
+   749→   817→                        </div>
+   750→   818→                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-ub-background">
+   751→   819→                          <div className="bg-ub-profit transition-all duration-500" style={{ width: `${passPct}%` }} />
+   752→   820→                          <div className="bg-ub-loss transition-all duration-500" style={{ width: `${100 - passPct}%` }} />
+   753→   821→                        </div>
+   754→   822→                      </div>
+   755→   823→                    );
+   756→   824→                  })}
+   757→   825→                </div>
+   758→   826→              </CardContent>
+   759→   827→            </Card>
+   760→   828→          </motion.div>
+   761→   829→        )}
+   762→   830→      </AnimatePresence>
+   763→   831→
+   764→   832→      {/* ── Previous Runs ── */}
+   765→   833→      <Card className="bg-ub-surface border-ub-border">
+   766→   834→        <CardHeader className="pb-2">
+   767→   835→          <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   768→   836→            <BarChart3 className="h-4 w-4 text-ub-accent" />
+   769→   837→            Previous Runs
+   770→   838→          </CardTitle>
+   771→   839→        </CardHeader>
+   772→   840→        <CardContent className="p-0">
+   773→   841→          <Table>
+   774→   842→            <TableHeader>
+   775→   843→              <TableRow className="border-ub-border hover:bg-transparent">
+   776→   844→                <TableHead className="text-ub-text-muted text-xs">Date</TableHead>
+   777→   845→                <TableHead className="text-ub-text-muted text-xs">Strategy</TableHead>
+   778→   846→                <TableHead className="text-ub-text-muted text-xs">Symbol</TableHead>
+   779→   847→                <TableHead className="text-ub-text-muted text-xs text-right">Return %</TableHead>
+   780→   848→                <TableHead className="text-ub-text-muted text-xs text-right">Sharpe</TableHead>
+   781→   849→                <TableHead className="text-ub-text-muted text-xs text-right">Trades</TableHead>
+   782→   850→                <TableHead className="text-ub-text-muted text-xs text-right">Action</TableHead>
+   783→   851→              </TableRow>
+   784→   852→            </TableHeader>
+   785→   853→            <TableBody>
+   786→   854→              {PREVIOUS_RUNS.map((run) => (
+   787→   855→                <TableRow key={run.id} className="border-ub-border hover:bg-ub-surface-hover">
+   788→   856→                  <TableCell className="text-ub-text-primary text-xs">{run.date}</TableCell>
+   789→   857→                  <TableCell className="text-ub-text-primary text-xs font-medium">{run.strategy}</TableCell>
+   790→   858→                  <TableCell className="text-ub-text-muted text-xs">{run.symbol}</TableCell>
+   791→   859→                  <TableCell className={`text-xs text-right font-semibold ${run.returnPct >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+   792→   860→                    {run.returnPct > 0 ? '+' : ''}{run.returnPct}%
+   793→   861→                  </TableCell>
+   794→   862→                  <TableCell className="text-ub-text-primary text-xs text-right">{run.sharpe}</TableCell>
+   795→   863→                  <TableCell className="text-ub-text-muted text-xs text-right">{run.trades}</TableCell>
+   796→   864→                  <TableCell className="text-right">
+   797→   865→                    <Button
+   798→   866→                      variant="ghost"
+   799→   867→                      size="sm"
+   800→   868→                      className="text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 text-xs h-7 px-3"
+   801→   869→                      onClick={() => handleViewRun(run)}
+   802→   870→                    >
+   803→   871→                      View
+   804→   872→                    </Button>
+   805→   873→                  </TableCell>
+   806→   874→                </TableRow>
+   807→   875→              ))}
+   808→   876→            </TableBody>
+   809→   877→          </Table>
+   810→   878→        </CardContent>
+   811→   879→      </Card>
+   812→   880→    </div>
+   813→   881→  );
+   814→   882→}
+   815→   883→

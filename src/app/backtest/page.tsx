@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Card,
@@ -65,6 +65,7 @@ import {
   ArrowDownRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { runBacktest, getBacktestStatus, getBacktestResult, getBacktestHistory } from '@/lib/api';
 
 // ─────────────────────────────────────────────
 // Types
@@ -315,6 +316,82 @@ const tooltipStyle = {
 };
 
 // ─────────────────────────────────────────────
+// Transform backend result to page format
+// ─────────────────────────────────────────────
+
+function transformBackendResult(result: any, initialCapital: number = 100000): BacktestResult {
+  if (!result) {
+    return {
+      metrics: {},
+      equityCurve: [],
+      drawdownChart: [],
+      monthlyReturns: [],
+      trades: [],
+      riskGateStats: [],
+    };
+  }
+
+  const r = result;
+  const capital = r.initial_capital || initialCapital;
+  const totalPnl = r.total_pnl ?? 0;
+  const totalReturn = capital > 0 ? parseFloat(((totalPnl / capital) * 100).toFixed(2)) : 0;
+  const totalTrades = r.total_trades ?? 0;
+  const winRate = r.win_rate ?? 0;
+  const avgWin = r.avg_win ?? 0;
+  const avgLoss = r.avg_loss ?? 0;
+  const avgTradePnl = totalTrades > 0 ? parseFloat((totalPnl / totalTrades).toFixed(2)) : 0;
+
+  // Equity curve
+  const equityCurve: EquityPoint[] = (r.equity_curve || []).map((pt: any, i: number) => ({
+    trade: i,
+    equity: Math.round(pt.capital ?? pt.equity ?? capital),
+  }));
+
+  // Drawdown chart — derive from equity curve
+  const drawdownChart: DrawdownPoint[] = [];
+  let peak = capital;
+  for (let i = 0; i < equityCurve.length; i++) {
+    const eq = equityCurve[i].equity;
+    peak = Math.max(peak, eq);
+    const dd = peak > 0 ? parseFloat((((eq - peak) / peak) * 100).toFixed(2)) : 0;
+    drawdownChart.push({
+      date: r.equity_curve?.[i]?.bar || `Day ${i}`,
+      drawdown: dd,
+    });
+  }
+
+  return {
+    metrics: {
+      totalReturn,
+      annualizedReturn: totalReturn, // Backend doesn't provide separate annualized
+      maxDrawdown: parseFloat((r.max_drawdown_pct ?? 0).toFixed(2)),
+      sharpe: parseFloat((r.sharpe_ratio ?? 0).toFixed(2)),
+      sortino: 0, // Backend doesn't provide
+      winRate: parseFloat((winRate * 100).toFixed(2)) || 0,
+      profitFactor: parseFloat((r.profit_factor ?? 0).toFixed(2)),
+      totalTrades,
+      totalFees: 0, // Backend doesn't provide
+      avgTradePnl: Math.round(avgTradePnl),
+    },
+    equityCurve,
+    drawdownChart,
+    monthlyReturns: [], // Backend doesn't provide monthly breakdown
+    trades: (r.trades || []).map((t: any, i: number) => ({
+      id: i + 1,
+      date: t.entry_time || t.date || 'N/A',
+      symbol: t.symbol || 'N/A',
+      direction: t.direction?.toUpperCase() || 'BUY',
+      entry: parseFloat(t.entry ?? 0),
+      exit: parseFloat(t.exit ?? 0),
+      pnl: parseFloat(t.pnl ?? 0),
+      duration: t.duration || '-',
+      exitReason: t.exit_reason || t.reason || '-',
+    })),
+    riskGateStats: [], // Backend doesn't provide risk gate breakdown
+  };
+}
+
+// ─────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────
 
@@ -322,6 +399,8 @@ export default function BacktestPage() {
   const [formOpen, setFormOpen] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<BacktestResult | null>(null);
+  const [previousRuns, setPreviousRuns] = useState<PreviousRun[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [form, setForm] = useState<BacktestForm>({
     strategy: 'Breakout Momentum',
     symbols: 'RELIANCE, INFY, TCS',
@@ -333,22 +412,114 @@ export default function BacktestPage() {
     applyRiskGates: true,
   });
 
-  const handleRun = useCallback(() => {
+  const activeRunIdRef = useRef<string | null>(null);
+
+  // Load backtest history on mount
+  const loadHistory = useCallback(async () => {
+    setIsLoadingHistory(true);
+    try {
+      const data: any = await getBacktestHistory({ limit: 20 });
+      if (data?.runs) {
+        setPreviousRuns(data.runs.map((r: any) => ({
+          id: r.id,
+          date: r.completed_at || r.created_at || 'N/A',
+          strategy: r.strategy || 'N/A',
+          symbol: r.symbol || 'N/A',
+          returnPct: r.total_pnl && r.initial_capital ? parseFloat(((r.total_pnl / r.initial_capital) * 100).toFixed(2)) : 0,
+          sharpe: r.sharpe_ratio || 0,
+          trades: r.total_trades || 0,
+        })));
+      }
+    } catch {
+      // Backend not available — that's OK, previous runs will just be empty
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const strategyMap: Record<string, string> = {
+    'Breakout Momentum': 'breakout',
+    'Supertrend': 'supertrend',
+    'Momentum': 'momentum',
+    'RSI Divergence': 'rsi_divergence',
+    'Mean Reversion': 'mean_reversion',
+    'VWAP Bounce': 'vwap_reversion',
+    'ORB (Opening Range Breakout)': 'orb',
+    'Gap Fill': 'gap_fill',
+    'Sector Rotation': 'sector_rotation',
+    'Multi-Timeframe': 'multi_timeframe',
+    'ORB with Volume': 'orb_volume',
+    'Trend Exhaustion': 'trend_exhaustion',
+    'News Momentum': 'news_momentum',
+    'Adaptive Supertrend': 'adaptive_supertrend',
+    'EMA Crossover': 'ema_crossover',
+    'Bollinger Squeeze': 'bollinger_squeeze',
+    'MACD Signal Cross': 'macd_cross',
+    'Ichimoku Cloud': 'ichimoku_cloud',
+    'Volume Profile': 'volume_profile',
+    'Fibonacci Retracement': 'fibonacci_retracement',
+    'ADX Trend Strength': 'adx_trend',
+    'Heikin Ashi Smooth': 'heikin_ashi',
+  };
+
+  const handleRun = useCallback(async () => {
     if (!form.symbols.trim()) {
       toast.error('Please enter at least one symbol');
       return;
     }
     setIsRunning(true);
     setResults(null);
-    setTimeout(() => {
-      const mockResult = generateMockResult(form);
-      setResults(mockResult);
+    try {
+      const response: any = await runBacktest({
+        strategy: strategyMap[form.strategy] || form.strategy.toLowerCase().replace(/ /g, '_'),
+        symbol: form.symbols.split(',')[0].trim(),
+        start_date: form.fromDate,
+        end_date: form.toDate,
+        timeframe: form.timeframe === '5m' ? '5min' : form.timeframe,
+        initial_capital: form.capital,
+        parameters: { include_fees: form.includeFees, apply_risk_gates: form.applyRiskGates },
+      });
+      if (response?.run_id) {
+        activeRunIdRef.current = response.run_id;
+        // Poll for status
+        const pollStatus = async () => {
+          try {
+            const status: any = await getBacktestStatus(response.run_id);
+            if (status?.status === 'completed') {
+              // Fetch full results
+              const result: any = await getBacktestResult(response.run_id);
+              const backtestResult = transformBackendResult(result, form.capital);
+              setResults(backtestResult);
+              setIsRunning(false);
+              toast.success('Backtest completed successfully');
+              loadHistory(); // Refresh previous runs
+              return;
+            } else if (status?.status === 'error') {
+              toast.error(status?.error_message || 'Backtest failed');
+              setIsRunning(false);
+              return;
+            }
+          } catch {
+            // Ignore polling errors
+          }
+          setTimeout(pollStatus, 2000);
+        };
+        pollStatus();
+      } else {
+        throw new Error('No run_id returned');
+      }
+    } catch (err: any) {
+      console.error('Backtest failed:', err);
+      toast.error(err?.response?.data?.detail || err?.message || 'Backtest failed. Check if backend is running.');
       setIsRunning(false);
-      toast.success('Backtest completed successfully');
-    }, 2000);
-  }, [form]);
+    }
+  }, [form, loadHistory]);
 
-  const handleViewRun = useCallback((run: PreviousRun) => {
+  const handleViewRun = useCallback(async (run: PreviousRun) => {
     setForm((prev) => ({
       ...prev,
       strategy: run.strategy,
@@ -356,17 +527,24 @@ export default function BacktestPage() {
     }));
     setResults(null);
     setIsRunning(true);
-    setTimeout(() => {
+    try {
+      const result = await getBacktestResult(run.id);
+      const backtestResult = transformBackendResult(result, form.capital);
+      setResults(backtestResult);
+      toast.success(`Loaded results for ${run.strategy}`);
+    } catch (err: any) {
+      toast.error('Failed to load backtest results');
+      // Fall back to mock if backend not available
       const mockResult = generateMockResult({
         ...form,
         strategy: run.strategy,
         symbols: run.symbol,
       });
       setResults(mockResult);
+    } finally {
       setIsRunning(false);
       setFormOpen(false);
-      toast.success(`Loaded results for ${run.strategy}`);
-    }, 1500);
+    }
   }, [form]);
 
   const metricCards: MetricCard[] = useMemo(() => {
@@ -851,7 +1029,14 @@ export default function BacktestPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {PREVIOUS_RUNS.map((run) => (
+              {isLoadingHistory ? (
+                <TableRow className="border-ub-border hover:bg-transparent">
+                  <TableCell colSpan={7} className="text-center text-ub-text-muted text-xs py-8">
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    Loading previous runs...
+                  </TableCell>
+                </TableRow>
+              ) : (previousRuns.length > 0 ? previousRuns : PREVIOUS_RUNS).map((run) => (
                 <TableRow key={run.id} className="border-ub-border hover:bg-ub-surface-hover">
                   <TableCell className="text-ub-text-primary text-xs">{run.date}</TableCell>
                   <TableCell className="text-ub-text-primary text-xs font-medium">{run.strategy}</TableCell>

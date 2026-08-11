@@ -15,8 +15,10 @@ interface WsConfig {
 }
 
 const DEFAULT_CONFIG: Required<WsConfig> = {
+  // WebSocket can't be proxied by Next.js rewrites, so we need the direct backend URL.
+  // In production, this would be behind a reverse proxy that handles WS upgrade.
   url: typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws')
+    ? (process.env.NEXT_PUBLIC_WS_URL || `ws://${window.location.hostname}:8000/ws`)
     : 'ws://localhost:8000/ws',
   reconnectBaseMs: 1000,
   reconnectMaxMs: 30_000,

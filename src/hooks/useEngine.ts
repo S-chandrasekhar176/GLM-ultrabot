@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { startEngine, stopEngine } from '@/lib/api';
+import { startEngine, stopEngine, pauseEngine, resumeEngine, type EngineStartParams } from '@/lib/api';
 import { useEngineStatus } from './useApi';
 import { useStore } from '@/lib/store';
 
@@ -12,7 +12,7 @@ export function useEngine() {
   const statusQuery = useEngineStatus();
 
   const startMutation = useMutation({
-    mutationFn: startEngine,
+    mutationFn: (params: EngineStartParams) => startEngine(params),
     onSuccess: () => {
       setEngineStatus('running');
       queryClient.invalidateQueries({ queryKey: ['engine-status'] });
@@ -27,14 +27,21 @@ export function useEngine() {
     },
   });
 
-  const pause = () => {
-    setEngineStatus('paused');
-  };
+  const pauseMutation = useMutation({
+    mutationFn: pauseEngine,
+    onSuccess: () => {
+      setEngineStatus('paused');
+      queryClient.invalidateQueries({ queryKey: ['engine-status'] });
+    },
+  });
 
-  const resume = () => {
-    // Resume re-starts the engine
-    startMutation.mutate();
-  };
+  const resumeMutation = useMutation({
+    mutationFn: resumeEngine,
+    onSuccess: () => {
+      setEngineStatus('running');
+      queryClient.invalidateQueries({ queryKey: ['engine-status'] });
+    },
+  });
 
   return {
     ...statusQuery,
@@ -42,10 +49,14 @@ export function useEngine() {
     startAsync: startMutation.mutateAsync,
     stop: stopMutation.mutate,
     stopAsync: stopMutation.mutateAsync,
-    pause,
-    resume,
+    pause: pauseMutation.mutate,
+    pauseAsync: pauseMutation.mutateAsync,
+    resume: resumeMutation.mutate,
+    resumeAsync: resumeMutation.mutateAsync,
     isStarting: startMutation.isPending,
     isStopping: stopMutation.isPending,
+    isPausing: pauseMutation.isPending,
+    isResuming: resumeMutation.isPending,
   };
 }
 

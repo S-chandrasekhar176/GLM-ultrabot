@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { getOpportunities, confirmOpportunity, skipOpportunity, runBacktest, getBacktestStatus, getBacktestResult } from '@/lib/api';
 import {
   Clock,
   TrendingUp,
@@ -22,6 +23,7 @@ import {
   Target,
   Layers,
   Gauge,
+  Loader2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -215,6 +217,47 @@ const MOCK_OPPORTUNITIES: OpportunityData[] = [
 ];
 
 // ─────────────────────────────────────────────
+// Transform backend opportunity to page format
+// ─────────────────────────────────────────────
+
+function transformOpportunity(opp: any): OpportunityData {
+  return {
+    id: opp.id || String(Math.random()),
+    symbol: opp.symbol || 'N/A',
+    direction: (opp.direction || 'BUY').toUpperCase() as Direction,
+    strategy: opp.strategy || 'N/A',
+    kronosScore: opp.confidence ?? opp.kronos_score ?? 0.5,
+    entry: parseFloat(opp.entry ?? 0),
+    stopLoss: parseFloat(opp.stop_loss ?? opp.stopLoss ?? 0),
+    target: parseFloat(opp.target ?? 0),
+    riskReward: opp.risk_reward ?? 1.5,
+    capitalRequired: opp.capital_required ?? 0,
+    expiryAt: opp.expiry_at || opp.timestamp || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    riskGates: opp.risk_gates || [
+      { name: 'Trend Align', passed: true, detail: 'No data from backend' },
+      { name: 'Volume Confirm', passed: true, detail: 'No data from backend' },
+      { name: 'RSI Check', passed: true, detail: 'No data from backend' },
+      { name: 'VIX Filter', passed: true, detail: 'No data from backend' },
+      { name: 'Capital Avail', passed: true, detail: 'No data from backend' },
+      { name: 'Daily Limit', passed: true, detail: 'No data from backend' },
+    ],
+    vix: opp.vix ?? 13.2,
+    niftyTrend: (opp.nifty_trend || 'Sideways') as NiftyTrend,
+    sector: opp.sector || 'N/A',
+    winRate: opp.win_rate ?? opp.confidence ? (opp.confidence * 100) : 60,
+    status: opp.status || 'pending',
+    type: opp.type || 'EQUITY',
+    lotSize: opp.lot_size ?? 1,
+    quantity: opp.quantity ?? 1,
+    margin: opp.margin ?? opp.capital_required ?? 0,
+    strike: opp.strike,
+    optionExpiry: opp.option_expiry,
+    premium: opp.premium,
+    createdAt: opp.created_at || opp.timestamp || new Date().toISOString(),
+  };
+}
+
+// ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
 
@@ -382,12 +425,18 @@ function OpportunityCard({
   onSkip,
   isConfirming,
   isSkipping,
+  isBacktestLoading,
+  backtestResult,
+  onQuickBacktest,
 }: {
   opp: OpportunityData;
   onConfirm: (id: string) => void;
   onSkip: (id: string) => void;
   isConfirming: boolean;
   isSkipping: boolean;
+  isBacktestLoading?: boolean;
+  backtestResult?: any;
+  onQuickBacktest?: (id: string) => void;
 }) {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [remindDialogOpen, setRemindDialogOpen] = useState(false);
@@ -574,6 +623,31 @@ function OpportunityCard({
                 <SkipForward className="h-3.5 w-3.5 mr-1.5" />
                 {isSkipping ? 'Skipping...' : 'SKIP'}
               </Button>
+              {onQuickBacktest && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`border-ub-accent/40 text-ub-accent hover:bg-ub-accent/10 hover:border-ub-accent/60 font-medium text-xs h-9 px-4 ${isBacktestLoading ? 'animate-pulse' : ''}`}
+                        onClick={() => onQuickBacktest(opp.id)}
+                        disabled={isConfirming || isSkipping || isBacktestLoading}
+                      >
+                        {isBacktestLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        ) : (
+                          <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        {isBacktestLoading ? 'Running...' : 'QUICK BACKTEST'}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Run a 30-day backtest for {opp.symbol} with {opp.strategy}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -585,6 +659,25 @@ function OpportunityCard({
                 REMIND LATER
               </Button>
             </div>
+
+            {/* Quick Backtest Result Badge */}
+            {backtestResult && (
+              <div className="flex items-center gap-3 p-2.5 rounded-md bg-ub-background/50 border border-ub-border/50">
+                <BarChart3 className="h-3.5 w-3.5 text-ub-accent flex-shrink-0" />
+                <span className="text-[11px] text-ub-text-muted">30d Backtest</span>
+                <span className={`text-xs font-bold ${backtestResult.winRate >= 55 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+                  WR: {backtestResult.winRate?.toFixed(1)}%
+                </span>
+                <span className="text-ub-border">|</span>
+                <span className={`text-xs font-bold ${backtestResult.totalPnl >= 0 ? 'text-ub-profit' : 'text-ub-loss'}`}>
+                  P&L: {backtestResult.totalPnl >= 0 ? '+' : ''}₹{Math.round(backtestResult.totalPnl).toLocaleString('en-IN')}
+                </span>
+                <span className="text-ub-border">|</span>
+                <span className={`text-xs font-semibold ${(backtestResult.sharpe ?? 0) >= 1 ? 'text-ub-profit' : 'text-ub-warning'}`}>
+                  Sharpe: {(backtestResult.sharpe ?? 0).toFixed(2)}
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -764,9 +857,39 @@ type FilterTab = 'all' | 'pending' | 'confirmed' | 'skipped' | 'expired';
 export default function OpportunitiesPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [opportunities, setOpportunities] = useState<OpportunityData[]>(MOCK_OPPORTUNITIES);
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [backtestLoading, setBacktestLoading] = useState<Record<string, boolean>>({});
+  const [backtestResults, setBacktestResults] = useState<Record<string, any>>({});
+  const backtestPollRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Load opportunities on mount
+  const loadOpportunities = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getOpportunities();
+      if (Array.isArray(data) && data.length > 0) {
+        setOpportunities(data.map(transformOpportunity));
+      }
+      // If backend returns empty or fails, keep MOCK_OPPORTUNITIES as fallback
+    } catch {
+      // Backend not available — keep mock data
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOpportunities();
+  }, [loadOpportunities]);
+
+  // Clean up polling timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(backtestPollRef.current).forEach(clearTimeout);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     if (activeTab === 'all') return opportunities;
@@ -775,33 +898,99 @@ export default function OpportunitiesPage() {
 
   const pendingCount = opportunities.filter((o) => o.status === 'pending').length;
 
-  const handleConfirm = useCallback((id: string) => {
-    setIsConfirming(true);
-    const opp = opportunities.find((o) => o.id === id);
-    // Simulate API call
-    setTimeout(() => {
-      setOpportunities((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: 'confirmed' as OppStatus } : o))
+  const handleConfirm = useCallback(async (id: string) => {
+    // Optimistic update
+    setOpportunities(prev =>
+      prev.map(o => o.id === id ? { ...o, status: 'confirmed' as OppStatus } : o),
+    );
+    try {
+      await confirmOpportunity(id);
+      toast.success('Opportunity confirmed — engine will execute');
+    } catch (err: any) {
+      // Revert on failure
+      setOpportunities(prev =>
+        prev.map(o => o.id === id ? { ...o, status: 'pending' as OppStatus } : o),
       );
-      setIsConfirming(false);
-      toast.success(`${opp?.symbol} confirmed`, {
-        description: `${opp?.strategy} trade has been placed successfully.`,
-      });
-    }, 800);
-  }, [opportunities]);
+      toast.error(err?.response?.data?.detail || 'Failed to confirm opportunity');
+    }
+  }, []);
 
-  const handleSkip = useCallback((id: string) => {
-    setIsSkipping(true);
-    const opp = opportunities.find((o) => o.id === id);
-    setTimeout(() => {
-      setOpportunities((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status: 'skipped' as OppStatus } : o))
+  const handleSkip = useCallback(async (id: string) => {
+    setOpportunities(prev =>
+      prev.map(o => o.id === id ? { ...o, status: 'skipped' as OppStatus } : o),
+    );
+    try {
+      await skipOpportunity(id);
+      toast.success('Opportunity skipped');
+    } catch (err: any) {
+      setOpportunities(prev =>
+        prev.map(o => o.id === id ? { ...o, status: 'pending' as OppStatus } : o),
       );
-      setIsSkipping(false);
-      toast.info(`${opp?.symbol} skipped`, {
-        description: 'Opportunity has been moved to skipped list.',
+      toast.error(err?.response?.data?.detail || 'Failed to skip opportunity');
+    }
+  }, []);
+
+  // Quick backtest: run a 30-day backtest for the opportunity's strategy + symbol
+  const handleQuickBacktest = useCallback(async (id: string) => {
+    const opp = opportunities.find(o => o.id === id);
+    if (!opp) return;
+
+    setBacktestLoading(prev => ({ ...prev, [id]: true }));
+    setBacktestResults(prev => { const next = { ...prev }; delete next[id]; return next; });
+
+    // Cancel any existing poll for this id
+    if (backtestPollRef.current[id]) clearTimeout(backtestPollRef.current[id]);
+
+    try {
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const strategyKey = opp.strategy.toLowerCase().replace(/ /g, '_');
+
+      const response: any = await runBacktest({
+        strategy: strategyKey,
+        symbol: opp.symbol,
+        start_date: startDate,
+        end_date: endDate,
+        timeframe: '5min',
+        initial_capital: 100000,
       });
-    }, 500);
+
+      if (response?.run_id) {
+        const pollStatus = async () => {
+          try {
+            const status: any = await getBacktestStatus(response.run_id);
+            if (status?.status === 'completed') {
+              const result: any = await getBacktestResult(response.run_id);
+              setBacktestResults(prev => ({
+                ...prev,
+                [id]: {
+                  winRate: (status.win_rate ?? result?.win_rate ?? 0) * 100,
+                  totalPnl: result?.total_pnl ?? 0,
+                  sharpe: result?.sharpe_ratio ?? status?.sharpe_ratio ?? 0,
+                },
+              }));
+              setBacktestLoading(prev => ({ ...prev, [id]: false }));
+              toast.success(`${opp.symbol} backtest completed`);
+              return;
+            } else if (status?.status === 'error') {
+              toast.error(status?.error_message || 'Quick backtest failed');
+              setBacktestLoading(prev => ({ ...prev, [id]: false }));
+              return;
+            }
+          } catch {
+            // Ignore polling errors
+          }
+          backtestPollRef.current[id] = setTimeout(pollStatus, 2000);
+        };
+        pollStatus();
+      } else {
+        throw new Error('No run_id returned');
+      }
+    } catch (err: any) {
+      console.error('Quick backtest failed:', err);
+      toast.error(err?.response?.data?.detail || err?.message || 'Quick backtest failed');
+      setBacktestLoading(prev => ({ ...prev, [id]: false }));
+    }
   }, [opportunities]);
 
   return (
@@ -885,6 +1074,9 @@ export default function OpportunitiesPage() {
                 onSkip={handleSkip}
                 isConfirming={isConfirming}
                 isSkipping={isSkipping}
+                isBacktestLoading={backtestLoading[opp.id] ?? false}
+                backtestResult={backtestResults[opp.id]}
+                onQuickBacktest={handleQuickBacktest}
               />
             ))}
           </AnimatePresence>
