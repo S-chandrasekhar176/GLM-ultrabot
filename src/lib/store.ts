@@ -4,7 +4,7 @@ import { create } from 'zustand';
 // Types
 // ─────────────────────────────────────────────
 
-export type EngineStatus = 'running' | 'stopped' | 'paused';
+export type EngineStatus = 'running' | 'stopped' | 'paused' | 'error';
 export type EngineMode = 'paper' | 'live';
 export type MarketRegime = 'bull' | 'bear' | 'sideways' | 'volatile';
 
@@ -34,6 +34,66 @@ export interface LivePrice {
 }
 
 // ─────────────────────────────────────────────
+// Broker Types
+// ─────────────────────────────────────────────
+
+export const BROKER_LIST = [
+  { id: 'paper', name: 'Paper Broker', needsCredentials: false, category: 'paper' as const },
+  { id: 'yahoofinance', name: 'Yahoo Finance', needsCredentials: false, category: 'paper' as const },
+  { id: 'zerodha', name: 'Zerodha', needsCredentials: true, category: 'live' as const },
+  { id: 'angelone', name: 'Angel One', needsCredentials: true, category: 'live' as const },
+  { id: 'upstox', name: 'Upstox', needsCredentials: true, category: 'live' as const },
+  { id: 'dhan', name: 'Dhan', needsCredentials: true, category: 'live' as const },
+  { id: 'icici', name: 'ICICI Direct', needsCredentials: true, category: 'live' as const },
+  { id: 'groww', name: 'Groww', needsCredentials: true, category: 'live' as const },
+] as const;
+
+export type BrokerId = (typeof BROKER_LIST)[number]['id'];
+
+export interface BrokerCredentialFields {
+  [key: string]: string;
+}
+
+// Credential field definitions per broker
+export const BROKER_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: 'password' }[]> = {
+  zerodha: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your Zerodha API key' },
+    { key: 'apiSecret', label: 'API Secret', placeholder: 'Your Zerodha API secret', type: 'password' },
+    { key: 'userId', label: 'User ID / PAN', placeholder: 'e.g. AB1234' },
+    { key: 'totpSecret', label: 'TOTP Secret', placeholder: 'For auto-login (optional)', type: 'password' },
+  ],
+  angelone: [
+    { key: 'apiKey', label: 'SmartAPI Key', placeholder: 'Your Angel One API key' },
+    { key: 'clientCode', label: 'Client Code', placeholder: 'Your client code' },
+    { key: 'pin', label: 'PIN', placeholder: 'Your PIN', type: 'password' },
+    { key: 'totpSecret', label: 'TOTP Secret', placeholder: 'For auto-login (optional)', type: 'password' },
+  ],
+  upstox: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your Upstox API key' },
+    { key: 'apiSecret', label: 'API Secret', placeholder: 'Your Upstox API secret', type: 'password' },
+    { key: 'userId', label: 'User ID', placeholder: 'Your Upstox user ID' },
+  ],
+  dhan: [
+    { key: 'accessToken', label: 'Access Token', placeholder: 'Your Dhan access token', type: 'password' },
+    { key: 'clientId', label: 'Client ID', placeholder: 'Your Dhan client ID' },
+  ],
+  icici: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your ICICI Direct API key' },
+    { key: 'sessionToken', label: 'Session Token', placeholder: 'Generated after login', type: 'password' },
+    { key: 'userId', label: 'User ID', placeholder: 'Your ICICI user ID' },
+  ],
+  groww: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your Groww API key' },
+    { key: 'clientId', label: 'Client ID', placeholder: 'Your Groww client ID' },
+    { key: 'accessToken', label: 'Access Token', placeholder: 'Your Groww access token', type: 'password' },
+  ],
+  yahoofinance: [
+    { key: 'symbols', label: 'Symbol List', placeholder: 'e.g. ^NSEI, ^NSBANKNIFTY, RELIANCE.NS' },
+  ],
+  paper: [],
+};
+
+// ─────────────────────────────────────────────
 // Auth Slice
 // ─────────────────────────────────────────────
 
@@ -58,12 +118,20 @@ export interface EngineSlice {
   niftyValue: number;
   niftyChange: number;
   marketCloseSeconds: number;
+  activeBroker: string | null;
+  startedAt: number | null;
+  errorMessage: string | null;
+  lastHeartbeat: number | null;
   setEngineStatus: (status: EngineStatus) => void;
   setMode: (mode: EngineMode) => void;
   setRegime: (regime: MarketRegime) => void;
   setVix: (vix: number) => void;
   setNifty: (value: number, change: number) => void;
   setMarketCloseSeconds: (seconds: number) => void;
+  setErrorMessage: (msg: string | null) => void;
+  start: (mode: EngineMode, brokerId: string) => void;
+  stop: () => void;
+  heartbeat: () => void;
 }
 
 // ─────────────────────────────────────────────
@@ -93,6 +161,18 @@ export interface SidebarSlice {
 }
 
 // ─────────────────────────────────────────────
+// Brokers Slice
+// ─────────────────────────────────────────────
+
+export interface BrokersSlice {
+  credentials: Record<string, BrokerCredentialFields>;
+  saveBrokerCredentials: (brokerId: string, fields: BrokerCredentialFields) => void;
+  clearBrokerCredentials: (brokerId: string) => void;
+  isBrokerConfigured: (brokerId: string) => boolean;
+  hydrateBrokers: () => void;
+}
+
+// ─────────────────────────────────────────────
 // Combined Store
 // ─────────────────────────────────────────────
 
@@ -101,11 +181,14 @@ interface StoreState {
   engine: EngineSlice;
   realtime: RealtimeSlice;
   sidebar: SidebarSlice;
+  brokers: BrokersSlice;
 }
 
 // ─────────────────────────────────────────────
 // Store — actions inside each slice
 // ─────────────────────────────────────────────
+
+const LS_BROKERS_KEY = 'ultrabot_broker_creds';
 
 export const useStore = create<StoreState>((set, get) => ({
   auth: {
@@ -145,6 +228,10 @@ export const useStore = create<StoreState>((set, get) => ({
     niftyValue: 0,
     niftyChange: 0,
     marketCloseSeconds: 0,
+    activeBroker: null,
+    startedAt: null,
+    errorMessage: null,
+    lastHeartbeat: null,
 
     setEngineStatus(status) { set({ engine: { ...get().engine, status } }); },
     setMode(mode) { set({ engine: { ...get().engine, mode } }); },
@@ -152,6 +239,38 @@ export const useStore = create<StoreState>((set, get) => ({
     setVix(vix) { set({ engine: { ...get().engine, vix } }); },
     setNifty(value, change) { set({ engine: { ...get().engine, niftyValue: value, niftyChange: change } }); },
     setMarketCloseSeconds(seconds) { set({ engine: { ...get().engine, marketCloseSeconds: seconds } }); },
+    setErrorMessage(msg) { set({ engine: { ...get().engine, errorMessage: msg } }); },
+
+    start(mode, brokerId) {
+      set({
+        engine: {
+          ...get().engine,
+          status: 'running',
+          mode,
+          activeBroker: brokerId,
+          startedAt: Date.now(),
+          errorMessage: null,
+          lastHeartbeat: Date.now(),
+        },
+      });
+    },
+
+    stop() {
+      set({
+        engine: {
+          ...get().engine,
+          status: 'stopped',
+          activeBroker: null,
+          startedAt: null,
+          errorMessage: null,
+          lastHeartbeat: null,
+        },
+      });
+    },
+
+    heartbeat() {
+      set({ engine: { ...get().engine, lastHeartbeat: Date.now() } });
+    },
   },
 
   realtime: {
@@ -195,6 +314,47 @@ export const useStore = create<StoreState>((set, get) => ({
     setCollapsed(collapsed) { set({ sidebar: { ...get().sidebar, collapsed } }); },
     setMobileOpen(mobileOpen) { set({ sidebar: { ...get().sidebar, mobileOpen } }); },
   },
+
+  brokers: {
+    credentials: {},
+
+    saveBrokerCredentials(brokerId, fields) {
+      const updated = { ...get().brokers.credentials, [brokerId]: fields };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LS_BROKERS_KEY, JSON.stringify(updated));
+      }
+      set({ brokers: { ...get().brokers, credentials: updated } });
+    },
+
+    clearBrokerCredentials(brokerId) {
+      const updated = { ...get().brokers.credentials };
+      delete updated[brokerId];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(LS_BROKERS_KEY, JSON.stringify(updated));
+      }
+      set({ brokers: { ...get().brokers, credentials: updated } });
+    },
+
+    isBrokerConfigured(brokerId) {
+      const creds = get().brokers.credentials[brokerId];
+      if (!creds) return false;
+      // Check that at least one non-empty value exists
+      return Object.values(creds).some((v) => v.trim() !== '');
+    },
+
+    hydrateBrokers() {
+      if (typeof window === 'undefined') return;
+      try {
+        const raw = localStorage.getItem(LS_BROKERS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          set({ brokers: { ...get().brokers, credentials: parsed } });
+        }
+      } catch {
+        // ignore corrupt data
+      }
+    },
+  },
 }));
 
 // ─────────────────────────────────────────────
@@ -205,3 +365,4 @@ export const useAuth = () => useStore((s) => s.auth);
 export const useEngine = () => useStore((s) => s.engine);
 export const useRealtime = () => useStore((s) => s.realtime);
 export const useSidebar = () => useStore((s) => s.sidebar);
+export const useBrokers = () => useStore((s) => s.brokers);

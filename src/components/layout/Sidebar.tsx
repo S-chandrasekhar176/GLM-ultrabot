@@ -16,7 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useSidebar, useAuth } from '@/lib/store';
+import { useSidebar, useAuth, useStore, BROKER_LIST } from '@/lib/store';
 import { theme } from '@/styles/theme';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
@@ -42,23 +42,34 @@ const navItems = [
 // ─────────────────────────────────────────────
 
 function EngineIndicator({ collapsed }: { collapsed: boolean }) {
-  const status = 'running'; // Will be read from store
+  const { status, mode, activeBroker } = useStore((s) => s.engine);
+  const isRunning = status === 'running';
+  const brokerName = activeBroker ? BROKER_LIST.find((b) => b.id === activeBroker)?.name : null;
 
   return (
     <div className="flex items-center gap-2 px-3 py-2">
       <span
-        className="inline-block h-2.5 w-2.5 rounded-full animate-pulse"
+        className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
         style={{
-          backgroundColor: status === 'running' ? theme.colors.profit : theme.colors.loss,
-          boxShadow: status === 'running'
-            ? `0 0 6px ${theme.colors.profit}`
-            : `0 0 6px ${theme.colors.loss}`,
+          backgroundColor: isRunning ? theme.colors.profit : theme.colors.textDisabled,
+          boxShadow: isRunning ? `0 0 6px ${theme.colors.profit}` : 'none',
+          animation: isRunning ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
         }}
       />
       {!collapsed && (
-        <span className="text-xs font-medium" style={{ color: theme.colors.textMuted }}>
-          Engine {status === 'running' ? 'Running' : 'Stopped'}
-        </span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-xs font-medium" style={{ color: isRunning ? theme.colors.profit : theme.colors.textDisabled }}>
+            {isRunning ? 'Running' : 'Stopped'}
+            {mode && (
+              <span className="ml-1.5 text-[10px] px-1.5 py-0 rounded" style={{ backgroundColor: mode === 'live' ? theme.colors.loss + '15' : theme.colors.accentMuted, color: mode === 'live' ? theme.colors.loss : theme.colors.accent }}>
+                {mode}
+              </span>
+            )}
+          </span>
+          {isRunning && brokerName && (
+            <span className="text-[10px] truncate" style={{ color: theme.colors.textDisabled }}>{brokerName}</span>
+          )}
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,917 @@
+   220→    setTimeout(() => {
+   221→      setBroker((p) => ({
+   222→        ...p,
+   223→        angelOne: { ...p.angelOne, status: 'Connected', tokenExpiry: '2025-08-17 09:15 IST' },
+   224→      }));
+   225→      setTestingAngel(false);
+   226→      toast.success('Angel One connection successful');
+   227→    }, 1500);
+   228→  }, []);
+   229→
+   230→  const handleTestShoonya = useCallback(() => {
+   231→    setTestingShoonya(true);
+   232→    setTimeout(() => {
+   233→      setBroker((p) => ({
+   234→        ...p,
+   235→        shoonya: { ...p.shoonya, status: 'Connected' },
+   236→      }));
+   237→      setTestingShoonya(false);
+   238→      toast.success('Shoonya connection successful');
+   239→    }, 1500);
+   240→  }, []);
+   241→
+   242→  const handleTestTelegram = useCallback(() => {
+   243→    setTestingTelegram(true);
+   244→    setTimeout(() => {
+   245→      setTestingTelegram(false);
+   246→      toast.success('Telegram test notification sent');
+   247→    }, 1500);
+   248→  }, []);
+   249→
+   250→  const handleSave = useCallback((section: string) => {
+   251→    toast.success(`${section} settings saved successfully`);
+   252→  }, []);
+   253→
+   254→  // Helper for number input updates
+   255→  const updateRisk = (key: keyof RiskConfig, value: number | string | boolean) => {
+   256→    setRisk((p) => ({ ...p, [key]: value }));
+   257→  };
+   258→
+   259→  const updateNotifications = (key: keyof NotificationConfig, value: boolean | string) => {
+   260→    setNotifications((p) => ({ ...p, [key]: value }));
+   261→  };
+   262→
+   263→  return (
+   264→    <div className="space-y-6">
+   265→      {/* Page Header */}
+   266→      <div className="flex items-center gap-3">
+   267→        <div className="h-10 w-10 rounded-lg bg-ub-accent/10 flex items-center justify-center">
+   268→          <Settings className="h-5 w-5 text-ub-accent" />
+   269→        </div>
+   270→        <div>
+   271→          <h1 className="text-2xl font-bold text-ub-text-primary">Settings</h1>
+   272→          <p className="text-sm text-ub-text-muted">Configure brokers, risk parameters, notifications, and more</p>
+   273→        </div>
+   274→      </div>
+   275→
+   276→      {/* Tabs */}
+   277→      <Tabs defaultValue="brokers" className="space-y-6">
+   278→        <TabsList className="bg-ub-surface border border-ub-border p-1 h-auto flex-wrap gap-1">
+   279→          <TabsTrigger
+   280→            value="brokers"
+   281→            className="data-[state=active]:bg-ub-accent/15 data-[state=active]:text-ub-accent text-ub-text-muted text-sm px-4 py-2 rounded-md"
+   282→          >
+   283→            <Plug className="h-4 w-4 mr-1.5" />
+   284→            Brokers
+   285→          </TabsTrigger>
+   286→          <TabsTrigger
+   287→            value="risk"
+   288→            className="data-[state=active]:bg-ub-accent/15 data-[state=active]:text-ub-accent text-ub-text-muted text-sm px-4 py-2 rounded-md"
+   289→          >
+   290→            <ShieldCheck className="h-4 w-4 mr-1.5" />
+   291→            Risk Parameters
+   292→          </TabsTrigger>
+   293→          <TabsTrigger
+   294→            value="notifications"
+   295→            className="data-[state=active]:bg-ub-accent/15 data-[state=active]:text-ub-accent text-ub-text-muted text-sm px-4 py-2 rounded-md"
+   296→          >
+   297→            <Bell className="h-4 w-4 mr-1.5" />
+   298→            Notifications
+   299→          </TabsTrigger>
+   300→          <TabsTrigger
+   301→            value="capital"
+   302→            className="data-[state=active]:bg-ub-accent/15 data-[state=active]:text-ub-accent text-ub-text-muted text-sm px-4 py-2 rounded-md"
+   303→          >
+   304→            <Wallet className="h-4 w-4 mr-1.5" />
+   305→            Capital
+   306→          </TabsTrigger>
+   307→          <TabsTrigger
+   308→            value="general"
+   309→            className="data-[state=active]:bg-ub-accent/15 data-[state=active]:text-ub-accent text-ub-text-muted text-sm px-4 py-2 rounded-md"
+   310→          >
+   311→            <Cog className="h-4 w-4 mr-1.5" />
+   312→            General
+   313→          </TabsTrigger>
+   314→        </TabsList>
+   315→
+   316→        {/* ═══════════════════════════════════════ */}
+   317→        {/* Tab: Brokers                             */}
+   318→        {/* ═══════════════════════════════════════ */}
+   319→        <TabsContent value="brokers" className="space-y-6">
+   320→          {/* Trading Mode */}
+   321→          <Card className="bg-ub-surface border-ub-border">
+   322→            <CardHeader className="pb-3">
+   323→              <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   324→                <Radio className="h-4 w-4 text-ub-accent" />
+   325→                Trading Mode
+   326→              </CardTitle>
+   327→            </CardHeader>
+   328→            <CardContent>
+   329→              <div className="grid grid-cols-2 gap-4 max-w-md">
+   330→                <button
+   331→                  onClick={() => setTradingMode('paper')}
+   332→                  className={`p-4 rounded-lg border-2 text-center transition-all ${
+   333→                    tradingMode === 'paper'
+   334→                      ? 'border-ub-accent bg-ub-accent/10'
+   335→                      : 'border-ub-border bg-ub-background hover:border-ub-border-hover'
+   336→                  }`}
+   337→                >
+   338→                  <p className="text-sm font-semibold" style={{ color: tradingMode === 'paper' ? '#00d09c' : '#94a3b8' }}>
+   339→                    Paper Trading
+   340→                  </p>
+   341→                  <p className="text-xs text-ub-text-muted mt-1">Simulated trades</p>
+   342→                </button>
+   343→                <button
+   344→                  onClick={() => setTradingMode('live')}
+   345→                  className={`p-4 rounded-lg border-2 text-center transition-all ${
+   346→                    tradingMode === 'live'
+   347→                      ? 'border-ub-accent bg-ub-accent/10'
+   348→                      : 'border-ub-border bg-ub-background hover:border-ub-border-hover'
+   349→                  }`}
+   350→                >
+   351→                  <p className="text-sm font-semibold" style={{ color: tradingMode === 'live' ? '#00d09c' : '#94a3b8' }}>
+   352→                    Live Trading
+   353→                  </p>
+   354→                  <p className="text-xs text-ub-text-muted mt-1">Real orders</p>
+   355→                </button>
+   356→              </div>
+   357→            </CardContent>
+   358→          </Card>
+   359→
+   360→          {/* Angel One */}
+   361→          <Card className="bg-ub-surface border-ub-border">
+   362→            <CardHeader className="pb-3">
+   363→              <div className="flex items-center justify-between">
+   364→                <CardTitle className="text-base font-semibold text-ub-text-primary">Angel One</CardTitle>
+   365→                <Badge
+   366→                  variant="outline"
+   367→                  className={`text-[10px] font-semibold ${
+   368→                    broker.angelOne.status === 'Connected'
+   369→                      ? 'border-ub-profit/40 text-ub-profit bg-ub-profit/10'
+   370→                      : 'border-ub-loss/40 text-ub-loss bg-ub-loss/10'
+   371→                  }`}
+   372→                >
+   373→                  <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${
+   374→                    broker.angelOne.status === 'Connected' ? 'bg-ub-profit' : 'bg-ub-loss'
+   375→                  }`} />
+   376→                  {broker.angelOne.status}
+   377→                </Badge>
+   378→              </div>
+   379→            </CardHeader>
+   380→            <CardContent className="space-y-4">
+   381→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   382→                <div className="space-y-2">
+   383→                  <Label className="text-ub-text-muted text-sm">API Key</Label>
+   384→                  <Input
+   385→                    value={broker.angelOne.apiKey}
+   386→                    onChange={(e) => setBroker((p) => ({ ...p, angelOne: { ...p.angelOne, apiKey: e.target.value } }))}
+   387→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   388→                  />
+   389→                </div>
+   390→                <div className="space-y-2">
+   391→                  <Label className="text-ub-text-muted text-sm">Client Code</Label>
+   392→                  <Input
+   393→                    value={broker.angelOne.clientCode}
+   394→                    onChange={(e) => setBroker((p) => ({ ...p, angelOne: { ...p.angelOne, clientCode: e.target.value } }))}
+   395→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   396→                  />
+   397→                </div>
+   398→                <div className="space-y-2">
+   399→                  <Label className="text-ub-text-muted text-sm">PIN</Label>
+   400→                  <Input
+   401→                    type="password"
+   402→                    value={broker.angelOne.pin}
+   403→                    onChange={(e) => setBroker((p) => ({ ...p, angelOne: { ...p.angelOne, pin: e.target.value } }))}
+   404→                    placeholder="••••"
+   405→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   406→                  />
+   407→                </div>
+   408→                <div className="space-y-2">
+   409→                  <Label className="text-ub-text-muted text-sm">Token Expiry</Label>
+   410→                  <div className="flex items-center h-10 px-3 rounded-md bg-ub-background border border-ub-border">
+   411→                    <span className="text-sm text-ub-text-muted">{broker.angelOne.tokenExpiry}</span>
+   412→                  </div>
+   413→                </div>
+   414→              </div>
+   415→              <div className="flex justify-end">
+   416→                <Button
+   417→                  onClick={handleTestAngel}
+   418→                  disabled={testingAngel}
+   419→                  variant="outline"
+   420→                  className="border-ub-accent/40 text-ub-accent hover:bg-ub-accent/10 hover:text-ub-accent"
+   421→                >
+   422→                  {testingAngel ? (
+   423→                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   424→                  ) : (
+   425→                    <TestTube className="h-4 w-4 mr-2" />
+   426→                  )}
+   427→                  Test Connection
+   428→                </Button>
+   429→              </div>
+   430→            </CardContent>
+   431→          </Card>
+   432→
+   433→          {/* Shoonya */}
+   434→          <Card className="bg-ub-surface border-ub-border">
+   435→            <CardHeader className="pb-3">
+   436→              <div className="flex items-center justify-between">
+   437→                <CardTitle className="text-base font-semibold text-ub-text-primary">Shoonya</CardTitle>
+   438→                <Badge
+   439→                  variant="outline"
+   440→                  className={`text-[10px] font-semibold ${
+   441→                    broker.shoonya.status === 'Connected'
+   442→                      ? 'border-ub-profit/40 text-ub-profit bg-ub-profit/10'
+   443→                      : 'border-ub-loss/40 text-ub-loss bg-ub-loss/10'
+   444→                  }`}
+   445→                >
+   446→                  <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${
+   447→                    broker.shoonya.status === 'Connected' ? 'bg-ub-profit' : 'bg-ub-loss'
+   448→                  }`} />
+   449→                  {broker.shoonya.status}
+   450→                </Badge>
+   451→              </div>
+   452→            </CardHeader>
+   453→            <CardContent className="space-y-4">
+   454→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   455→                <div className="space-y-2">
+   456→                  <Label className="text-ub-text-muted text-sm">User ID</Label>
+   457→                  <Input
+   458→                    value={broker.shoonya.userId}
+   459→                    onChange={(e) => setBroker((p) => ({ ...p, shoonya: { ...p.shoonya, userId: e.target.value } }))}
+   460→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   461→                  />
+   462→                </div>
+   463→                <div className="space-y-2">
+   464→                  <Label className="text-ub-text-muted text-sm">Password</Label>
+   465→                  <Input
+   466→                    type="password"
+   467→                    value={broker.shoonya.password}
+   468→                    onChange={(e) => setBroker((p) => ({ ...p, shoonya: { ...p.shoonya, password: e.target.value } }))}
+   469→                    placeholder="••••••••"
+   470→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   471→                  />
+   472→                </div>
+   473→                <div className="space-y-2">
+   474→                  <Label className="text-ub-text-muted text-sm">Vendor Code</Label>
+   475→                  <Input
+   476→                    value={broker.shoonya.vendorCode}
+   477→                    onChange={(e) => setBroker((p) => ({ ...p, shoonya: { ...p.shoonya, vendorCode: e.target.value } }))}
+   478→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   479→                  />
+   480→                </div>
+   481→                <div className="space-y-2">
+   482→                  <Label className="text-ub-text-muted text-sm">App Key</Label>
+   483→                  <Input
+   484→                    value={broker.shoonya.appKey}
+   485→                    onChange={(e) => setBroker((p) => ({ ...p, shoonya: { ...p.shoonya, appKey: e.target.value } }))}
+   486→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   487→                  />
+   488→                </div>
+   489→              </div>
+   490→              <div className="flex justify-end">
+   491→                <Button
+   492→                  onClick={handleTestShoonya}
+   493→                  disabled={testingShoonya}
+   494→                  variant="outline"
+   495→                  className="border-ub-accent/40 text-ub-accent hover:bg-ub-accent/10 hover:text-ub-accent"
+   496→                >
+   497→                  {testingShoonya ? (
+   498→                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   499→                  ) : (
+   500→                    <TestTube className="h-4 w-4 mr-2" />
+   501→                  )}
+   502→                  Test Connection
+   503→                </Button>
+   504→              </div>
+   505→            </CardContent>
+   506→          </Card>
+   507→
+   508→          <div className="flex justify-end">
+   509→            <Button onClick={() => handleSave('Brokers')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+   510→              <Save className="h-4 w-4 mr-2" />
+   511→              Save Changes
+   512→            </Button>
+   513→          </div>
+   514→        </TabsContent>
+   515→
+   516→        {/* ═══════════════════════════════════════ */}
+   517→        {/* Tab: Risk Parameters                    */}
+   518→        {/* ═══════════════════════════════════════ */}
+   519→        <TabsContent value="risk" className="space-y-6">
+   520→          {/* Position Limits */}
+   521→          <Card className="bg-ub-surface border-ub-border">
+   522→            <CardHeader className="pb-3">
+   523→              <CardTitle className="text-base font-semibold text-ub-text-primary">Position Limits</CardTitle>
+   524→            </CardHeader>
+   525→            <CardContent>
+   526→              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+   527→                <div className="space-y-2">
+   528→                  <Label className="text-ub-text-muted text-sm">Max Open Positions</Label>
+   529→                  <Input
+   530→                    type="number"
+   531→                    value={risk.maxOpenPositions}
+   532→                    onChange={(e) => updateRisk('maxOpenPositions', Number(e.target.value))}
+   533→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   534→                  />
+   535→                </div>
+   536→                <div className="space-y-2">
+   537→                  <Label className="text-ub-text-muted text-sm">Max Per Sector</Label>
+   538→                  <Input
+   539→                    type="number"
+   540→                    value={risk.maxPerSector}
+   541→                    onChange={(e) => updateRisk('maxPerSector', Number(e.target.value))}
+   542→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   543→                  />
+   544→                </div>
+   545→                <div className="space-y-2">
+   546→                  <Label className="text-ub-text-muted text-sm">Max Daily Trades</Label>
+   547→                  <Input
+   548→                    type="number"
+   549→                    value={risk.maxDailyTrades}
+   550→                    onChange={(e) => updateRisk('maxDailyTrades', Number(e.target.value))}
+   551→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   552→                  />
+   553→                </div>
+   554→              </div>
+   555→            </CardContent>
+   556→          </Card>
+   557→
+   558→          {/* Loss Limits */}
+   559→          <Card className="bg-ub-surface border-ub-border">
+   560→            <CardHeader className="pb-3">
+   561→              <CardTitle className="text-base font-semibold text-ub-text-primary">Loss Limits</CardTitle>
+   562→            </CardHeader>
+   563→            <CardContent>
+   564→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   565→                <div className="space-y-2">
+   566→                  <Label className="text-ub-text-muted text-sm">Max Daily Loss (%)</Label>
+   567→                  <Input
+   568→                    type="number"
+   569→                    step="0.5"
+   570→                    value={risk.maxDailyLossPct}
+   571→                    onChange={(e) => updateRisk('maxDailyLossPct', Number(e.target.value))}
+   572→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   573→                  />
+   574→                </div>
+   575→                <div className="space-y-2">
+   576→                  <Label className="text-ub-text-muted text-sm">Max Consecutive Losses</Label>
+   577→                  <Input
+   578→                    type="number"
+   579→                    value={risk.maxConsecutiveLosses}
+   580→                    onChange={(e) => updateRisk('maxConsecutiveLosses', Number(e.target.value))}
+   581→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   582→                  />
+   583→                </div>
+   584→                <div className="space-y-2">
+   585→                  <Label className="text-ub-text-muted text-sm">Cool-off Minutes</Label>
+   586→                  <Input
+   587→                    type="number"
+   588→                    value={risk.coolOffMinutes}
+   589→                    onChange={(e) => updateRisk('coolOffMinutes', Number(e.target.value))}
+   590→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   591→                  />
+   592→                </div>
+   593→                <div className="space-y-2">
+   594→                  <Label className="text-ub-text-muted text-sm">Max Drawdown (%)</Label>
+   595→                  <Input
+   596→                    type="number"
+   597→                    value={risk.maxDrawdownPct}
+   598→                    onChange={(e) => updateRisk('maxDrawdownPct', Number(e.target.value))}
+   599→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   600→                  />
+   601→                </div>
+   602→              </div>
+   603→            </CardContent>
+   604→          </Card>
+   605→
+   606→          {/* Trade Filters */}
+   607→          <Card className="bg-ub-surface border-ub-border">
+   608→            <CardHeader className="pb-3">
+   609→              <CardTitle className="text-base font-semibold text-ub-text-primary">Trade Filters</CardTitle>
+   610→            </CardHeader>
+   611→            <CardContent>
+   612→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   613→                <div className="space-y-2">
+   614→                  <Label className="text-ub-text-muted text-sm">VIX Threshold</Label>
+   615→                  <Input
+   616→                    type="number"
+   617→                    value={risk.vixThreshold}
+   618→                    onChange={(e) => updateRisk('vixThreshold', Number(e.target.value))}
+   619→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   620→                  />
+   621→                </div>
+   622→                <div className="space-y-2">
+   623→                  <Label className="text-ub-text-muted text-sm">Min Signal Confidence</Label>
+   624→                  <Input
+   625→                    type="number"
+   626→                    step="0.05"
+   627→                    value={risk.minSignalConfidence}
+   628→                    onChange={(e) => updateRisk('minSignalConfidence', Number(e.target.value))}
+   629→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   630→                  />
+   631→                </div>
+   632→                <div className="space-y-2">
+   633→                  <Label className="text-ub-text-muted text-sm">New Trade Window Start</Label>
+   634→                  <Input
+   635→                    type="time"
+   636→                    value={risk.newTradeWindowStart}
+   637→                    onChange={(e) => updateRisk('newTradeWindowStart', e.target.value)}
+   638→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   639→                  />
+   640→                </div>
+   641→                <div className="space-y-2">
+   642→                  <Label className="text-ub-text-muted text-sm">New Trade Window End</Label>
+   643→                  <Input
+   644→                    type="time"
+   645→                    value={risk.newTradeWindowEnd}
+   646→                    onChange={(e) => updateRisk('newTradeWindowEnd', e.target.value)}
+   647→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   648→                  />
+   649→                </div>
+   650→              </div>
+   651→            </CardContent>
+   652→          </Card>
+   653→
+   654→          {/* Position Sizing */}
+   655→          <Card className="bg-ub-surface border-ub-border">
+   656→            <CardHeader className="pb-3">
+   657→              <CardTitle className="text-base font-semibold text-ub-text-primary">Position Sizing</CardTitle>
+   658→            </CardHeader>
+   659→            <CardContent>
+   660→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   661→                <div className="space-y-2">
+   662→                  <Label className="text-ub-text-muted text-sm">Method</Label>
+   663→                  <Select
+   664→                    value={risk.positionSizingMethod}
+   665→                    onValueChange={(v) => updateRisk('positionSizingMethod', v)}
+   666→                  >
+   667→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   668→                      <SelectValue />
+   669→                    </SelectTrigger>
+   670→                    <SelectContent className="bg-ub-surface border-ub-border">
+   671→                      <SelectItem value="Dynamic Kelly" className="text-ub-text-primary">Dynamic Kelly</SelectItem>
+   672→                      <SelectItem value="Fixed" className="text-ub-text-primary">Fixed</SelectItem>
+   673→                      <SelectItem value="Risk Percent" className="text-ub-text-primary">Risk Percent</SelectItem>
+   674→                    </SelectContent>
+   675→                  </Select>
+   676→                </div>
+   677→                <div className="space-y-2">
+   678→                  <Label className="text-ub-text-muted text-sm">Kelly Min Fraction</Label>
+   679→                  <Input
+   680→                    type="number"
+   681→                    step="0.05"
+   682→                    value={risk.kellyMinFraction}
+   683→                    onChange={(e) => updateRisk('kellyMinFraction', Number(e.target.value))}
+   684→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   685→                  />
+   686→                </div>
+   687→                <div className="space-y-2">
+   688→                  <Label className="text-ub-text-muted text-sm">Kelly Max Fraction</Label>
+   689→                  <Input
+   690→                    type="number"
+   691→                    step="0.05"
+   692→                    value={risk.kellyMaxFraction}
+   693→                    onChange={(e) => updateRisk('kellyMaxFraction', Number(e.target.value))}
+   694→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   695→                  />
+   696→                </div>
+   697→                <div className="space-y-2">
+   698→                  <Label className="text-ub-text-muted text-sm">Min Position Size (₹)</Label>
+   699→                  <Input
+   700→                    type="number"
+   701→                    value={risk.minPositionSize}
+   702→                    onChange={(e) => updateRisk('minPositionSize', Number(e.target.value))}
+   703→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   704→                  />
+   705→                </div>
+   706→              </div>
+   707→            </CardContent>
+   708→          </Card>
+   709→
+   710→          {/* Partial Booking */}
+   711→          <Card className="bg-ub-surface border-ub-border">
+   712→            <CardHeader className="pb-3">
+   713→              <div className="flex items-center justify-between">
+   714→                <CardTitle className="text-base font-semibold text-ub-text-primary">Partial Booking</CardTitle>
+   715→                <Switch
+   716→                  checked={risk.partialBookingEnabled}
+   717→                  onCheckedChange={(v) => updateRisk('partialBookingEnabled', v)}
+   718→                  className="data-[state=checked]:bg-ub-accent"
+   719→                />
+   720→              </div>
+   721→            </CardHeader>
+   722→            <CardContent className={risk.partialBookingEnabled ? '' : 'opacity-50 pointer-events-none'}>
+   723→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+   724→                <div className="space-y-2">
+   725→                  <Label className="text-ub-text-muted text-sm">Level 1 — RR Ratio</Label>
+   726→                  <Input
+   727→                    type="number"
+   728→                    step="0.1"
+   729→                    value={risk.partialBookingLevel1RR}
+   730→                    onChange={(e) => updateRisk('partialBookingLevel1RR', Number(e.target.value))}
+   731→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   732→                  />
+   733→                  <Label className="text-ub-text-muted text-sm">Book %</Label>
+   734→                  <Input
+   735→                    type="number"
+   736→                    value={risk.partialBookingLevel1Pct}
+   737→                    onChange={(e) => updateRisk('partialBookingLevel1Pct', Number(e.target.value))}
+   738→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   739→                  />
+   740→                </div>
+   741→                <div className="space-y-2">
+   742→                  <Label className="text-ub-text-muted text-sm">Level 2 — RR Ratio</Label>
+   743→                  <Input
+   744→                    type="number"
+   745→                    step="0.1"
+   746→                    value={risk.partialBookingLevel2RR}
+   747→                    onChange={(e) => updateRisk('partialBookingLevel2RR', Number(e.target.value))}
+   748→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   749→                  />
+   750→                  <Label className="text-ub-text-muted text-sm">Book %</Label>
+   751→                  <Input
+   752→                    type="number"
+   753→                    value={risk.partialBookingLevel2Pct}
+   754→                    onChange={(e) => updateRisk('partialBookingLevel2Pct', Number(e.target.value))}
+   755→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   756→                  />
+   757→                </div>
+   758→                <div className="space-y-2">
+   759→                  <Label className="text-ub-text-muted text-sm">Level 3 — RR Ratio</Label>
+   760→                  <Input
+   761→                    type="number"
+   762→                    step="0.1"
+   763→                    value={risk.partialBookingLevel3RR}
+   764→                    onChange={(e) => updateRisk('partialBookingLevel3RR', Number(e.target.value))}
+   765→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   766→                  />
+   767→                  <Label className="text-ub-text-muted text-sm">Book %</Label>
+   768→                  <Input
+   769→                    type="number"
+   770→                    value={risk.partialBookingLevel3Pct}
+   771→                    onChange={(e) => updateRisk('partialBookingLevel3Pct', Number(e.target.value))}
+   772→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   773→                  />
+   774→                </div>
+   775→              </div>
+   776→              <Separator className="my-4 bg-ub-border" />
+   777→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   778→                <div className="space-y-2">
+   779→                  <Label className="text-ub-text-muted text-sm">Trailing SL Method</Label>
+   780→                  <Select
+   781→                    value={risk.trailingSLMethod}
+   782→                    onValueChange={(v) => updateRisk('trailingSLMethod', v)}
+   783→                  >
+   784→                    <SelectTrigger className="bg-ub-background border-ub-border text-ub-text-primary">
+   785→                      <SelectValue />
+   786→                    </SelectTrigger>
+   787→                    <SelectContent className="bg-ub-surface border-ub-border">
+   788→                      <SelectItem value="Fixed Step" className="text-ub-text-primary">Fixed Step</SelectItem>
+   789→                      <SelectItem value="ATR Based" className="text-ub-text-primary">ATR Based</SelectItem>
+   790→                      <SelectItem value="Percentage" className="text-ub-text-primary">Percentage</SelectItem>
+   791→                      <SelectItem value="Swing High/Low" className="text-ub-text-primary">Swing High/Low</SelectItem>
+   792→                    </SelectContent>
+   793→                  </Select>
+   794→                </div>
+   795→                <div className="space-y-2">
+   796→                  <Label className="text-ub-text-muted text-sm">Trailing Step (%)</Label>
+   797→                  <Input
+   798→                    type="number"
+   799→                    step="0.1"
+   800→                    value={risk.trailingStepPct}
+   801→                    onChange={(e) => updateRisk('trailingStepPct', Number(e.target.value))}
+   802→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   803→                  />
+   804→                </div>
+   805→              </div>
+   806→            </CardContent>
+   807→          </Card>
+   808→
+   809→          <div className="flex justify-end">
+   810→            <Button onClick={() => handleSave('Risk Parameters')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+   811→              <Save className="h-4 w-4 mr-2" />
+   812→              Save Changes
+   813→            </Button>
+   814→          </div>
+   815→        </TabsContent>
+   816→
+   817→        {/* ═══════════════════════════════════════ */}
+   818→        {/* Tab: Notifications                      */}
+   819→        {/* ═══════════════════════════════════════ */}
+   820→        <TabsContent value="notifications" className="space-y-6">
+   821→          {/* Telegram */}
+   822→          <Card className="bg-ub-surface border-ub-border">
+   823→            <CardHeader className="pb-3">
+   824→              <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   825→                <span className="text-lg">📨</span>
+   826→                Telegram
+   827→              </CardTitle>
+   828→            </CardHeader>
+   829→            <CardContent className="space-y-4">
+   830→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   831→                <div className="space-y-2">
+   832→                  <Label className="text-ub-text-muted text-sm">Bot Token</Label>
+   833→                  <Input
+   834→                    value={notifications.telegramBotToken}
+   835→                    onChange={(e) => updateNotifications('telegramBotToken', e.target.value)}
+   836→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   837→                  />
+   838→                </div>
+   839→                <div className="space-y-2">
+   840→                  <Label className="text-ub-text-muted text-sm">Chat ID</Label>
+   841→                  <Input
+   842→                    value={notifications.telegramChatId}
+   843→                    onChange={(e) => updateNotifications('telegramChatId', e.target.value)}
+   844→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   845→                  />
+   846→                </div>
+   847→              </div>
+   848→              <div className="flex justify-end">
+   849→                <Button
+   850→                  onClick={handleTestTelegram}
+   851→                  disabled={testingTelegram}
+   852→                  variant="outline"
+   853→                  className="border-ub-accent/40 text-ub-accent hover:bg-ub-accent/10 hover:text-ub-accent"
+   854→                >
+   855→                  {testingTelegram ? (
+   856→                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+   857→                  ) : (
+   858→                    <TestTube className="h-4 w-4 mr-2" />
+   859→                  )}
+   860→                  Test Notification
+   861→                </Button>
+   862→              </div>
+   863→            </CardContent>
+   864→          </Card>
+   865→
+   866→          {/* Alert Types */}
+   867→          <Card className="bg-ub-surface border-ub-border">
+   868→            <CardHeader className="pb-3">
+   869→              <CardTitle className="text-base font-semibold text-ub-text-primary">Alert Types</CardTitle>
+   870→            </CardHeader>
+   871→            <CardContent>
+   872→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+   873→                {[
+   874→                  { key: 'alertTradeExecuted' as const, label: 'Trade Executed' },
+   875→                  { key: 'alertPartialBooking' as const, label: 'Partial Booking' },
+   876→                  { key: 'alertStopLoss' as const, label: 'Stop Loss Hit' },
+   877→                  { key: 'alertTargetHit' as const, label: 'Target Hit' },
+   878→                  { key: 'alertRiskWarning' as const, label: 'Risk Limit Warning' },
+   879→                  { key: 'alertEngineStatus' as const, label: 'Engine Status Change' },
+   880→                  { key: 'alertError' as const, label: 'Error Alert' },
+   881→                  { key: 'alertEODReport' as const, label: 'EOD Report' },
+   882→                ].map((item) => (
+   883→                  <div key={item.key} className="flex items-center justify-between py-1">
+   884→                    <Label className="text-sm text-ub-text-primary cursor-pointer">{item.label}</Label>
+   885→                    <Switch
+   886→                      checked={notifications[item.key] as boolean}
+   887→                      onCheckedChange={(v) => updateNotifications(item.key, v)}
+   888→                      className="data-[state=checked]:bg-ub-accent"
+   889→                    />
+   890→                  </div>
+   891→                ))}
+   892→              </div>
+   893→            </CardContent>
+   894→          </Card>
+   895→
+   896→          {/* Schedule */}
+   897→          <Card className="bg-ub-surface border-ub-border">
+   898→            <CardHeader className="pb-3">
+   899→              <CardTitle className="text-base font-semibold text-ub-text-primary">Schedule</CardTitle>
+   900→            </CardHeader>
+   901→            <CardContent>
+   902→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   903→                <div className="space-y-2">
+   904→                  <Label className="text-ub-text-muted text-sm">Morning Briefing Time</Label>
+   905→                  <Input
+   906→                    type="time"
+   907→                    value={notifications.morningBriefingTime}
+   908→                    onChange={(e) => updateNotifications('morningBriefingTime', e.target.value)}
+   909→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   910→                  />
+   911→                </div>
+   912→                <div className="space-y-2">
+   913→                  <Label className="text-ub-text-muted text-sm">EOD Report Time</Label>
+   914→                  <Input
+   915→                    type="time"
+   916→                    value={notifications.eodReportTime}
+   917→                    onChange={(e) => updateNotifications('eodReportTime', e.target.value)}
+   918→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   919→                  />
+   920→                </div>
+   921→              </div>
+   922→            </CardContent>
+   923→          </Card>
+   924→
+   925→          <div className="flex justify-end">
+   926→            <Button onClick={() => handleSave('Notifications')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+   927→              <Save className="h-4 w-4 mr-2" />
+   928→              Save Changes
+   929→            </Button>
+   930→          </div>
+   931→        </TabsContent>
+   932→
+   933→        {/* ═══════════════════════════════════════ */}
+   934→        {/* Tab: Capital                             */}
+   935→        {/* ═══════════════════════════════════════ */}
+   936→        <TabsContent value="capital" className="space-y-6">
+   937→          <Card className="bg-ub-surface border-ub-border">
+   938→            <CardHeader className="pb-3">
+   939→              <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+   940→                <Wallet className="h-4 w-4 text-ub-accent" />
+   941→                Capital Configuration
+   942→              </CardTitle>
+   943→            </CardHeader>
+   944→            <CardContent className="space-y-6">
+   945→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   946→                <div className="space-y-2">
+   947→                  <Label className="text-ub-text-muted text-sm">Virtual Capital (₹)</Label>
+   948→                  <Input
+   949→                    type="number"
+   950→                    value={capital.virtualCapital}
+   951→                    onChange={(e) => setCapital((p) => ({ ...p, virtualCapital: Number(e.target.value) }))}
+   952→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   953→                  />
+   954→                </div>
+   955→                <div className="space-y-2">
+   956→                  <Label className="text-ub-text-muted text-sm">Min Position Size (₹)</Label>
+   957→                  <Input
+   958→                    type="number"
+   959→                    value={capital.minPositionSize}
+   960→                    onChange={(e) => setCapital((p) => ({ ...p, minPositionSize: Number(e.target.value) }))}
+   961→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+   962→                  />
+   963→                </div>
+   964→              </div>
+   965→
+   966→              {/* Max Capital Usage Slider */}
+   967→              <div className="space-y-3">
+   968→                <div className="flex items-center justify-between">
+   969→                  <Label className="text-ub-text-muted text-sm">Max Capital Usage</Label>
+   970→                  <span className="text-sm font-semibold text-ub-accent">{capital.maxCapitalUsagePct}%</span>
+   971→                </div>
+   972→                <div className="relative">
+   973→                  <div className="w-full h-2 bg-ub-background rounded-full overflow-hidden">
+   974→                    <div
+   975→                      className="h-full bg-ub-accent rounded-full transition-all duration-200"
+   976→                      style={{ width: `${capital.maxCapitalUsagePct}%` }}
+   977→                    />
+   978→                  </div>
+   979→                  <input
+   980→                    type="range"
+   981→                    min="10"
+   982→                    max="100"
+   983→                    step="5"
+   984→                    value={capital.maxCapitalUsagePct}
+   985→                    onChange={(e) => setCapital((p) => ({ ...p, maxCapitalUsagePct: Number(e.target.value) }))}
+   986→                    className="absolute top-0 left-0 w-full h-2 opacity-0 cursor-pointer"
+   987→                  />
+   988→                </div>
+   989→                <div className="flex justify-between text-xs text-ub-text-disabled">
+   990→                  <span>10%</span>
+   991→                  <span>100%</span>
+   992→                </div>
+   993→              </div>
+   994→
+   995→              {/* Per-Position Max Slider */}
+   996→              <div className="space-y-3">
+   997→                <div className="flex items-center justify-between">
+   998→                  <Label className="text-ub-text-muted text-sm">Per-Position Max</Label>
+   999→                  <span className="text-sm font-semibold text-ub-accent">{capital.perPositionMaxPct}%</span>
+  1000→                </div>
+  1001→                <div className="relative">
+  1002→                  <div className="w-full h-2 bg-ub-background rounded-full overflow-hidden">
+  1003→                    <div
+  1004→                      className="h-full bg-ub-warning rounded-full transition-all duration-200"
+  1005→                      style={{ width: `${capital.perPositionMaxPct * 5}%` }}
+  1006→                    />
+  1007→                  </div>
+  1008→                  <input
+  1009→                    type="range"
+  1010→                    min="5"
+  1011→                    max="50"
+  1012→                    step="5"
+  1013→                    value={capital.perPositionMaxPct}
+  1014→                    onChange={(e) => setCapital((p) => ({ ...p, perPositionMaxPct: Number(e.target.value) }))}
+  1015→                    className="absolute top-0 left-0 w-full h-2 opacity-0 cursor-pointer"
+  1016→                  />
+  1017→                </div>
+  1018→                <div className="flex justify-between text-xs text-ub-text-disabled">
+  1019→                  <span>5%</span>
+  1020→                  <span>50%</span>
+  1021→                </div>
+  1022→              </div>
+  1023→            </CardContent>
+  1024→          </Card>
+  1025→
+  1026→          <div className="flex justify-end">
+  1027→            <Button onClick={() => handleSave('Capital')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+  1028→              <Save className="h-4 w-4 mr-2" />
+  1029→              Save Changes
+  1030→            </Button>
+  1031→          </div>
+  1032→        </TabsContent>
+  1033→
+  1034→        {/* ═══════════════════════════════════════ */}
+  1035→        {/* Tab: General                            */}
+  1036→        {/* ═══════════════════════════════════════ */}
+  1037→        <TabsContent value="general" className="space-y-6">
+  1038→          {/* Engine Settings */}
+  1039→          <Card className="bg-ub-surface border-ub-border">
+  1040→            <CardHeader className="pb-3">
+  1041→              <CardTitle className="text-base font-semibold text-ub-text-primary flex items-center gap-2">
+  1042→                <Cog className="h-4 w-4 text-ub-accent" />
+  1043→                Engine Settings
+  1044→              </CardTitle>
+  1045→            </CardHeader>
+  1046→            <CardContent className="space-y-4">
+  1047→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1048→                <div className="space-y-2">
+  1049→                  <Label className="text-ub-text-muted text-sm">Scan Interval (seconds)</Label>
+  1050→                  <Input
+  1051→                    type="number"
+  1052→                    value={general.scanIntervalSeconds}
+  1053→                    onChange={(e) => setGeneral((p) => ({ ...p, scanIntervalSeconds: Number(e.target.value) }))}
+  1054→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1055→                  />
+  1056→                </div>
+  1057→                <div className="space-y-2">
+  1058→                  <Label className="text-ub-text-muted text-sm">Auto Square-off Time</Label>
+  1059→                  <Input
+  1060→                    type="time"
+  1061→                    value={general.autoSquareoffTime}
+  1062→                    onChange={(e) => setGeneral((p) => ({ ...p, autoSquareoffTime: e.target.value }))}
+  1063→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1064→                  />
+  1065→                </div>
+  1066→              </div>
+  1067→              <div className="flex items-center justify-between py-1">
+  1068→                <Label className="text-sm text-ub-text-primary">Auto-start Engine on Market Open</Label>
+  1069→                <Switch
+  1070→                  checked={general.autoStartEngine}
+  1071→                  onCheckedChange={(v) => setGeneral((p) => ({ ...p, autoStartEngine: v }))}
+  1072→                  className="data-[state=checked]:bg-ub-accent"
+  1073→                />
+  1074→              </div>
+  1075→            </CardContent>
+  1076→          </Card>
+  1077→
+  1078→          {/* Market Hours */}
+  1079→          <Card className="bg-ub-surface border-ub-border">
+  1080→            <CardHeader className="pb-3">
+  1081→              <CardTitle className="text-base font-semibold text-ub-text-primary">Market Hours</CardTitle>
+  1082→            </CardHeader>
+  1083→            <CardContent>
+  1084→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1085→                <div className="space-y-2">
+  1086→                  <Label className="text-ub-text-muted text-sm">Market Open</Label>
+  1087→                  <Input
+  1088→                    type="time"
+  1089→                    value={general.marketOpen}
+  1090→                    onChange={(e) => setGeneral((p) => ({ ...p, marketOpen: e.target.value }))}
+  1091→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1092→                  />
+  1093→                </div>
+  1094→                <div className="space-y-2">
+  1095→                  <Label className="text-ub-text-muted text-sm">Market Close</Label>
+  1096→                  <Input
+  1097→                    type="time"
+  1098→                    value={general.marketClose}
+  1099→                    onChange={(e) => setGeneral((p) => ({ ...p, marketClose: e.target.value }))}
+  1100→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1101→                  />
+  1102→                </div>
+  1103→                <div className="space-y-2">
+  1104→                  <Label className="text-ub-text-muted text-sm">Pre-market Start</Label>
+  1105→                  <Input
+  1106→                    type="time"
+  1107→                    value={general.premarketStart}
+  1108→                    onChange={(e) => setGeneral((p) => ({ ...p, premarketStart: e.target.value }))}
+  1109→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1110→                  />
+  1111→                </div>
+  1112→                <div className="space-y-2">
+  1113→                  <Label className="text-ub-text-muted text-sm">Post-market End</Label>
+  1114→                  <Input
+  1115→                    type="time"
+  1116→                    value={general.postmarketEnd}
+  1117→                    onChange={(e) => setGeneral((p) => ({ ...p, postmarketEnd: e.target.value }))}
+  1118→                    className="bg-ub-background border-ub-border text-ub-text-primary"
+  1119→                  />
+  1120→                </div>
+  1121→              </div>
+  1122→            </CardContent>
+  1123→          </Card>
+  1124→
+  1125→          <div className="flex justify-end">
+  1126→            <Button onClick={() => handleSave('General')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+  1127→              <Save className="h-4 w-4 mr-2" />
+  1128→              Save Changes
+  1129→            </Button>
+  1130→          </div>
+  1131→        </TabsContent>
+  1132→      </Tabs>
+  1133→    </div>
+  1134→  );
+  1135→}
+  1136→

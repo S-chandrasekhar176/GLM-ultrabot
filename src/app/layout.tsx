@@ -30,10 +30,12 @@ function Providers({ children }: { children: React.ReactNode }) {
   );
 
   const hydrate = useStore((s) => s.auth.hydrate);
+  const hydrateBrokers = useStore((s) => s.brokers.hydrateBrokers);
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydrateBrokers();
+  }, [hydrate, hydrateBrokers]);
 
   return (
     <QueryClientProvider client={queryClient}>

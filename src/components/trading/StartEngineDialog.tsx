@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   Loader2,
   Info,
+  Settings,
+  XCircle,
 } from 'lucide-react';
 import {
   Dialog,
@@ -24,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { theme } from '@/styles/theme';
-import type { EngineMode } from '@/lib/store';
+import { useStore, BROKER_LIST, type EngineMode } from '@/lib/store';
 
 /* ─────────────────────────────────────────────
    Broker Definitions
@@ -37,67 +39,63 @@ interface BrokerOption {
   description: string;
   features: string[];
   connected: boolean;
+  needsCredentials: boolean;
 }
 
-const BROKERS: BrokerOption[] = [
+const BROKERS: BrokerOption[] = BROKER_LIST.filter((b) => b.needsCredentials).map((b) => ({
+  id: b.id,
+  name: b.name,
+  logo: b.name[0],
+  description: getBrokerDescription(b.id),
+  features: getBrokerFeatures(b.id),
+  connected: false, // will be checked dynamically
+  needsCredentials: true,
+}));
+
+const PAPER_BROKERS: BrokerOption[] = [
   {
-    id: 'zerodha',
-    name: 'Zerodha',
-    logo: 'Z',
-    description: 'Kite Connect API — most popular retail broker in India',
-    features: ['Real-time quotes', 'Order execution', 'Historical data', 'Webhook support'],
-    connected: false,
+    id: 'paper',
+    name: 'Paper Broker',
+    logo: 'P',
+    description: 'Built-in simulator — no broker account needed. Uses real market data with virtual money.',
+    features: ['Simulated execution', 'Real LTP data', 'No risk', 'Instant fills'],
+    connected: true,
+    needsCredentials: false,
   },
   {
-    id: 'angelone',
-    name: 'Angel One',
-    logo: 'A',
-    description: 'SmartAPI — multi-exchange trading with advanced charting',
-    features: ['Real-time quotes', 'Smart order types', 'Margin trading', 'Portfolio analytics'],
-    connected: false,
-  },
-  {
-    id: 'upstox',
-    name: 'Upstox',
-    logo: 'U',
-    description: 'Upstox API v2 — fast and reliable order placement',
-    features: ['Real-time quotes', 'GTT orders', 'Margin trading', 'Multi-exchange'],
-    connected: false,
-  },
-  {
-    id: 'dhan',
-    name: 'Dhan',
-    logo: 'D',
-    description: 'Dhan HQ — modern API-first broker with option chains',
-    features: ['Real-time quotes', 'Option chains', 'IPO alerts', 'Treasury data'],
-    connected: false,
-  },
-  {
-    id: 'icici',
-    name: 'ICICI Direct',
-    logo: 'I',
-    description: 'ICICI Direct API — full-service broker with research',
-    features: ['Real-time quotes', 'Research calls', 'Margin trading', 'BTST/STBT'],
-    connected: false,
-  },
-  {
-    id: 'groww',
-    name: 'Groww',
-    logo: 'G',
-    description: 'Groww Connect API — simple and commission-free',
-    features: ['Real-time quotes', 'Zero commission', 'Simple UI', 'Mutual funds'],
-    connected: false,
+    id: 'yahoofinance',
+    name: 'Yahoo Finance',
+    logo: 'Y',
+    description: 'Free market data from Yahoo Finance. Real-time quotes for Indian and global markets.',
+    features: ['Free data', 'NSE/BSE quotes', 'Global markets', 'Historical data'],
+    connected: true,
+    needsCredentials: false,
   },
 ];
 
-const PAPER_BROKER: BrokerOption = {
-  id: 'paper',
-  name: 'Paper Broker',
-  logo: 'P',
-  description: 'Built-in simulator — no broker account needed. Uses real market data with virtual money.',
-  features: ['Simulated execution', 'Real LTP data', 'No risk', 'Instant fills'],
-  connected: true,
-};
+function getBrokerDescription(id: string): string {
+  const descriptions: Record<string, string> = {
+    zerodha: 'Kite Connect API — most popular retail broker in India',
+    angelone: 'SmartAPI — multi-exchange trading with advanced charting',
+    upstox: 'Upstox API v2 — fast and reliable order placement',
+    dhan: 'Dhan HQ — modern API-first broker with option chains',
+    icici: 'ICICI Direct API — full-service broker with research',
+    groww: 'Groww Connect API — simple and commission-free',
+  };
+  return descriptions[id] || '';
+}
+
+function getBrokerFeatures(id: string): string[] {
+  const features: Record<string, string[]> = {
+    zerodha: ['Real-time quotes', 'Order execution', 'Historical data', 'Webhook support'],
+    angelone: ['Real-time quotes', 'Smart order types', 'Margin trading', 'Portfolio analytics'],
+    upstox: ['Real-time quotes', 'GTT orders', 'Margin trading', 'Multi-exchange'],
+    dhan: ['Real-time quotes', 'Option chains', 'IPO alerts', 'Treasury data'],
+    icici: ['Real-time quotes', 'Research calls', 'Margin trading', 'BTST/STBT'],
+    groww: ['Real-time quotes', 'Zero commission', 'Simple UI', 'Mutual funds'],
+  };
+  return features[id] || [];
+}
 
 /* ─────────────────────────────────────────────
    Mode Definitions
@@ -190,10 +188,11 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
    Broker Card
    ───────────────────────────────────────────── */
 
-function BrokerCard({ broker, selected, isLive, onSelect }: {
+function BrokerCard({ broker, selected, isLive, isConfigured, onSelect }: {
   broker: BrokerOption;
   selected: boolean;
   isLive: boolean;
+  isConfigured: boolean;
   onSelect: () => void;
 }) {
   const activeColor = isLive ? theme.colors.loss : theme.colors.profit;
@@ -234,14 +233,19 @@ function BrokerCard({ broker, selected, isLive, onSelect }: {
           <span className="text-sm font-semibold" style={{ color: selected ? theme.colors.textPrimary : theme.colors.textMuted }}>
             {broker.name}
           </span>
-          {broker.connected && (
+          {broker.needsCredentials && isConfigured && (
             <Badge className="text-[9px] px-1.5 py-0 bg-ub-profit/10 text-ub-profit border-ub-profit/20 font-medium">
-              Ready
+              Configured
             </Badge>
           )}
-          {!broker.connected && isLive && (
+          {broker.needsCredentials && !isConfigured && (
             <Badge className="text-[9px] px-1.5 py-0 bg-ub-warning/10 text-ub-warning border-ub-warning/20 font-medium">
-              Setup needed
+              Not configured
+            </Badge>
+          )}
+          {!broker.needsCredentials && (
+            <Badge className="text-[9px] px-1.5 py-0 bg-ub-profit/10 text-ub-profit border-ub-profit/20 font-medium">
+              Ready
             </Badge>
           )}
         </div>
@@ -289,6 +293,44 @@ function Vr() {
 }
 
 /* ─────────────────────────────────────────────
+   Validation error box
+   ───────────────────────────────────────────── */
+
+function ValidationError({ brokerName, onGoToSettings }: { brokerName: string; onGoToSettings: () => void }) {
+  return (
+    <div
+      className="flex items-start gap-3 px-3.5 py-3 rounded-lg"
+      style={{
+        backgroundColor: theme.colors.loss + '08',
+        border: '1px solid ' + theme.colors.loss + '25',
+      }}
+    >
+      <XCircle size={18} className="shrink-0 mt-0.5" style={{ color: theme.colors.loss }} />
+      <div className="flex-1">
+        <p className="text-xs font-semibold" style={{ color: theme.colors.loss }}>
+          Credentials not configured
+        </p>
+        <p className="text-[11px] mt-1 leading-relaxed" style={{ color: theme.colors.textMuted }}>
+          <span style={{ color: theme.colors.textPrimary }} className="font-medium">{brokerName}</span>
+          {' '}
+          requires API credentials before the engine can start. Please add your credentials in Settings.
+        </p>
+        <button
+          onClick={onGoToSettings}
+          className="flex items-center gap-1.5 mt-2.5 text-[11px] font-semibold transition-colors"
+          style={{ color: theme.colors.info }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = theme.colors.info + 'cc'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = theme.colors.info; }}
+        >
+          <Settings size={13} />
+          Open Settings → Brokers
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
    Main Dialog
    ───────────────────────────────────────────── */
 
@@ -296,13 +338,31 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedMode, setSelectedMode] = useState<EngineMode | null>(null);
   const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+  const [attemptedStart, setAttemptedStart] = useState(false);
+
+  const isConfigured = useStore((s) => {
+    if (!selectedBroker) return true;
+    return s.brokers.isBrokerConfigured(selectedBroker);
+  });
 
   const isLive = selectedMode === 'live';
   const modeConfig = MODES.find((m) => m.id === selectedMode);
-  const brokers = isLive ? BROKERS : [PAPER_BROKER, ...BROKERS];
-  const canStart = selectedMode !== null && selectedBroker !== null;
+  const allBrokers = isLive ? BROKERS : [...PAPER_BROKERS, ...BROKERS];
+
+  const selectedBrokerData = allBrokers.find((b) => b.id === selectedBroker);
+  const needsCreds = selectedBrokerData?.needsCredentials ?? false;
+  const credsMissing = needsCreds && !isConfigured;
+
+  // For live mode, block start if creds missing
+  // For paper mode with real broker, allow start but warn
+  const canStart = selectedMode !== null && selectedBroker !== null && !credsMissing;
+  const shouldWarn = !isLive && needsCreds && !isConfigured;
 
   const handleStart = () => {
+    if (!canStart) {
+      setAttemptedStart(true);
+      return;
+    }
     if (selectedMode && selectedBroker) {
       onStart(selectedMode, selectedBroker);
     }
@@ -311,6 +371,7 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
   const handleBack = () => {
     setStep(1);
     setSelectedBroker(null);
+    setAttemptedStart(false);
   };
 
   const resetAndClose = (v: boolean) => {
@@ -318,6 +379,7 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
       setStep(1);
       setSelectedMode(null);
       setSelectedBroker(null);
+      setAttemptedStart(false);
     }
     onOpenChange(v);
   };
@@ -325,7 +387,13 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
   const handleSelectMode = (mode: EngineMode) => {
     setSelectedMode(mode);
     setSelectedBroker(null);
+    setAttemptedStart(false);
     setStep(2);
+  };
+
+  const handleGoToSettings = () => {
+    resetAndClose(false);
+    window.location.href = '/settings';
   };
 
   const headerTitle = step === 1 ? 'Start Trading Engine' : 'Select Broker';
@@ -473,20 +541,57 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
                 </span>
                 {' — '}
                 {isLive
-                  ? 'Orders will be placed with real money on the exchange. Ensure broker API credentials are configured in Settings.'
+                  ? 'Orders will be placed with real money. Ensure broker API credentials are configured in Settings.'
                   : 'Trades use virtual money. Select a broker for real market data, or use Paper Broker for simulated data.'}
               </p>
             </div>
 
+            {/* Validation error — show after attempted start with missing creds */}
+            {attemptedStart && credsMissing && selectedBrokerData && (
+              <div className="mb-4">
+                <ValidationError
+                  brokerName={selectedBrokerData.name}
+                  onGoToSettings={handleGoToSettings}
+                />
+              </div>
+            )}
+
+            {/* Paper mode warning — creds not configured but allowed to proceed */}
+            {!attemptedStart && shouldWarn && selectedBrokerData && (
+              <div
+                className="flex items-start gap-2 px-3 py-2.5 rounded-md mb-4"
+                style={{
+                  backgroundColor: theme.colors.warning + '08',
+                  border: '1px solid ' + theme.colors.warning + '20',
+                }}
+              >
+                <AlertTriangle size={14} className="shrink-0 mt-0.5" style={{ color: theme.colors.warning }} />
+                <p className="text-[11px]" style={{ color: theme.colors.textMuted }}>
+                  <span style={{ color: theme.colors.textPrimary }} className="font-medium">{selectedBrokerData.name}</span>
+                  {' '}
+                  has no credentials configured. You can still start, but configure credentials in
+                  <button
+                    onClick={handleGoToSettings}
+                    className="font-semibold mx-0.5"
+                    style={{ color: theme.colors.info }}
+                  >
+                    Settings
+                  </button>
+                  {' '}for real data.
+                </p>
+              </div>
+            )}
+
             {/* Broker list */}
             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-              {brokers.map((broker) => (
+              {allBrokers.map((broker) => (
                 <BrokerCard
                   key={broker.id}
                   broker={broker}
                   selected={selectedBroker === broker.id}
                   isLive={isLive}
-                  onSelect={() => setSelectedBroker(broker.id)}
+                  isConfigured={useStore.getState().brokers.isBrokerConfigured(broker.id)}
+                  onSelect={() => { setSelectedBroker(broker.id); setAttemptedStart(false); }}
                 />
               ))}
             </div>
@@ -504,7 +609,7 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
                 <span>
                   {modeConfig.label} via{' '}
                   <span style={{ color: theme.colors.textPrimary }} className="font-medium">
-                    {brokers.find((b) => b.id === selectedBroker)?.name}
+                    {allBrokers.find((b) => b.id === selectedBroker)?.name}
                   </span>
                 </span>
               </>
@@ -513,7 +618,7 @@ export default function StartEngineDialog({ open, onOpenChange, onStart, isStart
 
           <Button
             onClick={step === 2 ? handleStart : () => setStep(2)}
-            disabled={step === 2 ? (!canStart || isStarting) : false}
+            disabled={step === 2 ? (!canStart && !credsMissing ? true : isStarting) : false}
             className="h-9 px-5 text-xs font-semibold transition-all duration-200"
             style={{
               backgroundColor: step === 2 && modeConfig

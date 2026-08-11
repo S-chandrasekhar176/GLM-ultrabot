@@ -18,6 +18,8 @@ import {
   Eye,
   AlertTriangle,
   Power,
+  Wifi,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +39,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDashboard } from '@/hooks/useApi';
 import { useEngine } from '@/hooks/useEngine';
-import { useEngine as useEngineStore, type MarketRegime } from '@/lib/store';
+import { useEngine as useEngineStore, useStore, type MarketRegime, BROKER_LIST } from '@/lib/store';
 import StartEngineDialog from '@/components/trading/StartEngineDialog';
 
 // ─────────────────────────────────────────────
@@ -298,6 +300,34 @@ const REGIME_CONFIG: Record<MarketRegime, { label: string; colorClass: string; b
 };
 
 // ─────────────────────────────────────────────
+// Uptime Ticker
+// ─────────────────────────────────────────────
+
+function UptimeTicker({ startedAt }: { startedAt: number | null }) {
+  const [uptime, setUptime] = useState('00:00:00');
+
+  useEffect(() => {
+    if (!startedAt) { setUptime('00:00:00'); return; }
+    const tick = () => {
+      const diff = Math.floor((Date.now() - startedAt) / 1000);
+      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+      const s = String(diff % 60).padStart(2, '0');
+      setUptime(`${h}:${m}:${s}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  return (
+    <span className="font-mono text-xs" style={{ color: '#00D09C' }}>
+      {uptime}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Skeleton Loaders
 // ─────────────────────────────────────────────
 
@@ -492,26 +522,38 @@ export default function DashboardPage() {
   const riskColor = getRiskColor(data.riskUsed);
   const capitalUsedPct = data.totalCapital > 0 ? (data.capitalUsed / data.totalCapital) * 100 : 0;
 
-  const engineStatus = (engineStore.status || data.engineStatus || 'stopped') as 'running' | 'stopped' | 'paused';
+  const engineStatus = (engineStore.status || data.engineStatus || 'stopped') as 'running' | 'stopped' | 'paused' | 'error';
   const engineMode = (engineStore.mode || data.engineMode || 'paper') as 'paper' | 'live';
+  const activeBrokerId = engineStore.activeBroker;
+  const activeBrokerName = activeBrokerId ? (BROKER_LIST.find((b) => b.id === activeBrokerId)?.name ?? activeBrokerId) : null;
+  const startedAt = engineStore.startedAt;
   const regime = (engineStore.regime || data.regime || 'sideways') as MarketRegime;
   const regimeConf = data.regimeConfidence;
   const regimeCfg = REGIME_CONFIG[regime];
 
   const [engineDialogOpen, setEngineDialogOpen] = useState(false);
 
+  // Heartbeat: simulate a pulse every 5s when engine is running
+  useEffect(() => {
+    if (engineStatus !== 'running') return;
+    const interval = setInterval(() => {
+      useStore.getState().engine.heartbeat();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [engineStatus]);
+
   const handleStartStop = useCallback(() => {
     if (engineStatus === 'running' || engineStatus === 'paused') {
-      engine.stop();
+      useStore.getState().engine.stop();
     } else {
       setEngineDialogOpen(true);
     }
-  }, [engineStatus, engine]);
+  }, [engineStatus]);
 
-  const handleEngineStart = useCallback((_mode: 'paper' | 'live', _brokerId: string) => {
-    engine.start();
+  const handleEngineStart = useCallback((mode: 'paper' | 'live', brokerId: string) => {
+    useStore.getState().engine.start(mode, brokerId);
     setEngineDialogOpen(false);
-  }, [engine]);
+  }, []);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -687,15 +729,18 @@ export default function DashboardPage() {
             {/* Engine Status */}
             <SectionCard title="Engine Status" icon={Zap} className="xl:col-span-2">
               <div className="space-y-3">
+                {/* Top row: Status + Mode + Broker */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div
                       className={`h-2.5 w-2.5 rounded-full ${
                         engineStatus === 'running'
                           ? 'bg-ub-profit animate-pulse'
-                          : engineStatus === 'paused'
-                            ? 'bg-ub-warning'
-                            : 'bg-ub-loss'
+                          : engineStatus === 'error'
+                            ? 'bg-ub-loss animate-pulse'
+                            : engineStatus === 'paused'
+                              ? 'bg-ub-warning'
+                              : 'bg-ub-text-disabled'
                       }`}
                     />
                     <Badge
@@ -703,9 +748,11 @@ export default function DashboardPage() {
                       className={`text-xs font-semibold ${
                         engineStatus === 'running'
                           ? 'border-ub-profit/30 text-ub-profit bg-ub-profit/10'
-                          : engineStatus === 'paused'
-                            ? 'border-ub-warning/30 text-ub-warning bg-ub-warning/10'
-                            : 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+                          : engineStatus === 'error'
+                            ? 'border-ub-loss/30 text-ub-loss bg-ub-loss/10'
+                            : engineStatus === 'paused'
+                              ? 'border-ub-warning/30 text-ub-warning bg-ub-warning/10'
+                              : 'border-ub-text-disabled/30 text-ub-text-disabled bg-ub-text-disabled/10'
                       }`}
                     >
                       {engineStatus.charAt(0).toUpperCase() + engineStatus.slice(1)}
@@ -723,6 +770,40 @@ export default function DashboardPage() {
                     {engineMode.charAt(0).toUpperCase() + engineMode.slice(1)}
                   </Badge>
                 </div>
+
+                {/* Active broker + uptime (shown when running) */}
+                {engineStatus === 'running' && (
+                  <div className="flex items-center justify-between px-3 py-2 rounded-md" style={{ backgroundColor: 'rgba(0, 208, 156, 0.06)', border: '1px solid rgba(0, 208, 156, 0.12)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <Wifi size={13} className="text-ub-profit" />
+                        <span className="text-[11px] text-ub-text-muted">Connected via</span>
+                      </div>
+                      <span className="text-xs font-semibold text-ub-text-primary">
+                        {activeBrokerName || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Timer size={13} className="text-ub-text-disabled" />
+                      <span className="text-[11px] text-ub-text-muted">Uptime</span>
+                      <UptimeTicker startedAt={startedAt} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Error message */}
+                {engineStatus === 'error' && engineStore.errorMessage && (
+                  <div className="flex items-start gap-2 px-3 py-2.5 rounded-md" style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                    <AlertTriangle size={14} className="shrink-0 mt-0.5 text-ub-loss" />
+                    <p className="text-[11px] text-ub-loss leading-relaxed">{engineStore.errorMessage}</p>
+                  </div>
+                )}
+
+                {/* Stopped: show reason if available */}
+                {engineStatus === 'stopped' && !activeBrokerId && (
+                  <p className="text-[11px] text-ub-text-disabled">Engine is idle. Select a mode and broker to start trading.</p>
+                )}
+
                 <div className="flex gap-2">
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -751,7 +832,7 @@ export default function DashboardPage() {
                         size="sm"
                         variant="outline"
                         disabled={engineStatus === 'stopped'}
-                        onClick={() => engine.stop()}
+                        onClick={() => useStore.getState().engine.stop()}
                         className={`flex-1 h-9 text-xs font-semibold border-ub-border ${
                           engineStatus !== 'stopped'
                             ? 'hover:bg-ub-loss/15 hover:text-ub-loss hover:border-ub-loss/40 text-ub-text-muted'
@@ -767,11 +848,6 @@ export default function DashboardPage() {
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                {(engine.isStarting || engine.isStopping) && (
-                  <p className="text-[11px] text-ub-text-muted animate-pulse">
-                    {engine.isStarting ? 'Starting engine...' : 'Stopping engine...'}
-                  </p>
-                )}
               </div>
             </SectionCard>
 
