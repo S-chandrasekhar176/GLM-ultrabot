@@ -7,6 +7,7 @@ Lifecycle:
   Stage 4 (Trend Runner 25%):   1:3.5+ RR -> Let final 25-37.5% ride with ATR / Supertrend trailing stop
 """
 from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
 from models.risk_state import BookingLevels, BookingResult
 
 
@@ -32,10 +33,28 @@ class PartialBooker:
         self.trailing_method: str = cfg.get("trailing_sl_method", "step")
         self.trailing_step_pct: float = float(cfg.get("trailing_step_pct", 0.5))
 
+    def _normalize_position(
+        self,
+        position: Any = None,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        target: float = 0.0,
+        direction: str = "LONG",
+    ) -> Any:
+        if position is not None:
+            return position
+        return SimpleNamespace(
+            entry_price=entry_price,
+            sl_price=stop_loss,
+            stop_loss=stop_loss,
+            target=target,
+            direction=direction,
+        )
+
     def calculate_booking_levels(self, position: Any) -> List[BookingLevels]:
-        """Return the 4 standard booking levels for a position."""
+        """Return the 4 standard booking levels for a position object."""
         entry = float(getattr(position, "entry_price", 0) or 0)
-        sl = float(getattr(position, "sl_price", 0) or 0)
+        sl = float(getattr(position, "sl_price", 0) or getattr(position, "stop_loss", 0) or 0)
         direction = str(getattr(position, "direction", "LONG")).upper()
 
         risk = abs(entry - sl) if entry > 0 and sl > 0 else 1.0
@@ -79,6 +98,25 @@ class PartialBooker:
         ]
         return levels
 
+    def get_booking_levels(
+        self,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        target: float = 0.0,
+        direction: str = "LONG",
+        config: Optional[Dict[str, Any]] = None,
+        position: Any = None,
+    ) -> List[BookingLevels]:
+        """Universal signature for obtaining 4-stage booking levels."""
+        pos = self._normalize_position(
+            position=position,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            target=target,
+            direction=direction,
+        )
+        return self.calculate_booking_levels(pos)
+
     def check_and_book(self, position: Any, current_price: float) -> BookingResult:
         """Determine the current 4-stage booking level and active trailing SL."""
         if not self.enabled:
@@ -111,10 +149,30 @@ class PartialBooker:
             trailing_step_pct=self.trailing_step_pct,
         )
 
+    def check_partial_booking(
+        self,
+        current_price: float,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        target: float = 0.0,
+        direction: str = "LONG",
+        position: Any = None,
+        **kwargs: Any,
+    ) -> BookingResult:
+        """Universal signature for checking partial booking triggers."""
+        pos = self._normalize_position(
+            position=position,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            target=target,
+            direction=direction,
+        )
+        return self.check_and_book(pos, current_price)
+
     def calculate_trailing_sl(self, position: Any, current_price: float) -> float:
         """Calculate trailing Stop-Loss based on the active stage."""
         entry = float(getattr(position, "entry_price", 0) or 0)
-        original_sl = float(getattr(position, "sl_price", 0) or 0)
+        original_sl = float(getattr(position, "sl_price", 0) or getattr(position, "stop_loss", 0) or 0)
         direction = str(getattr(position, "direction", "LONG")).upper()
         risk = abs(entry - original_sl) if entry > 0 and original_sl > 0 else 1.0
 

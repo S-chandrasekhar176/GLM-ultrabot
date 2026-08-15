@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from types import SimpleNamespace
 
 from models.risk_state import GateResult, RiskResult
 
@@ -23,33 +24,40 @@ if TYPE_CHECKING:
     from db.repository import Repository
 
 
+def _wrap_signal(signal: Any) -> Any:
+    """Ensure signal object has attribute access."""
+    if isinstance(signal, dict):
+        return SimpleNamespace(**signal)
+    return signal
+
+
 class RiskEngine:
     """Runs all 16 risk gates sequentially, stopping at the first failure.
 
     Each gate receives the full risk config dict so it can read its own
-    parameters.  The ``repository`` is only injected into G13 (duplicate
+    parameters. The ``repository`` is injected into G13 (duplicate
     signal check) where it is needed.
     """
 
     def __init__(self, config: Dict[str, Any]):
-        self.config = config
+        self.config = config or {}
         self.gates: List[Any] = [
-            G1MaxPositions(config),
-            G2SectorConcentration(config),
-            G3MaxPositionSize(config),
-            G4MaxDailyTrades(config),
-            G5MaxDailyLoss(config),
-            G6CorrelationCheck(config),
-            G7VIXFilter(config),
-            G8TimeOfDay(config),
-            G9PriceMismatch(config),
-            G10MinConfidence(config),
-            G11MaxDrawdown(config),
-            G12MarginCheck(config),
-            G13DuplicateSignal(config),
-            G14StrategyBacktest(config),
-            G15VolumeLiquidity(config),
-            G16MultiTimeframe(config),
+            G1MaxPositions(self.config),
+            G2SectorConcentration(self.config),
+            G3MaxPositionSize(self.config),
+            G4MaxDailyTrades(self.config),
+            G5MaxDailyLoss(self.config),
+            G6CorrelationCheck(self.config),
+            G7VIXFilter(self.config),
+            G8TimeOfDay(self.config),
+            G9PriceMismatch(self.config),
+            G10MinConfidence(self.config),
+            G11MaxDrawdown(self.config),
+            G12MarginCheck(self.config),
+            G13DuplicateSignal(self.config),
+            G14StrategyBacktest(self.config),
+            G15VolumeLiquidity(self.config),
+            G16MultiTimeframe(self.config),
         ]
 
     def set_repository(self, repo: "Repository") -> None:
@@ -58,12 +66,15 @@ class RiskEngine:
             if isinstance(gate, G13DuplicateSignal):
                 gate.set_repository(repo)
 
-    async def validate(self, signal: Any, context: Dict[str, Any]) -> RiskResult:
-        """Run all gates.  Returns a RiskResult with ``passed=True`` only if
-        every gate passes.  Stops on the first failure."""
+    async def validate(self, signal: Any, context: Optional[Dict[str, Any]] = None) -> RiskResult:
+        """Run all gates. Returns a RiskResult with ``passed=True`` only if
+        every gate passes. Stops on the first failure."""
+        sig = _wrap_signal(signal)
+        ctx = context if context is not None else {}
         results: List[GateResult] = []
+
         for gate in self.gates:
-            result: GateResult = await gate.check(signal, context)
+            result: GateResult = await gate.check(sig, ctx)
             results.append(result)
             if not result.passed:
                 return RiskResult(
@@ -85,3 +96,36 @@ class RiskEngine:
             reduced_size=False,
             notes="All 16 gates passed",
         )
+
+    async def evaluate(
+        self,
+        signal: Any,
+        symbol: str = "",
+        current_price: float = 0.0,
+        context: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = None,
+    ) -> RiskResult:
+        """Convenience evaluation gateway for engine orchestrators.
+        
+        Accepts raw signal dictionary or object, builds/enriches context,
+        and executes all 16 risk gates.
+        """
+        sig = _wrap_signal(signal)
+        ctx = dict(context or {})
+        total_cap = float(ctx.get("total_capital") or ctx.get("capital") or 100000.0)
+        margin_avail = float(ctx.get("margin_available") or ctx.get("available_capital") or total_cap)
+        ctx.setdefault("total_capital", total_cap)
+        ctx.setdefault("capital", total_cap)
+        ctx.setdefault("available_capital", margin_avail)
+        ctx.setdefault("margin_available", margin_avail)
+        ctx.setdefault("open_positions", 0)
+        ctx.setdefault("open_positions_count", 0)
+        ctx.setdefault("daily_trades", 0)
+        ctx.setdefault("daily_trade_count", 0)
+        ctx.setdefault("daily_loss", 0.0)
+        ctx.setdefault("vix", 15.0)
+        ctx.setdefault("india_vix", 15.0)
+        from datetime import datetime, timezone
+        ctx.setdefault("current_time", datetime.now(timezone.utc))
+
+        return await self.validate(sig, ctx)

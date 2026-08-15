@@ -1,8 +1,9 @@
 """Telegram bot integration for UltraBot Web notifications.
 
 Sends trade fills, risk alerts, error alerts, morning briefings, and EOD reports
-via the Telegram Bot API.
+via the Telegram Bot API with HTML sanitization.
 """
+import html
 import logging
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -16,6 +17,13 @@ logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
 _TELEGRAM_API_BASE = "https://api.telegram.org/bot{token}/sendMessage"
+
+
+def _esc(val: Any) -> str:
+    """Sanitize variable strings for HTML parsing mode in Telegram."""
+    if val is None:
+        return ""
+    return html.escape(str(val))
 
 
 class TelegramBot:
@@ -71,18 +79,18 @@ class TelegramBot:
 
     async def send_trade_fill(self, trade: dict) -> bool:
         """Send a formatted trade fill notification."""
-        symbol = trade.get("symbol", "?")
-        direction = trade.get("direction", "?")
-        strategy = trade.get("strategy", "")
+        symbol = _esc(trade.get("symbol", "?"))
+        direction = _esc(trade.get("direction", "?"))
+        strategy = _esc(trade.get("strategy", ""))
         entry_price = float(trade.get("entry_price", 0))
         qty = int(trade.get("qty", 0))
         sl = float(trade.get("sl", 0))
         target = float(trade.get("target", 0))
         lot_size = int(trade.get("lot_size", 1))
-        option_type = trade.get("option_type", "")
-        strike = trade.get("strike", "")
+        option_type = _esc(trade.get("option_type", ""))
+        strike = _esc(trade.get("strike", ""))
 
-        direction_emoji = "🟢" if direction.upper() == "LONG" else "🔴"
+        direction_emoji = "🟢" if "LONG" in direction.upper() or "BUY" in direction.upper() else "🔴"
         label = f"{option_type} {strike}" if option_type and strike else symbol
 
         invested = entry_price * qty * lot_size
@@ -105,8 +113,8 @@ class TelegramBot:
 
     async def send_partial_booking(self, position, level: str, qty: int, price: float) -> bool:
         """Send a partial booking notification."""
-        symbol = getattr(position, "symbol", "?")
-        direction = getattr(position, "direction", "?")
+        symbol = _esc(getattr(position, "symbol", "?"))
+        direction = _esc(getattr(position, "direction", "?"))
         entry_price = float(getattr(position, "entry_price", 0))
         total_qty = int(getattr(position, "qty", 0))
 
@@ -114,7 +122,7 @@ class TelegramBot:
         remaining = total_qty - booked_qty
 
         if entry_price > 0 and price > 0:
-            if direction.upper() == "LONG":
+            if "LONG" in direction.upper() or "BUY" in direction.upper():
                 pnl = (price - entry_price) * booked_qty
             else:
                 pnl = (entry_price - price) * booked_qty
@@ -122,7 +130,7 @@ class TelegramBot:
             pnl = 0.0
 
         lines = [
-            f"📦 <b>PARTIAL BOOK – {level.upper()}</b>",
+            f"📦 <b>PARTIAL BOOK – {_esc(level.upper())}</b>",
             f"",
             f"<b>Symbol:</b> {symbol}  |  <b>Direction:</b> {direction}",
             f"<b>Booked:</b> {booked_qty} lots @ {price:.2f}",
@@ -138,16 +146,15 @@ class TelegramBot:
 
     async def send_sl_hit(self, trade: dict) -> bool:
         """Send a stop-loss hit notification."""
-        symbol = trade.get("symbol", "?")
-        direction = trade.get("direction", "?")
+        symbol = _esc(trade.get("symbol", "?"))
+        direction = _esc(trade.get("direction", "?"))
         entry_price = float(trade.get("entry_price", 0))
         exit_price = float(trade.get("exit_price", 0))
-        sl = float(trade.get("sl", 0))
         qty = int(trade.get("qty", 0))
         lot_size = int(trade.get("lot_size", 1))
-        strategy = trade.get("strategy", "")
+        strategy = _esc(trade.get("strategy", ""))
 
-        if direction.upper() == "LONG":
+        if "LONG" in direction.upper() or "BUY" in direction.upper():
             pnl = (exit_price - entry_price) * qty * lot_size
         else:
             pnl = (entry_price - exit_price) * qty * lot_size
@@ -167,16 +174,16 @@ class TelegramBot:
 
     async def send_target_hit(self, trade: dict) -> bool:
         """Send a target hit notification."""
-        symbol = trade.get("symbol", "?")
-        direction = trade.get("direction", "?")
+        symbol = _esc(trade.get("symbol", "?"))
+        direction = _esc(trade.get("direction", "?"))
         entry_price = float(trade.get("entry_price", 0))
         exit_price = float(trade.get("exit_price", 0))
         target = float(trade.get("target", 0))
         qty = int(trade.get("qty", 0))
         lot_size = int(trade.get("lot_size", 1))
-        strategy = trade.get("strategy", "")
+        strategy = _esc(trade.get("strategy", ""))
 
-        if direction.upper() == "LONG":
+        if "LONG" in direction.upper() or "BUY" in direction.upper():
             pnl = (exit_price - entry_price) * qty * lot_size
         else:
             pnl = (entry_price - exit_price) * qty * lot_size
@@ -205,7 +212,7 @@ class TelegramBot:
         lines = [
             f"🌅 <b>MORNING BRIEFING</b>  –  {now}",
             f"",
-            f"<b>Regime:</b> {regime}",
+            f"<b>Regime:</b> {_esc(regime)}",
             f"<b>India VIX:</b> {vix:.2f}",
             f"",
             f"<b>Watchlist ({len(watchlist)} stocks):</b>",
@@ -213,14 +220,14 @@ class TelegramBot:
 
         for item in watchlist[:30]:
             if isinstance(item, dict):
-                sym = item.get("symbol", str(item))
-                reason = item.get("reason", "")
+                sym = _esc(item.get("symbol", str(item)))
+                reason = _esc(item.get("reason", ""))
                 if reason:
                     lines.append(f"  • {sym} – {reason}")
                 else:
                     lines.append(f"  • {sym}")
             else:
-                lines.append(f"  • {item}")
+                lines.append(f"  • {_esc(item)}")
 
         lines.append(f"")
         lines.append(f"<i>Engine starting scan cycle...</i>")
@@ -232,7 +239,7 @@ class TelegramBot:
 
     async def send_eod_report(self, daily_summary: dict, trades: list) -> bool:
         """Send end-of-day report."""
-        today_str = daily_summary.get("date", "")
+        today_str = _esc(daily_summary.get("date", ""))
         net_pnl = float(daily_summary.get("net_pnl", 0))
         gross_pnl = float(daily_summary.get("gross_pnl", 0))
         total_fees = float(daily_summary.get("total_fees", 0))
@@ -261,21 +268,21 @@ class TelegramBot:
             lines.append(f"<b>Trade Details:</b>")
             for t in trades[:15]:
                 if isinstance(t, dict):
-                    sym = t.get("symbol", "?")
+                    sym = _esc(t.get("symbol", "?"))
                     t_pnl = float(t.get("net_pnl", t.get("pnl", 0)))
-                    strat = t.get("strategy", "")
-                    status = t.get("status", "")
-                    direction = t.get("direction", "")
+                    strat = _esc(t.get("strategy", ""))
+                    status = _esc(t.get("status", ""))
+                    direction = _esc(t.get("direction", ""))
                     lines.append(
                         f"  {sym} {direction} {strat} → {format_currency(t_pnl, show_sign=True)} [{status}]"
                     )
                 else:
                     # SQLAlchemy model object
-                    sym = getattr(t, "symbol", "?")
+                    sym = _esc(getattr(t, "symbol", "?"))
                     t_pnl = float(getattr(t, "net_pnl", 0))
-                    strat = getattr(t, "strategy", "")
-                    status = getattr(t, "status", "")
-                    direction = getattr(t, "direction", "")
+                    strat = _esc(getattr(t, "strategy", ""))
+                    status = _esc(getattr(t, "status", ""))
+                    direction = _esc(getattr(t, "direction", ""))
                     lines.append(
                         f"  {sym} {direction} {strat} → {format_currency(t_pnl, show_sign=True)} [{status}]"
                     )
@@ -290,11 +297,11 @@ class TelegramBot:
 
     async def send_error_alert(self, error: dict) -> bool:
         """Send a critical error alert."""
-        error_type = error.get("error_type", "UnknownError")
-        severity = error.get("severity", "error")
-        what = error.get("what_happened", "")
-        why = error.get("why_happened", "")
-        how = error.get("how_to_fix", "")
+        error_type = _esc(error.get("error_type", "UnknownError"))
+        severity = _esc(error.get("severity", "error"))
+        what = _esc(error.get("what_happened", ""))
+        why = _esc(error.get("why_happened", ""))
+        how = _esc(error.get("how_to_fix", ""))
         context = error.get("context", {})
 
         severity_emoji = {
@@ -302,7 +309,7 @@ class TelegramBot:
             "error": "❌",
             "warning": "⚠️",
             "info": "ℹ️",
-        }.get(severity, "❌")
+        }.get(severity.lower(), "❌")
 
         lines = [
             f"{severity_emoji} <b>{error_type}</b> [{severity.upper()}]",
@@ -313,8 +320,8 @@ class TelegramBot:
             lines.append(f"<b>Why:</b> {why}")
         if how:
             lines.append(f"<b>Fix:</b> {how}")
-        if context:
-            ctx_str = "\n".join(f"  • {k}: {v}" for k, v in list(context.items())[:5])
+        if context and isinstance(context, dict):
+            ctx_str = "\n".join(f"  • {_esc(k)}: {_esc(v)}" for k, v in list(context.items())[:5])
             lines.append(f"<b>Context:</b>\n{ctx_str}")
         lines.append(f"<b>Time:</b> {datetime.now(IST).strftime('%H:%M:%S')}")
 
@@ -329,7 +336,7 @@ class TelegramBot:
         lines = [
             f"⚠️ <b>RISK ALERT</b>",
             f"",
-            f"{message}",
+            f"{_esc(message)}",
             f"",
             f"<b>Time:</b> {datetime.now(IST).strftime('%H:%M:%S')}",
         ]

@@ -265,7 +265,7 @@ async def websocket_endpoint(
             {"action": "unsubscribe", "channels": ["channel1"]}
             {"action": "ping"}
     """
-    # Optional token validation
+    # Token validation
     if token:
         try:
             from api.routes.auth import is_token_revoked
@@ -275,13 +275,15 @@ async def websocket_endpoint(
             try:
                 payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
                 if is_token_revoked(token):
-                    await ws.close(code=4001, reason="Token revoked")
+                    await ws.close(code=1008, reason="Token revoked")
                     return
             except JWTError:
-                await ws.close(code=4001, reason="Invalid token")
+                await ws.close(code=1008, reason="Invalid token")
                 return
-        except Exception:
-            pass  # Allow connection even if token validation fails
+        except Exception as exc:
+            logger.warning("WebSocket token verification error: %s", exc)
+            await ws.close(code=1008, reason="Authentication failed")
+            return
 
     # Connect with default channels
     await ws_manager.connect(ws)

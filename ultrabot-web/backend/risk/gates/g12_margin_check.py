@@ -18,9 +18,9 @@ class G12MarginCheck:
         )
 
     async def check(self, signal: Any, context: Dict[str, Any]) -> GateResult:
-        available_margin = float(context.get("available_capital", 0))
+        available_margin = float(context.get("available_capital") or context.get("margin_available") or 0.0)
         entry_price = float(getattr(signal, "entry_price", 0) or 0)
-        total_capital = float(context.get("total_capital", 0))
+        total_capital = float(context.get("total_capital") or context.get("capital") or 0.0)
 
         if entry_price <= 0:
             return GateResult(
@@ -38,11 +38,16 @@ class G12MarginCheck:
                 severity="critical",
             )
 
-        # Estimate quantity: use lot_size for F&O, else 1
-        lot_size = get_lot_size(signal.symbol)
-        estimated_qty = lot_size
+        # Estimate quantity: use explicit quantity if specified, else F&O lot size or 1
+        qty = float(getattr(signal, "quantity", 0) or context.get("quantity", 0) or 0)
+        if qty <= 0:
+            seg = str(getattr(signal, "segment", "") or context.get("segment", "")).upper()
+            if seg in ("FNO", "F&O", "NFO", "OPTIONS", "FUTURES"):
+                qty = float(get_lot_size(signal.symbol))
+            else:
+                qty = 1.0
 
-        required_margin = entry_price * estimated_qty
+        required_margin = entry_price * qty
         max_allowed_margin = total_capital * (self.max_capital_usage_pct / 100.0)
 
         if required_margin > available_margin:
@@ -50,8 +55,8 @@ class G12MarginCheck:
                 gate_name="G12_MarginCheck",
                 passed=False,
                 message=(
-                    f"Required margin (\u20b9{required_margin:,.0f}) exceeds "
-                    f"available (\u20b9{available_margin:,.0f})"
+                    f"Required margin (₹{required_margin:,.0f}) exceeds "
+                    f"available (₹{available_margin:,.0f})"
                 ),
                 value=required_margin,
                 threshold=available_margin,
@@ -62,9 +67,9 @@ class G12MarginCheck:
             gate_name="G12_MarginCheck",
             passed=True,
             message=(
-                f"Required margin (\u20b9{required_margin:,.0f}) within "
-                f"available (\u20b9{available_margin:,.0f}), "
-                f"max usage (\u20b9{max_allowed_margin:,.0f})"
+                f"Required margin (₹{required_margin:,.0f}) within "
+                f"available (₹{available_margin:,.0f}), "
+                f"max usage (₹{max_allowed_margin:,.0f})"
             ),
             value=required_margin,
             threshold=available_margin,

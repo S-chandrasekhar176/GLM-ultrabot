@@ -95,8 +95,9 @@ class MarketLifecycleScheduler:
         """08:45 AM: Reset daily risk counters and calibrate market parameters."""
         logger.info("[08:45 AM IST] Running Pre-Market Initialization...")
         try:
-            if hasattr(self.engine, "daily_risk_manager") and self.engine.daily_risk_manager:
-                self.engine.daily_risk_manager.reset_daily()
+            daily_mgr = getattr(self.engine, "daily_risk", None) or getattr(self.engine, "daily_risk_manager", None)
+            if daily_mgr and hasattr(daily_mgr, "reset_daily"):
+                daily_mgr.reset_daily()
                 logger.info("Daily risk counters reset for new trading session.")
 
             await self.engine._broadcast("market", {

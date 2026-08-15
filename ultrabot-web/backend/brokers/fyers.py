@@ -24,11 +24,14 @@ class FyersBroker(BaseBroker):
         secret_key: str = "",
         pin: str = "",
         account_type: str = "live",
+        client_id: str = "",
+        config: Optional[Dict[str, Any]] = None,
     ):
-        self.app_id = app_id
-        self.access_token = access_token
-        self.secret_key = secret_key
-        self.pin = pin
+        super().__init__(config)
+        self.app_id = app_id or client_id or self.config.get("app_id", self.config.get("client_id", ""))
+        self.access_token = access_token or self.config.get("access_token", "")
+        self.secret_key = secret_key or self.config.get("secret_key", "")
+        self.pin = pin or self.config.get("pin", "")
         self.account_type = account_type
         self._client: Optional[httpx.AsyncClient] = None
         self._authenticated = False
@@ -43,28 +46,26 @@ class FyersBroker(BaseBroker):
         return self._client
 
     def _headers(self) -> Dict[str, str]:
-        auth_val = f"{self.app_id}:{self.access_token}" if self.app_id and self.access_token else self.access_token
+        auth_header = f"{self.app_id}:{self.access_token}" if self.app_id and self.access_token else self.access_token
         return {
-            "Authorization": auth_val,
+            "Authorization": auth_header,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
 
     async def authenticate(self) -> Dict[str, Any]:
-        """Authenticate / test Fyers credentials by fetching user profile / funds."""
+        """Validate Fyers credentials by checking profile/funds."""
         try:
             client = self._get_client()
             response = await client.get("/profile", headers=self._headers())
             
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("s") == "ok":
-                    self._authenticated = True
-                    return {
-                        "success": True,
-                        "message": f"Fyers v3 authentication successful. Logged in as: {data.get('data', {}).get('name', 'User')}",
-                        "data": data,
-                    }
+            if response.status_code == 200 and response.json().get("s") == "ok":
+                self._authenticated = True
+                return {
+                    "success": True,
+                    "message": "Fyers v3 authentication successful",
+                    "data": response.json(),
+                }
             
             # Try user_funds endpoint as secondary check
             funds_resp = await client.get("/user_funds", headers=self._headers())
@@ -100,20 +101,18 @@ class FyersBroker(BaseBroker):
                     if val > 0:
                         return float(val)
 
-            # Fallback to online quote
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.NS?interval=1d&range=1d"
-            async with httpx.AsyncClient(timeout=10.0) as cl:
-                res = await cl.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                if res.status_code == 200:
-                    ydata = res.json()
-                    meta = ydata.get("chart", {}).get("result", [{}])[0].get("meta", {})
-                    price = meta.get("regularMarketPrice", 0.0)
-                    if price > 0:
-                        return float(price)
-            return 1000.0
+            try:
+                from feeds.feed_manager import FeedManager
+                feed = FeedManager()
+                price = await feed.get_latest_price(symbol)
+                if price and price > 0:
+                    return float(price)
+            except Exception:
+                pass
+            return 0.0
         except Exception as exc:
             logger.warning("Failed to fetch Fyers LTP for %s: %s", symbol, exc)
-            return 1000.0
+            return 0.0
 
     async def get_margin(self) -> Dict[str, float]:
         """Get available margin/funds from Fyers."""

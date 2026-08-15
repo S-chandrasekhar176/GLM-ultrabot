@@ -9,6 +9,9 @@ class BaseBroker(ABC):
     these methods to be compatible with the trading engine.
     """
 
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self.config: Dict[str, Any] = config or {}
+
     @abstractmethod
     async def authenticate(self) -> Dict[str, Any]:
         """Authenticate with the broker.

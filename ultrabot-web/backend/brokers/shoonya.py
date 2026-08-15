@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 from typing import Any, Dict, List, Optional
+import pyotp
 
 import httpx
 
@@ -27,7 +28,7 @@ class ShoonyaBroker(BaseBroker):
     """Shoonya (Noren) broker integration.
 
     Uses httpx for HTTP calls to Shoonya's Noren REST API.
-    Requires user_id, password, vendor_code, and app_key for authentication.
+    Requires user_id, password, vendor_code, app_key, and TOTP secret for authentication.
     """
 
     def __init__(
@@ -36,12 +37,18 @@ class ShoonyaBroker(BaseBroker):
         password: str = "",
         vendor_code: str = "",
         app_key: str = "",
+        totp_secret: str = "",
+        factor2_pin: str = "",
         token_manager: Optional[TokenManager] = None,
+        config: Optional[Dict[str, Any]] = None,
     ):
-        self.user_id = user_id
-        self.password = password
-        self.vendor_code = vendor_code
-        self.app_key = app_key
+        super().__init__(config)
+        self.user_id = user_id or self.config.get("user_id", "")
+        self.password = password or self.config.get("password", "")
+        self.vendor_code = vendor_code or self.config.get("vendor_code", "")
+        self.app_key = app_key or self.config.get("app_key", "")
+        self.totp_secret = totp_secret or self.config.get("totp_secret", "")
+        self.factor2_pin = factor2_pin or self.config.get("factor2_pin", "")
         self.token_manager = token_manager or TokenManager()
         self._client: Optional[httpx.AsyncClient] = None
         self._authenticated = False
@@ -71,12 +78,26 @@ class ShoonyaBroker(BaseBroker):
         try:
             client = self._get_client()
             password_hash = self._sha256(self.password)
+            
+            # Generate TOTP 2FA if secret provided, else pin or fallback
+            factor2 = self.factor2_pin.strip()
+            if self.totp_secret and self.totp_secret.strip():
+                try:
+                    cleaned_totp = self.totp_secret.replace(" ", "").upper()
+                    factor2 = pyotp.TOTP(cleaned_totp).now()
+                except Exception as e:
+                    logger.warning("Failed to generate TOTP for Shoonya: %s", e)
+            if not factor2:
+                factor2 = password_hash
+
+            app_key_hash = self._sha256(f"{self.user_id}|{self.app_key}") if self.app_key else ""
+
             payload = {
                 "uid": self.user_id,
                 "pwd": password_hash,
-                "factor2": password_hash,
+                "factor2": factor2,
                 "vc": self.vendor_code,
-                "appkey": self.app_key,
+                "appkey": app_key_hash or self.app_key,
                 "deviceType": "WEB",
             }
 
@@ -108,10 +129,10 @@ class ShoonyaBroker(BaseBroker):
 
         except httpx.HTTPStatusError as e:
             logger.error("Shoonya auth HTTP error: %s", e)
-            return {"success": False, "message": f"HTTP error: {e.response.status_code}"}
+            return {"success": False, "message": f"HTTP error {e.response.status_code}"}
         except httpx.RequestError as e:
-            logger.error("Shoonya auth connection error: %s", e)
-            raise ConnectionLostError(broker="shoonya", what_happened=str(e)) from e
+            logger.error("Shoonya connection error: %s", e)
+            return {"success": False, "message": f"Connection error: {str(e)}"}
         except Exception as e:
             logger.error("Shoonya auth unexpected error: %s", e)
             return {"success": False, "message": str(e)}
@@ -124,26 +145,35 @@ class ShoonyaBroker(BaseBroker):
 
     async def get_ltp(self, symbol: str, exchange: str = "NSE") -> float:
         await self._refresh_if_needed()
-        try:
-            client = self._get_client()
-            payload = {
-                "uid": self.user_id,
-                "token": f"{exchange}|{symbol}",
-            }
-            response = await client.post(_QUOTE_URL, data=payload, headers=self._auth_headers())
-            response.raise_for_status()
-            data = response.json()
+        if self._authenticated and self._session_token:
+            try:
+                client = self._get_client()
+                payload = {
+                    "uid": self.user_id,
+                    "token": f"{exchange}|{symbol}",
+                }
+                response = await client.post(_QUOTE_URL, data=payload, headers=self._auth_headers())
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("stat") == "Ok":
+                        lp_str = data.get("lp", "0")
+                        if lp_str and float(lp_str) > 0:
+                            return float(lp_str)
+            except TokenExpiredError:
+                raise
+            except Exception as e:
+                logger.warning("Failed to get Shoonya direct LTP for %s: %s", symbol, e)
 
-            if data.get("stat") == "Ok":
-                lp_str = data.get("lp", "0")
-                if lp_str:
-                    return float(lp_str)
-            return 0.0
-        except TokenExpiredError:
-            raise
-        except Exception as e:
-            logger.warning("Failed to get LTP for %s: %s", symbol, e)
-            return 0.0
+        # Real-time fallback to market feed / Yahoo
+        try:
+            from feeds.feed_manager import FeedManager
+            feed = FeedManager()
+            price = await feed.get_latest_price(symbol)
+            if price and price > 0:
+                return float(price)
+        except Exception:
+            pass
+        return 0.0
 
     async def get_margin(self) -> Dict[str, float]:
         await self._refresh_if_needed()

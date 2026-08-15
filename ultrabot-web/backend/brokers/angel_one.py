@@ -1,5 +1,7 @@
 import json
 import logging
+import socket
+import uuid
 from typing import Any, Dict, List, Optional
 import pyotp
 
@@ -22,8 +24,49 @@ _CANCEL_URL = f"{_BASE_URL}/rest/secure/angelbroking/order/v1/cancelOrder"
 _ORDER_STATUS_URL = f"{_BASE_URL}/rest/secure/angelbroking/order/v1/orderDetails"
 _POSITIONS_URL = f"{_BASE_URL}/rest/secure/angelbroking/position/v1/book"
 
-# Symbol token mapping (sample, should be loaded from instrument dump)
-_TOKEN_MAP: Dict[str, str] = {}
+# Standard NSE symbol token mapping for SmartAPI
+_TOKEN_MAP: Dict[str, str] = {
+    "RELIANCE": "2885",
+    "TCS": "11536",
+    "INFY": "1594",
+    "HDFCBANK": "1333",
+    "ICICIBANK": "4963",
+    "SBIN": "3045",
+    "BHARTIARTL": "10604",
+    "ITC": "1660",
+    "TATAMOTORS": "3456",
+    "LT": "11483",
+    "BAJFINANCE": "317",
+    "MARUTI": "10999",
+    "SUNPHARMA": "3351",
+    "WIPRO": "3787",
+    "AXISBANK": "5900",
+    "KOTAKBANK": "1922",
+    "NIFTY": "26000",
+    "BANKNIFTY": "26009",
+}
+
+
+def _get_local_ip() -> str:
+    """Dynamically determine host local IP."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def _get_mac_address() -> str:
+    """Dynamically format host MAC address."""
+    try:
+        node = uuid.getnode()
+        mac = ":".join(f"{(node >> ele) & 0xff:02x}" for ele in range(40, -1, -8))
+        return mac
+    except Exception:
+        return "02:00:00:00:00:00"
 
 
 class AngelOneBroker(BaseBroker):
@@ -43,14 +86,16 @@ class AngelOneBroker(BaseBroker):
         refresh_token: str = "",
         feed_token: str = "",
         token_manager: Optional[TokenManager] = None,
+        config: Optional[Dict[str, Any]] = None,
     ):
-        self.api_key = api_key
-        self.client_code = client_code
-        self.pin = pin
-        self.totp_secret = totp_secret
-        self.jwt_token = jwt_token
-        self.refresh_token = refresh_token
-        self.feed_token = feed_token
+        super().__init__(config)
+        self.api_key = api_key or self.config.get("api_key", "")
+        self.client_code = client_code or self.config.get("client_code", "")
+        self.pin = pin or self.config.get("pin", "")
+        self.totp_secret = totp_secret or self.config.get("totp_secret", "")
+        self.jwt_token = jwt_token or self.config.get("jwt_token", "")
+        self.refresh_token = refresh_token or self.config.get("refresh_token", "")
+        self.feed_token = feed_token or self.config.get("feed_token", "")
         self.token_manager = token_manager or TokenManager()
         self._client: Optional[httpx.AsyncClient] = None
         self._authenticated = False
@@ -103,12 +148,14 @@ class AngelOneBroker(BaseBroker):
                 "password": self.pin.strip(),
                 "totp": totp,
             }
+            local_ip = _get_local_ip()
+            mac_addr = _get_mac_address()
             headers = {
-                "X-ClientPublicIP": "106.193.147.98",
-                "X-ClientLocalIP": "192.168.1.1",
+                "X-ClientPublicIP": local_ip,
+                "X-ClientLocalIP": local_ip,
                 "X-UserType": "USER",
                 "X-SourceID": "WEB",
-                "X-MACAddress": "fe80::216e:6507:4b90:3719",
+                "X-MACAddress": mac_addr,
                 "X-PrivateKey": self.api_key.strip(),
                 "Content-Type": "application/json",
                 "Accept": "application/json",
@@ -138,11 +185,11 @@ class AngelOneBroker(BaseBroker):
                 logger.info("Angel One authentication successful for client %s", self.client_code)
                 return {
                     "success": True,
-                    "message": "Authenticated with Angel One successfully",
-                    "data": data,
+                    "jwt_token": self.jwt_token,
+                    "feed_token": self.feed_token,
                 }
             else:
-                err_msg = data.get("message") or f"Login failed (status {response.status_code})"
+                err_msg = data.get("message", "Authentication failed")
                 err_code = data.get("errorcode", "")
                 full_msg = f"{err_msg} ({err_code})" if err_code else err_msg
                 logger.error("Angel One auth failed: %s", full_msg)
@@ -165,6 +212,22 @@ class AngelOneBroker(BaseBroker):
             logger.error("Angel One auth unexpected error: %s", e)
             return {"success": False, "message": str(e)}
 
+    def _auth_headers(self) -> Dict[str, str]:
+        """Construct authenticated request headers with dynamic client IP and MAC."""
+        local_ip = _get_local_ip()
+        mac_addr = _get_mac_address()
+        return {
+            "Authorization": f"Bearer {self.jwt_token}",
+            "X-ClientPublicIP": local_ip,
+            "X-ClientLocalIP": local_ip,
+            "X-UserType": "USER",
+            "X-SourceID": "WEB",
+            "X-MACAddress": mac_addr,
+            "X-PrivateKey": self.api_key.strip(),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
     async def _refresh_if_needed(self) -> bool:
         if self.token_manager.is_expired("angel_one"):
             if self.refresh_token:
@@ -173,11 +236,7 @@ class AngelOneBroker(BaseBroker):
                     payload = {
                         "refreshToken": self.refresh_token,
                     }
-                    headers = {
-                        "X-ClientPublicIP": "127.0.0.1",
-                        "X-PrivateKey": self.api_key,
-                        "Content-Type": "application/json",
-                    }
+                    headers = self._auth_headers()
                     response = await client.post(_REFRESH_URL, json=payload, headers=headers)
                     response.raise_for_status()
                     data = response.json()
@@ -200,29 +259,43 @@ class AngelOneBroker(BaseBroker):
 
     async def get_ltp(self, symbol: str, exchange: str = "NSE") -> float:
         await self._refresh_if_needed()
+        token = _TOKEN_MAP.get(symbol.upper(), "")
+        if token and self._authenticated and self.jwt_token:
+            try:
+                client = self._get_client()
+                mode = "" if exchange == "NSE" else exchange
+                payload = {
+                    "mode": mode,
+                    "exchangeTokens": {exchange: [token]},
+                }
+                response = await client.post(
+                    _QUOTE_URL, json=payload, headers=self._auth_headers()
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") is True and data.get("data"):
+                        quote_data = data["data"]
+                        if isinstance(quote_data, list) and quote_data:
+                            return float(quote_data[0].get("ltp", 0.0))
+                        elif isinstance(quote_data, dict):
+                            fetched = quote_data.get("fetched", [])
+                            if fetched and isinstance(fetched, list):
+                                return float(fetched[0].get("ltp", 0.0))
+            except TokenExpiredError:
+                raise
+            except Exception as e:
+                logger.warning("Angel One quote fetch failed for %s: %s", symbol, e)
+
+        # Real-time fallback to market data feed / Yahoo Finance
         try:
-            client = self._get_client()
-            mode = "" if exchange == "NSE" else exchange
-            payload = {
-                "mode": mode,
-                "exchangeTokens": _TOKEN_MAP.get(symbol, []),
-            }
-            response = await client.post(
-                _QUOTE_URL, json=payload, headers=self._auth_headers()
-            )
-            response.raise_for_status()
-            data = response.json()
-            if data.get("status") is True and data.get("data", []):
-                for item in data["data"]:
-                    if item.get("symbol") == symbol:
-                        ltp_str = item.get("ltp", "0")
-                        return float(ltp_str)
-            return 0.0
-        except TokenExpiredError:
-            raise
-        except Exception as e:
-            logger.warning("Failed to get LTP for %s: %s", symbol, e)
-            return 0.0
+            from feeds.feed_manager import FeedManager
+            feed = FeedManager()
+            price = await feed.get_latest_price(symbol)
+            if price and price > 0:
+                return float(price)
+        except Exception:
+            pass
+        return 0.0
 
     async def get_margin(self) -> Dict[str, float]:
         await self._refresh_if_needed()
