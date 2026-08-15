@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60; // Cache for 60 seconds
 
-interface NewsItem {
+export interface NewsItem {
+  id: string;
   symbol: string;
   symbols: string[];
   price: number;
@@ -11,12 +12,14 @@ interface NewsItem {
   headline: string;
   summary: string;
   source: string;
+  providerCode: 'ET' | 'MC' | 'LM' | 'BS' | 'OTHER';
   category: string;
   sentiment: 'BUY' | 'SELL' | 'NEUTRAL';
   impactLevel: 'HIGH' | 'MEDIUM' | 'LOW';
   tradeAction: 'BUY' | 'SELL' | 'HOLD';
   confidence: number;
   publishedAt: string;
+  publishedTimestamp: number;
   timeAgo: string;
   url: string;
 }
@@ -36,12 +39,13 @@ const POSITIVE_KEYWORDS = [
   'surge', 'jump', 'rally', 'soar', 'boom', 'bullish', 'upbeat', 'strong', 'record',
   'beat', 'exceeds', 'outperform', 'upgrade', 'buy', 'expansion', 'growth', 'profit',
   'dividend', 'bonus', 'buyback', 'order win', 'contract', 'deal', 'gains', 'target',
+  'highest', 'boost', 'accelerate', 'milestone',
 ];
 
 const NEGATIVE_KEYWORDS = [
   'crash', 'plunge', 'drop', 'fall', 'slump', 'bearish', 'weak', 'miss', 'disappoint',
   'downgrade', 'sell', 'fraud', 'loss', 'debt', 'penalty', 'warning', 'risk', 'decline',
-  'cut', 'weakness', 'slashed',
+  'cut', 'weakness', 'slashed', 'investigation', 'fine', 'defaults',
 ];
 
 function extractSymbol(text: string): { symbol: string; symbols: string[] } {
@@ -75,25 +79,34 @@ function analyzeSentiment(text: string): {
   }
 
   if (pos > neg) {
-    return { sentiment: 'BUY', tradeAction: 'BUY', confidence: Math.min(95, 75 + pos * 5) };
+    return { sentiment: 'BUY', tradeAction: 'BUY', confidence: Math.min(96, 75 + pos * 5) };
   } else if (neg > pos) {
-    return { sentiment: 'SELL', tradeAction: 'SELL', confidence: Math.min(95, 75 + neg * 5) };
+    return { sentiment: 'SELL', tradeAction: 'SELL', confidence: Math.min(96, 75 + neg * 5) };
   }
-  return { sentiment: 'NEUTRAL', tradeAction: 'HOLD', confidence: 65 };
+  return { sentiment: 'NEUTRAL', tradeAction: 'HOLD', confidence: 68 };
+}
+
+function getProviderCode(source: string): 'ET' | 'MC' | 'LM' | 'BS' | 'OTHER' {
+  const s = source.toLowerCase();
+  if (s.includes('economic') || s.includes('et ')) return 'ET';
+  if (s.includes('moneycontrol') || s.includes('mc ')) return 'MC';
+  if (s.includes('livemint') || s.includes('mint')) return 'LM';
+  if (s.includes('business standard') || s.includes('bs ')) return 'BS';
+  return 'OTHER';
 }
 
 function parseRssItems(xmlText: string, defaultSource: string): NewsItem[] {
   const items: NewsItem[] = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
+  const itemRegex = /<item[\s\S]*?>([\s\S]*?)<\/item>/gi;
   let match;
 
   while ((match = itemRegex.exec(xmlText)) !== null) {
     const itemContent = match[1];
 
-    const titleMatch = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i.exec(itemContent);
-    const linkMatch = /<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i.exec(itemContent);
-    const pubDateMatch = /<pubDate>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/i.exec(itemContent);
-    const descMatch = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i.exec(itemContent);
+    const titleMatch = /<title[\s\S]*?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i.exec(itemContent);
+    const linkMatch = /<link[\s\S]*?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i.exec(itemContent);
+    const pubDateMatch = /<pubDate[\s\S]*?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/pubDate>/i.exec(itemContent);
+    const descMatch = /<description[\s\S]*?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i.exec(itemContent);
 
     let headline = titleMatch ? titleMatch[1] : '';
     headline = headline
@@ -126,11 +139,14 @@ function parseRssItems(xmlText: string, defaultSource: string): NewsItem[] {
     const { sentiment, tradeAction, confidence } = analyzeSentiment(headline + ' ' + rawDesc);
 
     let timeAgo = 'Recently';
+    let publishedTimestamp = Date.now();
+
     if (rawDate) {
       try {
         const d = new Date(rawDate);
         if (!isNaN(d.getTime())) {
-          const diffMs = Date.now() - d.getTime();
+          publishedTimestamp = d.getTime();
+          const diffMs = Date.now() - publishedTimestamp;
           const diffMins = Math.floor(diffMs / 60000);
           if (diffMins < 60) {
             timeAgo = `${Math.max(1, diffMins)}m ago`;
@@ -145,20 +161,37 @@ function parseRssItems(xmlText: string, defaultSource: string): NewsItem[] {
       }
     }
 
+    const providerCode = getProviderCode(defaultSource);
+
     items.push({
+      id: `${symbol}-${publishedTimestamp}-${Math.random().toString(36).substring(2, 6)}`,
       symbol,
       symbols,
       price: 1000 + Math.floor(Math.random() * 2000),
-      changePct: sentiment === 'BUY' ? +(Math.random() * 3 + 0.5).toFixed(2) : sentiment === 'SELL' ? -(Math.random() * 3 + 0.5).toFixed(2) : +(Math.random() * 1 - 0.5).toFixed(2),
+      changePct:
+        sentiment === 'BUY'
+          ? +(Math.random() * 3 + 0.5).toFixed(2)
+          : sentiment === 'SELL'
+          ? -(Math.random() * 3 + 0.5).toFixed(2)
+          : +(Math.random() * 1 - 0.5).toFixed(2),
       headline,
-      summary: rawDesc.slice(0, 180),
+      summary: rawDesc.slice(0, 200) || headline,
       source: defaultSource,
-      category: headline.toLowerCase().includes('result') || headline.toLowerCase().includes('profit') ? 'Earnings' : headline.toLowerCase().includes('rbi') || headline.toLowerCase().includes('sebi') ? 'Regulatory' : 'Market News',
+      providerCode,
+      category:
+        headline.toLowerCase().includes('result') || headline.toLowerCase().includes('profit')
+          ? 'Earnings'
+          : headline.toLowerCase().includes('rbi') || headline.toLowerCase().includes('sebi')
+          ? 'Regulatory'
+          : headline.toLowerCase().includes('order') || headline.toLowerCase().includes('contract')
+          ? 'Deal Win'
+          : 'Market News',
       sentiment,
-      impactLevel: confidence > 80 ? 'HIGH' : 'MEDIUM',
+      impactLevel: confidence > 82 ? 'HIGH' : 'MEDIUM',
       tradeAction,
       confidence,
       publishedAt: timeAgo,
+      publishedTimestamp,
       timeAgo,
       url: link,
     });
@@ -169,12 +202,18 @@ function parseRssItems(xmlText: string, defaultSource: string): NewsItem[] {
 
 export async function GET() {
   const feeds = [
+    // Economic Times
     {
       url: 'https://economictimes.indiatimes.com/markets/rssfeeds/2146842.cms',
       source: 'Economic Times',
     },
     {
-      url: 'https://www.moneycontrol.com/rss/marketreports.xml',
+      url: 'https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146843.cms',
+      source: 'Economic Times',
+    },
+    // Moneycontrol
+    {
+      url: 'https://www.moneycontrol.com/rss/buzzingstocks.xml',
       source: 'Moneycontrol',
     },
     {
@@ -182,47 +221,80 @@ export async function GET() {
       source: 'Moneycontrol',
     },
     {
+      url: 'https://www.moneycontrol.com/rss/latestnews.xml',
+      source: 'Moneycontrol',
+    },
+    // LiveMint
+    {
       url: 'https://www.livemint.com/rss/markets',
       source: 'LiveMint',
     },
     {
-      url: 'https://economictimes.indiatimes.com/rssfeeds/1221656.cms',
-      source: 'ET Top Stories',
+      url: 'https://www.livemint.com/rss/companies',
+      source: 'LiveMint',
+    },
+    // Business Standard
+    {
+      url: 'https://www.business-standard.com/rss/markets-106.rss',
+      source: 'Business Standard',
+    },
+    {
+      url: 'https://www.business-standard.com/rss/companies-101.rss',
+      source: 'Business Standard',
+    },
+    // NDTV Profit & Others
+    {
+      url: 'https://feeds.feedburner.com/ndtvprofit-latest',
+      source: 'NDTV Profit',
+    },
+    {
+      url: 'https://news.google.com/rss/search?q=NSE+stocks+Nifty+India+dividend+earnings&hl=en-IN&gl=IN&ceid=IN:en',
+      source: 'NSE / Exchange Feed',
     },
   ];
 
   const allItems: NewsItem[] = [];
   const seenHeadlines = new Set<string>();
 
-  for (const feed of feeds) {
-    try {
-      const res = await fetch(feed.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'application/rss+xml, application/xml, text/xml, */*',
-        },
-        next: { revalidate: 60 },
-      });
+  const results = await Promise.allSettled(
+    feeds.map(async (feed) => {
+      try {
+        const res = await fetch(feed.url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            Accept:
+              'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
+          next: { revalidate: 60 },
+        });
 
-      if (res.ok) {
-        const xml = await res.text();
-        const parsed = parseRssItems(xml, feed.source);
-        for (const item of parsed) {
-          if (!seenHeadlines.has(item.headline.toLowerCase())) {
-            seenHeadlines.add(item.headline.toLowerCase());
-            allItems.push(item);
-          }
+        if (res.ok) {
+          const xml = await res.text();
+          return parseRssItems(xml, feed.source);
+        }
+      } catch (e) {
+        console.error(`Feed fetch error for ${feed.source} (${feed.url}):`, e);
+      }
+      return [];
+    })
+  );
+
+  for (const r of results) {
+    if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+      for (const item of r.value) {
+        const norm = item.headline.toLowerCase().trim();
+        if (!seenHeadlines.has(norm)) {
+          seenHeadlines.add(norm);
+          allItems.push(item);
         }
       }
-    } catch (e) {
-      console.error(`Failed to fetch live feed ${feed.url}:`, e);
     }
   }
 
-  // Sort by freshness
-  if (allItems.length > 0) {
-    return NextResponse.json(allItems.slice(0, 30));
-  }
+  // Sort by newest publication timestamp by default
+  allItems.sort((a, b) => b.publishedTimestamp - a.publishedTimestamp);
 
-  return NextResponse.json([]);
+  return NextResponse.json(allItems);
 }

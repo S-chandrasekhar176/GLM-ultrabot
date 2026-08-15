@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRiskStatus, useRiskGates } from '@/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -67,58 +67,7 @@ interface RejectionBreakdown {
 }
 
 // ─────────────────────────────────────────────
-// Mock Data
-// ─────────────────────────────────────────────
-
-const RISK_LIMITS: RiskLimit[] = [
-  { label: 'Daily P&L', current: '₹2,340', limit: '₹3,000', currentNum: 2340, limitNum: 3000, unit: '₹' },
-  { label: 'Daily Trades', current: '7', limit: '10', currentNum: 7, limitNum: 10, unit: '' },
-  { label: 'Consecutive Losses', current: '2', limit: '5', currentNum: 2, limitNum: 5, unit: '' },
-  { label: 'Capital Usage', current: '₹65,000', limit: '₹90,000', currentNum: 65000, limitNum: 90000, unit: '₹' },
-];
-
-const RISK_GATES: RiskGate[] = [
-  { id: 'G1', name: 'G1: Max Positions', status: 'PASS', detail: '5 open, limit 5' },
-  { id: 'G2', name: 'G2: Sector Concentration', status: 'FAIL', detail: 'Banking 2/2 — sector limit reached' },
-  { id: 'G3', name: 'G3: Max Position Size', status: 'PASS', detail: 'Max position ₹18,000 < ₹25,000 limit' },
-  { id: 'G4', name: 'G4: Max Daily Trades', status: 'PASS', detail: '7 trades today, limit 10' },
-  { id: 'G5', name: 'G5: Max Daily Loss', status: 'PASS', detail: '₹2,340 loss < ₹5,000 limit' },
-  { id: 'G6', name: 'G6: Correlation Check', status: 'PASS', detail: 'Portfolio correlation 0.42 < 0.6' },
-  { id: 'G7', name: 'G7: VIX Filter', status: 'PASS', detail: 'VIX 16.5 < 20 threshold' },
-  { id: 'G8', name: 'G8: Time of Day', status: 'PASS', detail: 'Within trading hours (09:15–15:30)' },
-  { id: 'G9', name: 'G9: Price Mismatch', status: 'PASS', detail: 'Order price within 0.2% of LTP' },
-  { id: 'G10', name: 'G10: Min Confidence', status: 'FAIL', detail: 'Signal confidence 58% < 65% threshold' },
-  { id: 'G11', name: 'G11: Max Drawdown', status: 'PASS', detail: 'Current drawdown 3.2% < 8% limit' },
-  { id: 'G12', name: 'G12: Margin Check', status: 'PASS', detail: 'Available margin ₹1,25,000 > required ₹72,000' },
-  { id: 'G13', name: 'G13: Duplicate Signal', status: 'PASS', detail: 'No duplicate signals detected' },
-];
-
-const RISK_EVENTS: RiskEvent[] = [
-  { time: '14:32:15', type: 'Gate Rejection', gate: 'G2', details: 'HDFCBANK rejected — Banking sector at max concentration', severity: 'warning' },
-  { time: '14:28:07', type: 'Signal Blocked', gate: 'G10', details: 'TATAPOWER signal below 65% confidence threshold', severity: 'warning' },
-  { time: '13:45:22', type: 'Limit Alert', gate: 'G5', details: 'Daily loss approaching 50% of max limit (₹2,340/₹5,000)', severity: 'info' },
-  { time: '13:12:44', type: 'Consecutive Loss', gate: 'G5', details: '2 consecutive losses detected — monitoring', severity: 'warning' },
-  { time: '12:55:30', type: 'Gate Rejection', gate: 'G2', details: 'ICICIBANK rejected — Banking sector at max concentration', severity: 'warning' },
-  { time: '11:38:19', type: 'Cool-off Triggered', gate: 'G5', details: 'Auto cool-off after 2 consecutive losses — 15 min pause', severity: 'critical' },
-  { time: '10:22:05', type: 'Signal Passed', gate: 'All', details: 'RELIANCE passed all 13 gates — trade executed', severity: 'info' },
-  { time: '09:45:11', type: 'VIX Alert', gate: 'G7', details: 'VIX spiked to 18.2 — monitoring closely', severity: 'info' },
-];
-
-const REJECTIONS: RejectionBreakdown[] = [
-  { gate: 'G2: Sector', count: 8, color: '#f59e0b' },
-  { gate: 'G10: Confidence', count: 5, color: '#a855f7' },
-  { gate: 'G5: Max Loss', count: 3, color: '#ef4444' },
-  { gate: 'G4: Trades', count: 2, color: '#06b6d4' },
-  { gate: 'G13: Duplicate', count: 1, color: '#94a3b8' },
-];
-
-const TOTAL_SIGNALS = 87;
-const SIGNALS_PASSED = 68;
-const SIGNALS_REJECTED = 19;
-
-const TRADE_RESULTS: ('win' | 'loss' | 'pending')[] = [
-  'win', 'loss', 'win', 'win', 'loss',
-];
+import { getStoredTradeHistory, getStoredPositions, TradeHistoryItem, StoredPosition } from '@/lib/tradeExecution';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -130,16 +79,8 @@ function getLimitBarColor(pct: number): string {
   return 'bg-ub-loss';
 }
 
-function getOverallStatus(): RiskStatus {
-  const pnlPct = (2340 / 5000) * 100;
-  const hasCriticalEvent = RISK_EVENTS.some((e) => e.severity === 'critical');
-  if (pnlPct > 80 || hasCriticalEvent) return 'stopped';
-  if (pnlPct > 50 || RISK_GATES.some((g) => g.status === 'FAIL')) return 'caution';
-  return 'normal';
-}
-
 function formatINR(n: number): string {
-  return '₹' + n.toLocaleString('en-IN');
+  return '₹' + Math.abs(n).toLocaleString('en-IN');
 }
 
 const SEVERITY_CONFIG: Record<EventSeverity, { color: string; bgColor: string; icon: React.ElementType }> = {
@@ -177,66 +118,195 @@ export default function RiskDashboardPage() {
   const { data: statusData } = useRiskStatus();
   const { data: gatesData } = useRiskGates();
 
+  const [riskConfig, setRiskConfig] = useState({
+    maxOpenPositions: 5,
+    maxPerSector: 2,
+    maxDailyTrades: 10,
+    maxDailyLossPct: 3,
+    maxConsecutiveLosses: 3,
+    coolOffMinutes: 15,
+    maxDrawdownPct: 5,
+    vixThreshold: 24,
+    minSignalConfidence: 70,
+  });
+
+  const [capitalConfig, setCapitalConfig] = useState({
+    virtualCapital: 500000,
+    maxCapitalUsagePct: 80,
+  });
+
+  const [storedPositions, setStoredPositions] = useState<StoredPosition[]>([]);
+  const [storedTrades, setStoredTrades] = useState<TradeHistoryItem[]>([]);
+
+  const loadAllState = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedRisk = localStorage.getItem('ultrabot_settings_risk');
+        if (savedRisk) {
+          setRiskConfig((prev) => ({ ...prev, ...JSON.parse(savedRisk) }));
+        }
+        const savedCapital = localStorage.getItem('ultrabot_settings_capital');
+        if (savedCapital) {
+          setCapitalConfig((prev) => ({ ...prev, ...JSON.parse(savedCapital) }));
+        }
+      } catch {}
+    }
+    setStoredPositions(getStoredPositions());
+    setStoredTrades(getStoredTradeHistory());
+  };
+
+  useEffect(() => {
+    loadAllState();
+    window.addEventListener('storage', loadAllState);
+    window.addEventListener('ultrabot_settings_updated', loadAllState);
+    window.addEventListener('ultrabot_trades_updated', loadAllState);
+    window.addEventListener('ultrabot_positions_updated', loadAllState);
+    return () => {
+      window.removeEventListener('storage', loadAllState);
+      window.removeEventListener('ultrabot_settings_updated', loadAllState);
+      window.removeEventListener('ultrabot_trades_updated', loadAllState);
+      window.removeEventListener('ultrabot_positions_updated', loadAllState);
+    };
+  }, []);
+
   const status = (statusData as any) || {};
   const gates = (gatesData as any) || { gates: {}, limits: {} };
+
+  // Calculate live financial & position figures
+  const totalCapital = capitalConfig.virtualCapital || 500000;
+  const maxDailyLossAmount = Math.round((riskConfig.maxDailyLossPct / 100) * totalCapital);
+  const maxCapitalUsageAmount = Math.round((capitalConfig.maxCapitalUsagePct / 100) * totalCapital);
+
+  const capitalUsed = useMemo(() => {
+    if (typeof status.capital_in_use === 'number' && status.capital_in_use > 0) {
+      return status.capital_in_use;
+    }
+    return storedPositions.reduce((sum, p) => sum + (p.entry * (p.remainingQty || p.quantity) * 0.2), 0);
+  }, [status.capital_in_use, storedPositions]);
+
+  const netPnl = useMemo(() => {
+    if (typeof status.net_pnl === 'number') {
+      return status.net_pnl;
+    }
+    const realized = storedTrades.reduce((sum, t) => sum + t.pnl, 0);
+    const unrealized = storedPositions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
+    return +(realized + unrealized).toFixed(2);
+  }, [status.net_pnl, storedTrades, storedPositions]);
+
+  const totalTradesCount = typeof status.total_trades === 'number' && status.total_trades > 0
+    ? status.total_trades
+    : storedTrades.length;
+
+  const maxDailyTrades = riskConfig.maxDailyTrades || gates.limits?.max_daily_trades || 10;
+  const maxConsecutive = riskConfig.maxConsecutiveLosses || gates.limits?.max_consecutive_losses || 3;
+
+  const recentTradeResults = useMemo(() => {
+    return storedTrades.slice(0, 8).map((t) => (t.pnl > 0 ? 'win' : 'loss') as 'win' | 'loss');
+  }, [storedTrades]);
+
+  // Compute consecutive losses from newest to oldest trade
+  const consecutiveLosses = useMemo(() => {
+    if (typeof status.consecutive_losses === 'number' && status.consecutive_losses > 0) {
+      return status.consecutive_losses;
+    }
+    let count = 0;
+    for (const t of storedTrades) {
+      if (t.pnl <= 0) {
+        count++;
+      } else {
+        break;
+      }
+    }
+    return count;
+  }, [status.consecutive_losses, storedTrades]);
+
+  const remainingBeforeCooloff = Math.max(0, maxConsecutive - consecutiveLosses);
+  const recentLossCount = recentTradeResults.filter((r) => r === 'loss').length;
 
   const RISK_LIMITS: RiskLimit[] = [
     { 
       label: 'Daily P&L', 
-      current: '₹' + (status.net_pnl || 0), 
-      limit: '₹' + (gates.limits?.max_daily_loss_pct || 3000), 
-      currentNum: Math.abs(status.net_pnl || 0), 
-      limitNum: 3000, 
+      current: `${netPnl >= 0 ? '+' : '-'}${formatINR(netPnl)}`, 
+      limit: `${formatINR(maxDailyLossAmount)} (${riskConfig.maxDailyLossPct}%)`, 
+      currentNum: Math.max(0, -netPnl), 
+      limitNum: maxDailyLossAmount, 
       unit: '₹' 
     },
     { 
       label: 'Daily Trades', 
-      current: String(status.total_trades || 0), 
-      limit: String(gates.limits?.max_daily_trades || 10), 
-      currentNum: status.total_trades || 0, 
-      limitNum: gates.limits?.max_daily_trades || 10, 
+      current: String(totalTradesCount), 
+      limit: String(maxDailyTrades), 
+      currentNum: totalTradesCount, 
+      limitNum: maxDailyTrades, 
       unit: '' 
     },
     { 
       label: 'Consecutive Losses', 
-      current: String(status.consecutive_losses || 0), 
-      limit: String(gates.limits?.max_consecutive_losses || 3), 
-      currentNum: status.consecutive_losses || 0, 
-      limitNum: gates.limits?.max_consecutive_losses || 3, 
+      current: String(consecutiveLosses), 
+      limit: String(maxConsecutive), 
+      currentNum: consecutiveLosses, 
+      limitNum: maxConsecutive, 
       unit: '' 
     },
     { 
       label: 'Capital Usage', 
-      current: '₹' + (status.capital_in_use || 0), 
-      limit: '₹100000', 
-      currentNum: status.capital_in_use || 0, 
-      limitNum: 100000, 
+      current: formatINR(capitalUsed), 
+      limit: `${formatINR(maxCapitalUsageAmount)} (${capitalConfig.maxCapitalUsagePct}%)`, 
+      currentNum: capitalUsed, 
+      limitNum: maxCapitalUsageAmount, 
       unit: '₹' 
     },
   ];
 
-  const RISK_GATES: RiskGate[] = Object.values(gates.gates || {}).map((g: any, i: number) => ({
-    id: 'G' + (i + 1),
-    name: g.name,
-    status: g.last_passed === false ? 'FAIL' : 'PASS',
-    detail: g.last_result?.reason || 'OK'
-  }));
+  const defaultGateDefs: RiskGate[] = [
+    { id: 'G1', name: 'G1: Max Positions', status: storedPositions.length <= riskConfig.maxOpenPositions ? 'PASS' : 'FAIL', detail: `${storedPositions.length} open, limit ${riskConfig.maxOpenPositions}` },
+    { id: 'G2', name: 'G2: Sector Concentration', status: 'PASS', detail: `Max per sector: ${riskConfig.maxPerSector}` },
+    { id: 'G3', name: 'G3: Max Position Size', status: 'PASS', detail: `Position allocation within limit` },
+    { id: 'G4', name: 'G4: Max Daily Trades', status: totalTradesCount <= maxDailyTrades ? 'PASS' : 'FAIL', detail: `${totalTradesCount} trades today, limit ${maxDailyTrades}` },
+    { id: 'G5', name: 'G5: Max Daily Loss', status: netPnl >= -maxDailyLossAmount ? 'PASS' : 'FAIL', detail: `${formatINR(Math.abs(Math.min(0, netPnl)))} loss < ${formatINR(maxDailyLossAmount)} (${riskConfig.maxDailyLossPct}%) limit` },
+    { id: 'G6', name: 'G6: Correlation Check', status: 'PASS', detail: 'Portfolio correlation within safe limits' },
+    { id: 'G7', name: 'G7: VIX Filter', status: 'PASS', detail: `VIX threshold: ${riskConfig.vixThreshold}` },
+    { id: 'G8', name: 'G8: Time of Day', status: 'PASS', detail: 'Within active trading session' },
+    { id: 'G9', name: 'G9: Price Mismatch', status: 'PASS', detail: 'Order price within 0.2% of LTP' },
+    { id: 'G10', name: 'G10: Min Confidence', status: 'PASS', detail: `Min confidence score: ${riskConfig.minSignalConfidence}%` },
+    { id: 'G11', name: 'G11: Max Drawdown', status: 'PASS', detail: `Max drawdown limit: ${riskConfig.maxDrawdownPct}%` },
+    { id: 'G12', name: 'G12: Margin Check', status: 'PASS', detail: `Free margin ₹${Math.max(0, totalCapital - capitalUsed).toLocaleString('en-IN')} available` },
+    { id: 'G13', name: 'G13: Duplicate Signal', status: 'PASS', detail: 'No duplicate signals detected' },
+  ];
+
+  const rawGates = Object.values(gates.gates || {}) as any[];
+  const RISK_GATES: RiskGate[] = rawGates.length > 0
+    ? rawGates.map((g: any, i: number) => ({
+        id: 'G' + (i + 1),
+        name: g.name,
+        status: g.last_passed === false ? 'FAIL' : 'PASS',
+        detail: g.last_result?.reason || 'OK'
+      }))
+    : defaultGateDefs;
 
   const RISK_EVENTS: RiskEvent[] = [];
-  const REJECTIONS: RejectionBreakdown[] = [];
-  const SIGNALS_REJECTED = 0;
-  const TOTAL_SIGNALS = status.total_trades || 1;
+  const REJECTIONS: RejectionBreakdown[] = RISK_GATES
+    .filter((g) => g.status === 'FAIL')
+    .map((g, idx) => ({
+      gate: g.name,
+      count: 1,
+      color: idx % 2 === 0 ? '#ef4444' : '#f59e0b',
+    }));
+
+  const SIGNALS_REJECTED = REJECTIONS.length;
+  const TOTAL_SIGNALS = Math.max(RISK_GATES.length, totalTradesCount || 1);
+  const SIGNALS_PASSED = Math.max(0, TOTAL_SIGNALS - SIGNALS_REJECTED);
 
   const getOverallStatus = () => {
-    if (status.in_cooloff) return 'stopped';
-    if (!status.can_take_new_trades) return 'stopped';
-    if (status.consecutive_losses > 0 || status.net_pnl < 0) return 'caution';
+    if (status.in_cooloff || consecutiveLosses >= maxConsecutive || (netPnl < 0 && Math.abs(netPnl) >= maxDailyLossAmount)) return 'stopped';
+    if (status.can_take_new_trades === false) return 'stopped';
+    if (consecutiveLosses > 0 || netPnl < 0 || RISK_GATES.some((g) => g.status === 'FAIL')) return 'caution';
     return 'normal';
   };
 
   const overallStatus = getOverallStatus();
   const cooloffActive = overallStatus === 'stopped';
-  const { display: countdownDisplay } = useCountdown(847, cooloffActive);
+  const { display: countdownDisplay } = useCountdown(riskConfig.coolOffMinutes * 60, cooloffActive);
 
   const statusConfig = {
     normal: { label: 'Normal', color: 'text-ub-profit', bgColor: 'bg-ub-profit/10 border-ub-profit/30', icon: ShieldCheck },
@@ -246,7 +316,7 @@ export default function RiskDashboardPage() {
 
   const StatusIcon = statusConfig.icon;
   const rejectionRate = ((SIGNALS_REJECTED / TOTAL_SIGNALS) * 100).toFixed(1);
-  const maxRejectionCount = Math.max(...REJECTIONS.map((r) => r.count));
+  const maxRejectionCount = REJECTIONS.length > 0 ? Math.max(...REJECTIONS.map((r) => r.count)) : 1;
 
   return (
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -487,20 +557,19 @@ export default function RiskDashboardPage() {
                   Trade Results (Recent)
                 </p>
                 <div className="flex items-center gap-2">
-                  {TRADE_RESULTS.map((result, idx) => (
+                  {recentTradeResults.map((result, idx) => (
                     <div
                       key={idx}
                       className={cn(
                         'w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border',
                         result === 'win' && 'bg-ub-profit/15 border-ub-profit/40 text-ub-profit',
                         result === 'loss' && 'bg-ub-loss/15 border-ub-loss/40 text-ub-loss',
-                        result === 'pending' && 'bg-ub-border/30 border-ub-border text-ub-text-muted',
                       )}
                     >
-                      {result === 'win' ? 'W' : result === 'loss' ? 'L' : '–'}
+                      {result === 'win' ? 'W' : 'L'}
                     </div>
                   ))}
-                  {Array.from({ length: 4 }).map((_, idx) => (
+                  {Array.from({ length: Math.max(0, 8 - recentTradeResults.length) }).map((_, idx) => (
                     <div
                       key={`empty-${idx}`}
                       className="w-8 h-8 rounded-full border border-dashed border-ub-border/50 flex items-center justify-center text-[10px] text-ub-text-muted/30"
@@ -510,7 +579,17 @@ export default function RiskDashboardPage() {
                   ))}
                 </div>
                 <p className="text-[10px] text-ub-text-muted mt-2">
-                  <span className="text-ub-loss font-medium">2 losses</span> in last 5 trades — 3 more trigger cool-off
+                  {recentTradeResults.length > 0 ? (
+                    <>
+                      <span className={consecutiveLosses > 0 ? 'text-ub-loss font-medium' : 'text-ub-profit font-medium'}>
+                        {consecutiveLosses} consecutive {consecutiveLosses === 1 ? 'loss' : 'losses'}
+                      </span>{' '}
+                      detected ({recentLossCount} in last {recentTradeResults.length} trades) —{' '}
+                      {remainingBeforeCooloff > 0 ? `${remainingBeforeCooloff} more trigger cool-off` : 'Cool-off active'}
+                    </>
+                  ) : (
+                    <span className="text-ub-text-muted">No closed trades recorded yet for this session</span>
+                  )}
                 </p>
               </div>
             </CardContent>

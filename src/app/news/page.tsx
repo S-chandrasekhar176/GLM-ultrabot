@@ -2,20 +2,23 @@
 
 import { useState, useMemo } from 'react';
 import { useNews } from '@/hooks/useApi';
-import { theme } from '@/styles/theme';
 import {
   Newspaper,
   TrendingUp,
   TrendingDown,
   Clock,
   ExternalLink,
-  ShieldCheck,
   Tag,
   ArrowUpRight,
   ArrowDownRight,
   Minus,
   Search,
   Filter,
+  ArrowUpDown,
+  Calendar,
+  Sparkles,
+  RefreshCw,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,29 +26,71 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
+type SortOption = 'latest' | 'oldest' | 'stocks_asc' | 'stocks_desc' | 'confidence' | 'bullish' | 'bearish';
+
 export default function NewsPage() {
   const { data: newsItems, isLoading, isError, refetch } = useNews();
-  const [filterSentiment, setFilterSentiment] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
+  const [filterSentiment, setFilterSentiment] = useState<'ALL' | 'BUY' | 'SELL' | 'NEUTRAL'>('ALL');
   const [filterProvider, setFilterProvider] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<SortOption>('latest');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredItems = useMemo(() => {
+  // Compute live provider counts across all received news items
+  const providerCounts = useMemo(() => {
+    if (!Array.isArray(newsItems)) {
+      return { total: 0, et: 0, mc: 0, lm: 0, bs: 0, other: 0 };
+    }
+    let et = 0;
+    let mc = 0;
+    let lm = 0;
+    let bs = 0;
+    let other = 0;
+
+    for (const item of newsItems) {
+      const src = (item.source || '').toLowerCase();
+      const code = item.providerCode;
+
+      if (code === 'ET' || src.includes('economic') || src.includes('et ')) et++;
+      else if (code === 'MC' || src.includes('moneycontrol') || src.includes('mc ')) mc++;
+      else if (code === 'LM' || src.includes('livemint') || src.includes('mint')) lm++;
+      else if (code === 'BS' || src.includes('business standard') || src.includes('bs ')) bs++;
+      else other++;
+    }
+
+    return { total: newsItems.length, et, mc, lm, bs, other };
+  }, [newsItems]);
+
+  const filteredAndSortedItems = useMemo(() => {
     if (!Array.isArray(newsItems)) return [];
-    return newsItems.filter((item: any) => {
+
+    // 1. Filter
+    const filtered = newsItems.filter((item: any) => {
+      const sentiment = (item.sentiment || item.tradeAction || 'NEUTRAL').toUpperCase();
       const matchesSentiment =
         filterSentiment === 'ALL' ||
-        (item.sentiment || item.tradeAction || '').toUpperCase() === filterSentiment;
+        (filterSentiment === 'BUY' && (sentiment === 'BUY' || sentiment === 'BULLISH')) ||
+        (filterSentiment === 'SELL' && (sentiment === 'SELL' || sentiment === 'BEARISH')) ||
+        (filterSentiment === 'NEUTRAL' && sentiment === 'NEUTRAL');
 
       const src = (item.source || '').toLowerCase();
+      const code = item.providerCode;
       let matchesProvider = true;
+
       if (filterProvider === 'ET') {
-        matchesProvider = src.includes('economic') || src.includes('et');
+        matchesProvider = code === 'ET' || src.includes('economic') || src.includes('et ');
       } else if (filterProvider === 'MC') {
-        matchesProvider = src.includes('moneycontrol');
+        matchesProvider = code === 'MC' || src.includes('moneycontrol') || src.includes('mc ');
       } else if (filterProvider === 'LM') {
-        matchesProvider = src.includes('livemint') || src.includes('mint');
+        matchesProvider = code === 'LM' || src.includes('livemint') || src.includes('mint');
+      } else if (filterProvider === 'BS') {
+        matchesProvider = code === 'BS' || src.includes('business standard') || src.includes('bs ');
       } else if (filterProvider === 'OTHER') {
-        matchesProvider = !src.includes('economic') && !src.includes('moneycontrol') && !src.includes('mint');
+        matchesProvider =
+          code === 'OTHER' ||
+          (!src.includes('economic') &&
+            !src.includes('moneycontrol') &&
+            !src.includes('mint') &&
+            !src.includes('business standard'));
       }
 
       const q = searchQuery.toLowerCase().trim();
@@ -53,36 +98,76 @@ export default function NewsPage() {
         !q ||
         (item.symbol || '').toLowerCase().includes(q) ||
         (item.headline || '').toLowerCase().includes(q) ||
+        (item.summary || '').toLowerCase().includes(q) ||
         (item.source || '').toLowerCase().includes(q) ||
         (item.symbols || []).some((s: string) => s.toLowerCase().includes(q));
 
       return matchesSentiment && matchesProvider && matchesSearch;
     });
-  }, [newsItems, filterSentiment, filterProvider, searchQuery]);
+
+    // 2. Sort
+    return filtered.sort((a: any, b: any) => {
+      if (sortOption === 'latest') {
+        const timeA = a.publishedTimestamp || 0;
+        const timeB = b.publishedTimestamp || 0;
+        return timeB - timeA;
+      }
+      if (sortOption === 'oldest') {
+        const timeA = a.publishedTimestamp || 0;
+        const timeB = b.publishedTimestamp || 0;
+        return timeA - timeB;
+      }
+      if (sortOption === 'stocks_asc') {
+        const symA = (a.symbol || 'ZZZ').toUpperCase();
+        const symB = (b.symbol || 'ZZZ').toUpperCase();
+        return symA.localeCompare(symB);
+      }
+      if (sortOption === 'stocks_desc') {
+        const symA = (a.symbol || 'AAA').toUpperCase();
+        const symB = (b.symbol || 'AAA').toUpperCase();
+        return symB.localeCompare(symA);
+      }
+      if (sortOption === 'confidence') {
+        return (b.confidence || 0) - (a.confidence || 0);
+      }
+      if (sortOption === 'bullish') {
+        const isBuyA = a.sentiment === 'BUY' ? 1 : 0;
+        const isBuyB = b.sentiment === 'BUY' ? 1 : 0;
+        return isBuyB - isBuyA;
+      }
+      if (sortOption === 'bearish') {
+        const isSellA = a.sentiment === 'SELL' ? 1 : 0;
+        const isSellB = b.sentiment === 'SELL' ? 1 : 0;
+        return isSellB - isSellA;
+      }
+      return 0;
+    });
+  }, [newsItems, filterSentiment, filterProvider, sortOption, searchQuery]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center bg-ub-accent/15 border border-ub-accent/20"
-          >
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-ub-accent/15 border border-ub-accent/20">
             <Newspaper className="w-5 h-5 text-ub-accent" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-ub-text-primary">
+            <h1 className="text-2xl font-bold tracking-tight text-ub-text-primary flex items-center gap-2">
               Real-time Market News & Sentiment
+              <Badge variant="outline" className="text-[11px] font-mono text-ub-accent border-ub-accent/40 bg-ub-accent/10">
+                Live Feed
+              </Badge>
             </h1>
             <p className="text-sm text-ub-text-muted">
-              Live automated news sentiment analysis, published times & trade signals for NSE F&O stocks
+              Live automated financial news aggregation, NLP sentiment analysis & trade impact signals for Indian markets
             </p>
           </div>
         </div>
 
-        {/* Filter actions */}
+        {/* Filter & Search actions */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative w-48 sm:w-64">
+          <div className="relative w-48 sm:w-60">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ub-text-muted" />
             <Input
               placeholder="Search ticker or news..."
@@ -116,7 +201,7 @@ export default function NewsPage() {
                   : 'text-ub-text-muted hover:text-ub-text-primary'
               }`}
             >
-              Buy
+              Bullish
             </Button>
             <Button
               variant="ghost"
@@ -128,83 +213,135 @@ export default function NewsPage() {
                   : 'text-ub-text-muted hover:text-ub-text-primary'
               }`}
             >
-              Sell
+              Bearish
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFilterSentiment('NEUTRAL')}
+              className={`h-7 px-2.5 text-xs font-medium rounded-md ${
+                filterSentiment === 'NEUTRAL'
+                  ? 'bg-ub-surface-active text-ub-text-primary'
+                  : 'text-ub-text-muted hover:text-ub-text-primary'
+              }`}
+            >
+              Neutral
             </Button>
           </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            className="h-8 w-8 border-ub-border text-ub-text-muted hover:text-ub-text-primary hover:border-ub-accent/40"
+            title="Refresh news feed"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
 
-      {/* Provider Switcher Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        <span className="text-xs text-ub-text-muted flex items-center gap-1 shrink-0 mr-1">
-          <Filter className="h-3.5 w-3.5" /> Source Provider:
-        </span>
-        <button
-          onClick={() => setFilterProvider('ALL')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all shrink-0 ${
-            filterProvider === 'ALL'
-              ? 'bg-ub-accent/15 border-ub-accent text-ub-accent shadow-sm'
-              : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
-          }`}
-        >
-          <span>🌐</span> All Providers
-        </button>
-        <button
-          onClick={() => setFilterProvider('ET')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all shrink-0 ${
-            filterProvider === 'ET'
-              ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 shadow-sm'
-              : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
-          }`}
-        >
-          <span>📰</span> Economic Times
-        </button>
-        <button
-          onClick={() => setFilterProvider('MC')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all shrink-0 ${
-            filterProvider === 'MC'
-              ? 'bg-blue-500/15 border-blue-500 text-blue-400 shadow-sm'
-              : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
-          }`}
-        >
-          <span>📊</span> Moneycontrol
-        </button>
-        <button
-          onClick={() => setFilterProvider('LM')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all shrink-0 ${
-            filterProvider === 'LM'
-              ? 'bg-orange-500/15 border-orange-500 text-orange-400 shadow-sm'
-              : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
-          }`}
-        >
-          <span>⚡</span> LiveMint
-        </button>
-        <button
-          onClick={() => setFilterProvider('OTHER')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all shrink-0 ${
-            filterProvider === 'OTHER'
-              ? 'bg-purple-500/15 border-purple-500 text-purple-400 shadow-sm'
-              : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
-          }`}
-        >
-          <span>🔍</span> NSE / Others
-        </button>
+      {/* Provider Switcher Bar & Sort Control */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1 border-y border-ub-border/60 py-3">
+        {/* Source Provider Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+          <button
+            onClick={() => setFilterProvider('ALL')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'ALL'
+                ? 'bg-ub-accent/15 border-ub-accent text-ub-accent shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>🌐</span> All Sources ({providerCounts.total})
+          </button>
+          <button
+            onClick={() => setFilterProvider('ET')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'ET'
+                ? 'bg-emerald-500/15 border-emerald-500 text-emerald-400 shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>📰</span> Economic Times ({providerCounts.et})
+          </button>
+          <button
+            onClick={() => setFilterProvider('MC')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'MC'
+                ? 'bg-blue-500/15 border-blue-500 text-blue-400 shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>📊</span> Moneycontrol ({providerCounts.mc})
+          </button>
+          <button
+            onClick={() => setFilterProvider('LM')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'LM'
+                ? 'bg-orange-500/15 border-orange-500 text-orange-400 shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>⚡</span> LiveMint ({providerCounts.lm})
+          </button>
+          <button
+            onClick={() => setFilterProvider('BS')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'BS'
+                ? 'bg-cyan-500/15 border-cyan-500 text-cyan-400 shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>📈</span> Business Standard ({providerCounts.bs})
+          </button>
+          <button
+            onClick={() => setFilterProvider('OTHER')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
+              filterProvider === 'OTHER'
+                ? 'bg-purple-500/15 border-purple-500 text-purple-400 shadow-sm'
+                : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
+            }`}
+          >
+            <span>🔍</span> NSE / Others ({providerCounts.other})
+          </button>
+        </div>
+
+        {/* Sort Filter Options Bar */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-ub-text-muted flex items-center gap-1 font-medium">
+            <ArrowUpDown className="h-3.5 w-3.5 text-ub-accent" /> Sort By:
+          </span>
+          <select
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value as SortOption)}
+            className="h-8 px-2.5 text-xs bg-ub-surface border border-ub-border rounded-lg text-ub-text-primary focus:outline-none focus:border-ub-accent cursor-pointer font-medium"
+          >
+            <option value="latest">🕒 Latest First (Newest Date)</option>
+            <option value="oldest">⏳ Oldest First</option>
+            <option value="stocks_asc">🔤 Stock Ticker (A → Z)</option>
+            <option value="stocks_desc">🔤 Stock Ticker (Z → A)</option>
+            <option value="confidence">🎯 Highest AI Confidence</option>
+            <option value="bullish">📈 Bullish / Buy Signals First</option>
+            <option value="bearish">📉 Bearish / Sell Signals First</option>
+          </select>
+        </div>
       </div>
 
-      {/* Content */}
+      {/* Content Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <Card key={i} className="bg-ub-surface border-ub-border">
               <CardContent className="p-5 space-y-3">
                 <div className="flex justify-between items-center">
-                  <Skeleton className="h-5 w-24 rounded" />
-                  <Skeleton className="h-5 w-16 rounded" />
+                  <Skeleton className="h-5 w-24 rounded bg-ub-surface-active" />
+                  <Skeleton className="h-5 w-16 rounded bg-ub-surface-active" />
                 </div>
-                <Skeleton className="h-12 w-full rounded" />
+                <Skeleton className="h-12 w-full rounded bg-ub-surface-active" />
                 <div className="flex justify-between items-center pt-2">
-                  <Skeleton className="h-4 w-20 rounded" />
-                  <Skeleton className="h-4 w-28 rounded" />
+                  <Skeleton className="h-4 w-20 rounded bg-ub-surface-active" />
+                  <Skeleton className="h-4 w-28 rounded bg-ub-surface-active" />
                 </div>
               </CardContent>
             </Card>
@@ -212,7 +349,7 @@ export default function NewsPage() {
         </div>
       ) : isError ? (
         <Card className="border-ub-loss/30 bg-ub-loss/5 p-8 text-center space-y-3">
-          <p className="text-ub-loss font-medium">Failed to load news feed.</p>
+          <p className="text-ub-loss font-medium">Failed to load live news feed.</p>
           <Button
             size="sm"
             onClick={() => refetch()}
@@ -221,9 +358,9 @@ export default function NewsPage() {
             Retry News Feed
           </Button>
         </Card>
-      ) : filteredItems && filteredItems.length > 0 ? (
+      ) : filteredAndSortedItems && filteredAndSortedItems.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredItems.map((item: any, idx: number) => {
+          {filteredAndSortedItems.map((item: any, idx: number) => {
             const sentiment = (item.sentiment || item.tradeAction || 'NEUTRAL').toUpperCase();
             const isBuy = sentiment === 'BUY' || sentiment === 'BULLISH';
             const isSell = sentiment === 'SELL' || sentiment === 'BEARISH';
@@ -231,7 +368,7 @@ export default function NewsPage() {
 
             return (
               <Card
-                key={idx}
+                key={item.id || idx}
                 className="bg-ub-surface border-ub-border hover:border-ub-accent/40 transition-all duration-200 shadow-sm flex flex-col justify-between"
               >
                 <CardContent className="p-5 flex flex-col h-full space-y-3">
@@ -240,12 +377,12 @@ export default function NewsPage() {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge
                         variant="outline"
-                        className="font-bold text-xs px-2 py-0.5 border-ub-accent/30 text-ub-accent bg-ub-accent/10"
+                        className="font-bold text-xs px-2 py-0.5 border-ub-accent/30 text-ub-accent bg-ub-accent/10 font-mono"
                       >
                         {item.symbol || 'NIFTY'}
                       </Badge>
                       {item.category && (
-                        <span className="text-[11px] text-ub-text-muted px-1.5 py-0.5 rounded bg-ub-surface-hover">
+                        <span className="text-[11px] text-ub-text-muted px-1.5 py-0.5 rounded bg-ub-surface-hover border border-ub-border/50">
                           {item.category}
                         </span>
                       )}
@@ -340,9 +477,16 @@ export default function NewsPage() {
                             <ExternalLink className="h-3 w-3" />
                           </a>
 
-                          <div className="flex items-center gap-1 text-[11px] text-ub-text-muted shrink-0">
-                            <Clock className="h-3 w-3 text-ub-accent" />
-                            <span>{item.publishedAt || item.timeAgo || 'Recently'}</span>
+                          <div className="flex items-center gap-2 text-[11px] text-ub-text-muted shrink-0">
+                            {item.confidence && (
+                              <span className="text-emerald-400 font-semibold text-[10px] bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+                                {item.confidence}% Conf.
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-ub-accent" />
+                              <span>{item.publishedAt || item.timeAgo || 'Recently'}</span>
+                            </div>
                           </div>
                         </div>
                       </>
@@ -359,9 +503,21 @@ export default function NewsPage() {
           <h3 className="text-base font-semibold text-ub-text-primary mb-1">
             No matching news found
           </h3>
-          <p className="text-xs text-ub-text-muted">
-            Try adjusting your search query or sentiment filter.
+          <p className="text-xs text-ub-text-muted max-w-sm mx-auto mb-4">
+            No news articles match your current provider filter ({filterProvider}), sentiment ({filterSentiment}), or search query.
           </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setFilterProvider('ALL');
+              setFilterSentiment('ALL');
+              setSearchQuery('');
+            }}
+            className="border-ub-border text-xs"
+          >
+            Reset Filters
+          </Button>
         </Card>
       )}
     </div>

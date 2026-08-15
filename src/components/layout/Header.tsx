@@ -82,6 +82,11 @@ export default function Header() {
   const [indices, setIndices] = useState<MarketIndexItem[]>(INITIAL_INDICES);
   const [flashingIndex, setFlashingIndex] = useState<{ id: string; dir: 'up' | 'down' } | null>(null);
   const [marketInfo, setMarketInfo] = useState<MarketHoursInfo>(getMarketHoursInfo());
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (engineData && (engineData as any).state) {
@@ -307,6 +312,7 @@ export default function Header() {
           {/* Market Status & Countdown Timer */}
           <Badge
             className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-semibold border rounded-full"
+            suppressHydrationWarning
             style={{
               backgroundColor: isMarketOpen ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)',
               borderColor: isMarketOpen ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
@@ -319,12 +325,15 @@ export default function Header() {
               }`}
             />
             <Clock className="h-2.5 w-2.5" />
-            {formatMarketTimer(marketInfo)}
+            {mounted ? formatMarketTimer(marketInfo) : 'Market Closed'}
           </Badge>
 
           {/* Real IST Clock */}
-          <span className="hidden sm:block text-[11px] font-mono text-ub-text-muted tabular-nums">
-            {marketInfo.istTimeString}
+          <span
+            className="hidden sm:block text-[11px] font-mono text-ub-text-muted tabular-nums"
+            suppressHydrationWarning
+          >
+            {mounted ? marketInfo.istTimeString : ''}
           </span>
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
 } from '@/lib/opportunityStorage';
 import { getConfirmedOppIds, getSkippedOppIds, executeOpportunityTrade, addSkippedOppId, checkAndAutoSquareoffPositions } from '@/lib/tradeExecution';
 import { getOpportunities, confirmOpportunity, skipOpportunity, runBacktest, getBacktestStatus, getBacktestResult } from '@/lib/api';
+import { TradingViewChartModal, type ChartTradeData } from '@/components/chart/TradingViewChartModal';
 import {
   Clock,
   TrendingUp,
@@ -120,7 +121,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 1412.00,
     riskReward: 2.03,
     capitalRequired: 69125,
-    expiryAt: new Date(Date.now() + 90 * 1000).toISOString(),
+    expiryAt: '2026-08-15T15:15:00.000Z',
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX at 15.5 is below maximum limit of 22.0' },
       { name: 'Max Daily Loss', passed: true, detail: 'Current daily loss at 0% / 2.0% limit' },
@@ -144,7 +145,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 13825,
-    createdAt: new Date(Date.now() - 35 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:15:00.000Z',
   },
   {
     id: 'opp-2',
@@ -157,7 +158,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 1672.00,
     riskReward: 2.04,
     capitalRequired: 82140,
-    expiryAt: new Date(Date.now() + 150 * 1000).toISOString(),
+    expiryAt: '2026-08-15T15:15:00.000Z',
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX at 15.5 is below maximum limit of 22.0' },
       { name: 'Max Daily Loss', passed: true, detail: 'Daily PnL positive' },
@@ -181,7 +182,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 16428,
-    createdAt: new Date(Date.now() - 65 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:16:00.000Z',
   },
   {
     id: 'opp-3',
@@ -194,7 +195,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 838.00,
     riskReward: 2.20,
     capitalRequired: 61380,
-    expiryAt: new Date(Date.now() + 60 * 1000).toISOString(),
+    expiryAt: '2026-08-15T15:15:00.000Z',
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX 15.5 within range' },
       { name: 'Max Daily Loss', passed: true, detail: 'Normal risk state' },
@@ -218,7 +219,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 75,
     margin: 12276,
-    createdAt: new Date(Date.now() - 20 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:17:00.000Z',
   },
   {
     id: 'opp-4',
@@ -231,7 +232,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 4205.00,
     riskReward: 2.25,
     capitalRequired: 82300,
-    expiryAt: new Date(Date.now() + 180 * 1000).toISOString(),
+    expiryAt: '2026-08-15T15:15:00.000Z',
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX 15.5 within safe limit' },
       { name: 'Max Daily Loss', passed: true, detail: 'Daily PnL protected' },
@@ -255,7 +256,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 20,
     margin: 16460,
-    createdAt: new Date(Date.now() - 50 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:18:00.000Z',
   },
 ];
 
@@ -287,7 +288,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 200,
     margin: 6168,
-    createdAt: new Date(Date.now() - 120 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:10:00.000Z',
   },
   {
     id: 'rej-2',
@@ -315,7 +316,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 100,
     margin: 10960,
-    createdAt: new Date(Date.now() - 180 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:11:00.000Z',
   },
   {
     id: 'rej-3',
@@ -343,7 +344,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 10,
     margin: 13700,
-    createdAt: new Date(Date.now() - 240 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:12:00.000Z',
   },
   {
     id: 'rej-4',
@@ -371,7 +372,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 30,
     margin: 10710,
-    createdAt: new Date(Date.now() - 300 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:13:00.000Z',
   },
 ];
 
@@ -387,7 +388,7 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     target: 1002.00,
     riskReward: 2.05,
     capitalRequired: 49025,
-    expiryAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    expiryAt: '2026-08-15T09:15:00.000Z',
     riskGates: [
       { name: 'Target Guard', passed: false, detail: 'Target price ₹1002.00 reached (+2.2% move finished at LTP ₹1004.50) before confirmation' },
       { name: 'Confidence Gate', passed: true, detail: 'Score 82% passed' },
@@ -402,7 +403,7 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 9805,
-    createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    createdAt: '2026-08-15T09:00:00.000Z',
   },
   {
     id: 'exp-2',
@@ -415,7 +416,7 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     target: 3700.00,
     riskReward: 2.00,
     capitalRequired: 72400,
-    expiryAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    expiryAt: '2026-08-15T09:15:00.000Z',
     riskGates: [
       { name: 'Stop-Loss Guard', passed: false, detail: 'Stop-loss level ₹3580.00 breached (LTP ₹3572.00) — setup thesis failed' },
       { name: 'Confidence Gate', passed: true, detail: 'Score 79% passed' },
@@ -430,7 +431,7 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 20,
     margin: 14480,
-    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    createdAt: '2026-08-15T08:50:00.000Z',
   },
 ];
 
@@ -520,8 +521,10 @@ function getInvalidationDetails(reason?: string) {
 function CreationTimeBadge({ createdAt }: { createdAt?: string }) {
   const [elapsed, setElapsed] = useState('');
   const [exactTime, setExactTime] = useState('');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (!createdAt) return;
 
     const calc = () => {
@@ -569,12 +572,17 @@ function CreationTimeBadge({ createdAt }: { createdAt?: string }) {
         <TooltipTrigger asChild>
           <Badge
             variant="outline"
+            suppressHydrationWarning
             className="bg-ub-surface/90 border-cyan-500/30 text-cyan-300 text-[11px] font-medium flex items-center gap-1.5 px-2 py-0.5 shadow-sm"
           >
             <Clock className="h-3 w-3 text-cyan-400 shrink-0" />
             <span className="text-ub-text-muted text-[10px]">Created:</span>
-            <span className="font-mono text-cyan-300 font-semibold text-[11px]">{exactTime || createdAt}</span>
-            <span className="text-[10px] text-cyan-400/90 font-mono bg-cyan-950/60 px-1 py-0.2 rounded">({elapsed || '0s ago'})</span>
+            <span className="font-mono text-cyan-300 font-semibold text-[11px]" suppressHydrationWarning>
+              {mounted ? (exactTime || 'Just now') : 'Live'}
+            </span>
+            <span className="text-[10px] text-cyan-400/90 font-mono bg-cyan-950/60 px-1 py-0.2 rounded" suppressHydrationWarning>
+              ({mounted ? (elapsed || '0s ago') : '0s ago'})
+            </span>
           </Badge>
         </TooltipTrigger>
         <TooltipContent>
@@ -592,8 +600,10 @@ function CreationTimeBadge({ createdAt }: { createdAt?: string }) {
 function TimerCountdown({ expiryAt, onExpire }: { expiryAt: string; onExpire?: () => void }) {
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpired, setIsExpired] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     if (!expiryAt) return;
     const update = () => {
       const diff = new Date(expiryAt).getTime() - Date.now();
@@ -616,12 +626,13 @@ function TimerCountdown({ expiryAt, onExpire }: { expiryAt: string; onExpire?: (
 
   return (
     <span
+      suppressHydrationWarning
       className={`flex items-center gap-1 text-xs font-mono font-medium ${
         isExpired ? 'text-ub-loss font-bold' : timeLeft.includes('0:') || timeLeft.includes('1:') ? 'text-ub-warning font-semibold' : 'text-ub-text-muted'
       }`}
     >
       <Timer className="h-3 w-3" />
-      {timeLeft}
+      {mounted ? timeLeft : '--:--'}
     </span>
   );
 }
@@ -718,6 +729,7 @@ function OpportunityCard({
   onConfirm,
   onSkip,
   onExpire,
+  onOpenChart,
   isConfirming,
   isSkipping,
   isBacktestLoading,
@@ -728,6 +740,7 @@ function OpportunityCard({
   onConfirm: (id: string) => void;
   onSkip: (id: string) => void;
   onExpire?: (id: string) => void;
+  onOpenChart?: (opp: OpportunityData) => void;
   isConfirming: boolean;
   isSkipping: boolean;
   isBacktestLoading?: boolean;
@@ -924,6 +937,16 @@ function OpportunityCard({
                       Backtest: {backtestResult.winRate?.toFixed(0)}% Win | ₹{backtestResult.totalPnl?.toFixed(0)} PnL
                     </span>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 text-xs font-semibold h-8"
+                    onClick={() => onOpenChart?.(opp)}
+                    title="Open real-time interactive candlestick chart with strategy markings"
+                  >
+                    <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+                    View Chart
+                  </Button>
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">
@@ -1031,6 +1054,7 @@ export default function OpportunitiesPage() {
   const [countdown, setCountdown] = useState<number>(60);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [marketInfo, setMarketInfo] = useState<MarketHoursInfo>(getMarketHoursInfo());
+  const [selectedChartTrade, setSelectedChartTrade] = useState<ChartTradeData | null>(null);
   const backtestPollRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   // Listen to market hours every second & auto square-off
@@ -1827,6 +1851,20 @@ export default function OpportunitiesPage() {
                     onConfirm={handleConfirm}
                     onSkip={handleSkip}
                     onExpire={handleExpireOpportunity}
+                    onOpenChart={(tradeOpp) =>
+                      setSelectedChartTrade({
+                        symbol: tradeOpp.symbol,
+                        direction: tradeOpp.direction,
+                        entry: tradeOpp.entry,
+                        stopLoss: tradeOpp.stopLoss,
+                        target: tradeOpp.target,
+                        strategy: tradeOpp.strategy,
+                        winRate: tradeOpp.winRate,
+                        confidence: Math.round(tradeOpp.kronosScore * 100),
+                        riskReward: tradeOpp.riskReward,
+                        quantity: tradeOpp.quantity,
+                      })
+                    }
                     isConfirming={isConfirming}
                     isSkipping={isSkipping}
                     isBacktestLoading={backtestLoading[opp.id] ?? false}
@@ -1839,6 +1877,13 @@ export default function OpportunitiesPage() {
           )}
         </div>
       </Tabs>
+
+      {/* TradingView Real-Time Candlestick Chart Modal with Strategy Annotations */}
+      <TradingViewChartModal
+        isOpen={!!selectedChartTrade}
+        onClose={() => setSelectedChartTrade(null)}
+        trade={selectedChartTrade}
+      />
     </div>
   );
 }

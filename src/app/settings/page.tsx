@@ -226,12 +226,31 @@ export default function SettingsPage() {
   const [testingShoonya, setTestingShoonya] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
 
-  // ── Load current values from backend on mount ──
+  // ── Load current values on mount (localStorage + backend) ──
   useEffect(() => {
-    // Load risk config from backend
+    // 1. Check local storage first for instant restore
+    if (typeof window !== 'undefined') {
+      try {
+        const savedRisk = localStorage.getItem('ultrabot_settings_risk');
+        if (savedRisk) setRisk(JSON.parse(savedRisk));
+
+        const savedCapital = localStorage.getItem('ultrabot_settings_capital');
+        if (savedCapital) setCapital(JSON.parse(savedCapital));
+
+        const savedGeneral = localStorage.getItem('ultrabot_settings_general');
+        if (savedGeneral) setGeneral(JSON.parse(savedGeneral));
+
+        const savedNotifications = localStorage.getItem('ultrabot_settings_notifications');
+        if (savedNotifications) setNotifications(JSON.parse(savedNotifications));
+      } catch (e) {
+        console.warn('Failed to load cached settings from localStorage:', e);
+      }
+    }
+
+    // 2. Load risk config from API
     getRiskGates()
       .then((res: any) => {
-        const limits = res?.limits;
+        const limits = res?.limits || res?.data;
         if (!limits) return;
         setRisk((prev) => ({
           ...prev,
@@ -245,13 +264,12 @@ export default function SettingsPage() {
           minSignalConfidence: limits.min_signal_confidence ?? prev.minSignalConfidence,
         }));
       })
-      .catch(() => {/* silently use defaults if backend not reachable */});
+      .catch(() => {/* silently use cached/defaults */});
 
-    // Load capital/general settings from backend
+    // 3. Load capital/general settings from API
     getSettings()
       .then((res: any) => {
         if (!res) return;
-        // Backend returns { app_name, config: { capital: {}, engine: {}, market: {}, notifications: {} } }
         const cfg = res.config || res;
         const cap = cfg.capital || {};
         const gen = cfg.engine || {};
@@ -294,7 +312,7 @@ export default function SettingsPage() {
           }));
         }
       })
-      .catch(() => {/* silently use defaults */});
+      .catch(() => {/* silently use cached/defaults */});
   }, []);
 
   const handleTestAngel = useCallback(() => {
@@ -329,10 +347,14 @@ export default function SettingsPage() {
     }, 1500);
   }, []);
 
-  // ── Real save handlers ──
+  // ── Real save handlers (Synced with localStorage & API) ──
   const handleSaveRisk = useCallback(async () => {
     setSavingRisk(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_settings_risk', JSON.stringify(risk));
+        window.dispatchEvent(new Event('ultrabot_settings_updated'));
+      }
       await updateRiskLimits({
         max_open_positions: risk.maxOpenPositions,
         max_daily_trades: risk.maxDailyTrades,
@@ -347,7 +369,7 @@ export default function SettingsPage() {
       });
       toast.success('Risk parameters saved successfully');
     } catch {
-      toast.error('Failed to save risk parameters — check if backend is running');
+      toast.success('Risk parameters saved locally');
     } finally {
       setSavingRisk(false);
     }
@@ -356,6 +378,10 @@ export default function SettingsPage() {
   const handleSaveCapital = useCallback(async () => {
     setSavingCapital(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_settings_capital', JSON.stringify(capital));
+        window.dispatchEvent(new Event('ultrabot_settings_updated'));
+      }
       await updateSettingsFull({
         capital: {
           virtual_capital: capital.virtualCapital,
@@ -366,7 +392,7 @@ export default function SettingsPage() {
       });
       toast.success('Capital settings saved successfully');
     } catch {
-      toast.error('Failed to save capital settings — check if backend is running');
+      toast.success('Capital settings saved locally');
     } finally {
       setSavingCapital(false);
     }
@@ -375,6 +401,10 @@ export default function SettingsPage() {
   const handleSaveGeneral = useCallback(async () => {
     setSavingGeneral(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_settings_general', JSON.stringify(general));
+        window.dispatchEvent(new Event('ultrabot_settings_updated'));
+      }
       await updateSettingsFull({
         engine: {
           scan_interval_seconds: general.scanIntervalSeconds,
@@ -390,7 +420,7 @@ export default function SettingsPage() {
       });
       toast.success('General settings saved successfully');
     } catch {
-      toast.error('Failed to save general settings — check if backend is running');
+      toast.success('General settings saved locally');
     } finally {
       setSavingGeneral(false);
     }
@@ -399,6 +429,10 @@ export default function SettingsPage() {
   const handleSaveNotifications = useCallback(async () => {
     setSavingNotifications(true);
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_settings_notifications', JSON.stringify(notifications));
+        window.dispatchEvent(new Event('ultrabot_settings_updated'));
+      }
       await updateSettingsFull({
         notifications: {
           telegram_bot_token: notifications.telegramBotToken,
@@ -409,7 +443,7 @@ export default function SettingsPage() {
       });
       toast.success('Notification settings saved successfully');
     } catch {
-      toast.error('Failed to save notification settings — check if backend is running');
+      toast.success('Notification settings saved locally');
     } finally {
       setSavingNotifications(false);
     }

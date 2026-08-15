@@ -15,13 +15,16 @@ from risk.gates.g10_min_confidence import G10MinConfidence
 from risk.gates.g11_max_drawdown import G11MaxDrawdown
 from risk.gates.g12_margin_check import G12MarginCheck
 from risk.gates.g13_duplicate_signal import G13DuplicateSignal
+from risk.gates.g14_strategy_backtest import G14StrategyBacktest
+from risk.gates.g15_volume_liquidity import G15VolumeLiquidity
+from risk.gates.g16_multi_timeframe import G16MultiTimeframe
 
 if TYPE_CHECKING:
     from db.repository import Repository
 
 
 class RiskEngine:
-    """Runs all 13 risk gates sequentially, stopping at the first failure.
+    """Runs all 16 risk gates sequentially, stopping at the first failure.
 
     Each gate receives the full risk config dict so it can read its own
     parameters.  The ``repository`` is only injected into G13 (duplicate
@@ -44,6 +47,9 @@ class RiskEngine:
             G11MaxDrawdown(config),
             G12MarginCheck(config),
             G13DuplicateSignal(config),
+            G14StrategyBacktest(config),
+            G15VolumeLiquidity(config),
+            G16MultiTimeframe(config),
         ]
 
     def set_repository(self, repo: "Repository") -> None:
@@ -77,5 +83,5 @@ class RiskEngine:
             block_reason=None,
             severity="info",
             reduced_size=False,
-            notes="All 13 gates passed",
+            notes="All 16 gates passed",
         )

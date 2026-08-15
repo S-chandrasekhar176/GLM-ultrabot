@@ -82,6 +82,12 @@ interface DashboardData {
   longCount: number;
   shortCount: number;
   winRate: number;
+  totalTradesCount: number;
+  winningTradesCount: number;
+  todayWinRate: number;
+  todayTradesCount: number;
+  todayWinningTradesCount: number;
+  hasTradeHistory: boolean;
   riskUsed: number;
   totalCapital: number;
   capitalUsed: number;
@@ -475,6 +481,40 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  const [configuredCapital, setConfiguredCapital] = useState<number>(0);
+
+  useEffect(() => {
+    const loadCapital = () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('ultrabot_settings_capital');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (typeof parsed.virtualCapital === 'number' && parsed.virtualCapital > 0) {
+              setConfiguredCapital(parsed.virtualCapital);
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      fetch('/api/settings')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.config?.capital?.virtual_capital) {
+            setConfiguredCapital(d.config.capital.virtual_capital);
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadCapital();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', loadCapital);
+      return () => window.removeEventListener('storage', loadCapital);
+    }
+  }, []);
+
   useEffect(() => {
     if (!apiData) return;
     const raw = apiData as Record<string, any>;
@@ -527,23 +567,39 @@ export default function DashboardPage() {
     const todayPnl = +(unrealizedPnl + realizedPnl).toFixed(2);
 
     // 4. Capital Calculations
-    const totalCapital = typeof raw?.total_capital === 'number' && raw.total_capital > 0
+    const totalCapital = configuredCapital > 0
+      ? configuredCapital
+      : typeof raw?.total_capital === 'number' && raw.total_capital > 0
       ? raw.total_capital
       : typeof raw?.totalCapital === 'number' && raw.totalCapital > 0
       ? raw.totalCapital
-      : 1000000.0; // ₹10,00,000 default virtual paper capital
+      : 1000000.0;
 
     const capitalUsed = +(positionsList.reduce((sum, p) => sum + (p.entry * p.qty * 0.2), 0)).toFixed(2);
     const freeCapital = +(totalCapital - capitalUsed + todayPnl).toFixed(2);
     const todayPnlPercent = totalCapital > 0 ? +((todayPnl / totalCapital) * 100).toFixed(2) : 0;
 
-    // 5. Win Rate
-    let winRate = 75;
-    if (tradesList.length > 0) {
-      const wins = tradesList.filter((t) => t.pnl > 0).length;
-      winRate = Math.round((wins / tradesList.length) * 100);
-    } else if (positionsList.length > 0) {
-      const positive = positionsList.filter((p) => p.pnl >= 0).length;
+    // 5. Dynamic Win Rate Engine (Evaluates every trade on every day)
+    const totalTradesCount = storedTrades.length;
+    const winningTradesCount = storedTrades.filter((t) => t.pnl > 0).length;
+    const allTimeWinRate = totalTradesCount > 0 ? Math.round((winningTradesCount / totalTradesCount) * 100) : 0;
+
+    const todayDateStr = new Date().toDateString();
+    const todayTrades = storedTrades.filter((t) => {
+      if (!t.exitedAt) return true;
+      return new Date(t.exitedAt).toDateString() === todayDateStr;
+    });
+    const todayTradesCount = todayTrades.length;
+    const todayWinningTradesCount = todayTrades.filter((t) => t.pnl > 0).length;
+    const todayWinRate = todayTradesCount > 0 ? Math.round((todayWinningTradesCount / todayTradesCount) * 100) : allTimeWinRate;
+
+    const hasExecutedTrades = totalTradesCount > 0;
+    const hasOpenPositions = positionsList.length > 0;
+    const hasTradeHistory = hasExecutedTrades || hasOpenPositions;
+
+    let winRate = allTimeWinRate;
+    if (totalTradesCount === 0 && hasOpenPositions) {
+      const positive = positionsList.filter((p) => p.pnl > 0).length;
       winRate = Math.round((positive / positionsList.length) * 100);
     }
 
@@ -551,9 +607,13 @@ export default function DashboardPage() {
     const riskUsed = capitalUsed > 0 ? Math.min(100, Math.max(8, Math.round((capitalUsed / totalCapital) * 100 * 2.5))) : 0;
 
     // 7. Signals counts
-    const signalsConfirmed = confirmedIds.length || (raw?.signalsConfirmed as number) || 0;
-    const signalsSkipped = skippedIds.length || (raw?.signalsSkipped as number) || 0;
-    const signalsGenerated = 204; // Liquid scanned pool
+    const signalsConfirmed = confirmedIds.length || (raw?.signalsConfirmed as number) || (raw?.signals_confirmed as number) || 0;
+    const signalsSkipped = skippedIds.length || (raw?.signalsSkipped as number) || (raw?.signals_skipped as number) || 0;
+    const signalsGenerated = typeof raw?.signalsGenerated === 'number'
+      ? raw.signalsGenerated
+      : typeof raw?.signals_generated === 'number'
+      ? raw.signals_generated
+      : Math.max(signalsConfirmed + signalsSkipped, 24);
 
     const activeStrats = (raw?.active_strategies || raw?.activeStrategies) as string[] | undefined;
     const regConf = (raw?.regime_confidence || raw?.regimeConfidence) as number | undefined;
@@ -565,6 +625,12 @@ export default function DashboardPage() {
       longCount,
       shortCount,
       winRate,
+      totalTradesCount,
+      winningTradesCount,
+      todayWinRate,
+      todayTradesCount,
+      todayWinningTradesCount,
+      hasTradeHistory,
       riskUsed,
       totalCapital,
       capitalUsed,
@@ -679,20 +745,45 @@ export default function DashboardPage() {
               </div>
             </StatCard>
 
-            {/* Card 3: Day Win Rate */}
-            <StatCard title="Day Win Rate">
+            {/* Card 3: Dynamic Win Rate */}
+            <StatCard title="Win Rate">
               <div className="flex items-center gap-4">
                 <CircularProgress
-                  value={data.winRate}
+                  value={data.hasTradeHistory ? data.winRate : 0}
                   size={68}
                   strokeWidth={5}
-                  color={data.winRate >= 60 ? '#22c55e' : data.winRate >= 40 ? '#f59e0b' : '#ef4444'}
+                  color={!data.hasTradeHistory ? '#64748b' : data.winRate >= 60 ? '#22c55e' : data.winRate >= 40 ? '#f59e0b' : '#ef4444'}
                 />
                 <div className="flex flex-col">
-                  <span className="text-xs text-ub-text-muted">Trades Won</span>
-                  <span className={`text-sm font-semibold ${data.winRate >= 60 ? 'text-ub-profit' : data.winRate >= 40 ? 'text-ub-warning' : 'text-ub-loss'}`}>
-                    {data.winRate >= 60 ? 'Good' : data.winRate >= 40 ? 'Average' : 'Poor'}
+                  <span className="text-xs text-ub-text-muted">
+                    {data.hasTradeHistory
+                      ? `${data.winningTradesCount}/${data.totalTradesCount} Won (All-Time)`
+                      : 'Trades Won'}
                   </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      !data.hasTradeHistory
+                        ? 'text-ub-text-muted'
+                        : data.winRate >= 60
+                        ? 'text-ub-profit'
+                        : data.winRate >= 40
+                        ? 'text-ub-warning'
+                        : 'text-ub-loss'
+                    }`}
+                  >
+                    {!data.hasTradeHistory
+                      ? 'No Trades Yet'
+                      : data.winRate >= 60
+                      ? 'Good'
+                      : data.winRate >= 40
+                      ? 'Moderate'
+                      : 'Needs Tuning'}
+                  </span>
+                  {data.todayTradesCount > 0 && (
+                    <span className="text-[10px] text-cyan-400 font-mono mt-0.5">
+                      Today: {data.todayWinningTradesCount}/{data.todayTradesCount} ({data.todayWinRate}%)
+                    </span>
+                  )}
                 </div>
               </div>
             </StatCard>

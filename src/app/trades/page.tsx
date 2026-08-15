@@ -38,6 +38,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { TradingViewChartModal, type ChartTradeData } from '@/components/chart/TradingViewChartModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -173,7 +174,13 @@ const INR_SHORT = (n: number) =>
 // Positions Tab Component
 // ─────────────────────────────────────────────
 
-function PositionsTab({ resetSignal }: { resetSignal: number }) {
+function PositionsTab({
+  resetSignal,
+  onOpenChart,
+}: {
+  resetSignal: number;
+  onOpenChart?: (trade: ChartTradeData) => void;
+}) {
   const { data: positionsData, closePosition, isClosing } = usePositions();
   const [positions, setPositions] = useState<Position[]>([]);
   const [closeDialogId, setCloseDialogId] = useState<string | null>(null);
@@ -497,16 +504,38 @@ function PositionsTab({ resetSignal }: { resetSignal: number }) {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-xs text-ub-text-muted hover:text-ub-text-primary"
-                          >
-                            Actions
-                          </Button>
-                        </DropdownMenuTrigger>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px] border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 font-semibold"
+                          onClick={() =>
+                            onOpenChart?.({
+                              symbol: pos.symbol,
+                              direction: pos.direction,
+                              entry: pos.entry,
+                              stopLoss: pos.stopLoss,
+                              target: pos.target,
+                              quantity: pos.remainingQty,
+                              pnl: pos.unrealizedPnl,
+                              strategy: pos.strategy || 'Intraday Strategy',
+                            })
+                          }
+                          title="Open real-time interactive candlestick chart"
+                        >
+                          <TrendingUp className="h-3 w-3 mr-1" />
+                          Chart
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-ub-text-muted hover:text-ub-text-primary"
+                            >
+                              Actions
+                            </Button>
+                          </DropdownMenuTrigger>
                         <DropdownMenuContent className="bg-ub-surface border-ub-border" align="end">
                           <DropdownMenuItem
                             className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary"
@@ -539,8 +568,9 @@ function PositionsTab({ resetSignal }: { resetSignal: number }) {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </TableCell>
+                </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -695,7 +725,13 @@ const ITEMS_PER_PAGE = 20;
 
 type ResultFilter = 'all' | 'win' | 'loss';
 
-function HistoryTab({ resetSignal }: { resetSignal: number }) {
+function HistoryTab({
+  resetSignal,
+  onOpenChart,
+}: {
+  resetSignal: number;
+  onOpenChart?: (trade: ChartTradeData) => void;
+}) {
   const { data: tradesData, isLoading: isLoadingTrades } = useTrades();
   const isLoading = isLoadingTrades;
   const [storedTrades, setStoredTrades] = useState<TradeHistoryItem[]>([]);
@@ -981,6 +1017,7 @@ function HistoryTab({ resetSignal }: { resetSignal: number }) {
                   <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Net P&L</TableHead>
                   <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Duration</TableHead>
                   <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider">Exit Reason</TableHead>
+                  <TableHead className="text-ub-text-muted text-[11px] uppercase tracking-wider text-right">Chart</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1046,6 +1083,29 @@ function HistoryTab({ resetSignal }: { resetSignal: number }) {
                       >
                         {trade.exitReason}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 px-2 text-[10px] border-cyan-500/40 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 font-semibold"
+                        onClick={() =>
+                          onOpenChart?.({
+                            symbol: trade.symbol,
+                            direction: trade.direction,
+                            entry: trade.entry,
+                            stopLoss: +(trade.entry * (trade.direction === 'BUY' ? 0.985 : 1.015)).toFixed(2),
+                            target: trade.exit,
+                            quantity: trade.quantity,
+                            pnl: trade.netPnl,
+                            strategy: trade.strategy || 'Historical Strategy',
+                          })
+                        }
+                        title="View chart with trade entry and exit levels"
+                      >
+                        <TrendingUp className="h-2.5 w-2.5 mr-1" />
+                        Chart
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1131,6 +1191,7 @@ function HistoryTab({ resetSignal }: { resetSignal: number }) {
 export default function TradesPage() {
   const [resetSignal, setResetSignal] = useState(0);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [selectedChartTrade, setSelectedChartTrade] = useState<ChartTradeData | null>(null);
 
   const handleResetPaper = useCallback(() => {
     clearAllPaperData();
@@ -1197,13 +1258,26 @@ export default function TradesPage() {
         </TabsList>
 
         <TabsContent value="positions" className="mt-4">
-          <PositionsTab resetSignal={resetSignal} />
+          <PositionsTab
+            resetSignal={resetSignal}
+            onOpenChart={(trade) => setSelectedChartTrade(trade)}
+          />
         </TabsContent>
 
         <TabsContent value="history" className="mt-4">
-          <HistoryTab resetSignal={resetSignal} />
+          <HistoryTab
+            resetSignal={resetSignal}
+            onOpenChart={(trade) => setSelectedChartTrade(trade)}
+          />
         </TabsContent>
       </Tabs>
+
+      {/* TradingView Real-Time Candlestick Chart Modal */}
+      <TradingViewChartModal
+        isOpen={!!selectedChartTrade}
+        onClose={() => setSelectedChartTrade(null)}
+        trade={selectedChartTrade}
+      />
     </div>
   );
 }

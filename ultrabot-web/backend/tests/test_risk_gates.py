@@ -15,6 +15,9 @@ from risk.gates.g10_min_confidence import G10MinConfidence
 from risk.gates.g11_max_drawdown import G11MaxDrawdown
 from risk.gates.g12_margin_check import G12MarginCheck
 from risk.gates.g13_duplicate_signal import G13DuplicateSignal
+from risk.gates.g14_strategy_backtest import G14StrategyBacktest
+from risk.gates.g15_volume_liquidity import G15VolumeLiquidity
+from risk.gates.g16_multi_timeframe import G16MultiTimeframe
 
 
 # Default config matching defaults.yaml
@@ -301,3 +304,59 @@ class TestG13DuplicateSignal:
         ctx = make_context()
         result = await gate.check(signal, ctx)
         assert result.passed is True
+
+
+@pytest.mark.asyncio
+class TestG14StrategyBacktest:
+    async def test_pass_high_win_rate(self):
+        gate = G14StrategyBacktest(DEFAULT_CONFIG)
+        signal = make_signal(strategy="vwap_breakout")
+        ctx = make_context()
+        result = await gate.check(signal, ctx)
+        assert result.passed is True
+        assert result.gate_name == "G14_StrategyBacktest"
+
+    async def test_fail_low_backtest_win_rate(self):
+        gate = G14StrategyBacktest({"min_backtest_win_rate": 0.65})
+        signal = make_signal(strategy="breakout")  # profile has 52% win rate
+        ctx = make_context()
+        result = await gate.check(signal, ctx)
+        assert result.passed is False
+        assert "below minimum requirement" in result.message
+
+
+@pytest.mark.asyncio
+class TestG15VolumeLiquidity:
+    async def test_pass_high_volume(self):
+        gate = G15VolumeLiquidity(DEFAULT_CONFIG)
+        signal = make_signal(volume_ratio=1.5)
+        ctx = make_context()
+        result = await gate.check(signal, ctx)
+        assert result.passed is True
+
+    async def test_fail_low_volume(self):
+        gate = G15VolumeLiquidity({"min_volume_ratio": 1.2})
+        signal = make_signal(volume_ratio=0.8)
+        ctx = make_context()
+        result = await gate.check(signal, ctx)
+        assert result.passed is False
+        assert "below minimum" in result.message
+
+
+@pytest.mark.asyncio
+class TestG16MultiTimeframe:
+    async def test_pass_aligned_trend(self):
+        gate = G16MultiTimeframe(DEFAULT_CONFIG)
+        signal = make_signal(direction="LONG")
+        ctx = make_context(trend="bullish")
+        result = await gate.check(signal, ctx)
+        assert result.passed is True
+
+    async def test_fail_counter_trend(self):
+        gate = G16MultiTimeframe(DEFAULT_CONFIG)
+        signal = make_signal(direction="LONG")
+        ctx = make_context(trend="bearish")
+        result = await gate.check(signal, ctx)
+        assert result.passed is False
+        assert "counter-trend trap risk" in result.message
+
