@@ -500,25 +500,18 @@ export async function getKronosHotlist(): ApiResponse {
   return data;
 }
 
-export async function getNews(): ApiResponse<NewsItemResponse[]> {
-  try {
-    const { data } = await api.get<NewsItemResponse[]>('/api/live-news');
-    if (Array.isArray(data) && data.length > 0) {
-      return data;
-    }
-  } catch {
-    // Try standard news route
-  }
-
+export async function getNews(): Promise<NewsItemResponse[]> {
   try {
     const { data } = await api.get<NewsItemResponse[]>('/api/news');
-    if (Array.isArray(data) && data.length > 0) {
+    if (Array.isArray(data)) {
       return data;
     }
-  } catch {
-    // Return empty array
+    if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as any).data)) {
+      return (data as any).data;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch news:', err);
   }
-
   return [];
 }
 

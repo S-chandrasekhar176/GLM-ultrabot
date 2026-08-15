@@ -192,12 +192,20 @@ async def lifespan(app: FastAPI):
     app.state.ws_manager = ws_manager
     app.state.fee_calculator = fee_calculator
 
+    # Start Market Lifecycle Scheduler
+    from core.scheduler import MarketLifecycleScheduler
+    market_scheduler = MarketLifecycleScheduler(engine=eng, repository_getter=repo_getter)
+    market_scheduler.start()
+    app.state.scheduler = market_scheduler
+
     logger.info("UltraBot Web started")
     logger.info("Market status: %s", market_hours.get_market_status())
 
     yield
 
     # ── Shutdown ─────────────────────────────────────────────
+    if hasattr(app.state, "scheduler"):
+        app.state.scheduler.stop()
     if eng.state.value != "stopped":
         await eng.stop()
     logger.info("UltraBot Web stopped")

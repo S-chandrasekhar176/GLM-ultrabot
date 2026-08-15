@@ -734,6 +734,69 @@ class Repository:
         return result.rowcount > 0
 
     # ────────────────────────────────────────
+    # 10. BACKTEST RUNS
+    # ────────────────────────────────────────
+
+    async def create_backtest_run(
+        self,
+        id: str,
+        strategy: str,
+        symbol: Optional[str] = None,
+        start_date: str = "",
+        end_date: str = "",
+        timeframe: str = "5min",
+        initial_capital: float = 100000.0,
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> BacktestRun:
+        run = BacktestRun(
+            id=id,
+            strategy=strategy,
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
+            timeframe=timeframe,
+            initial_capital=initial_capital,
+            status="PENDING",
+            parameters=_to_json(parameters or {}),
+            results=_to_json({}),
+            equity_curve=_to_json([]),
+            created_at=_ist_now(),
+            updated_at=_ist_now(),
+        )
+        self.session.add(run)
+        await self.session.flush()
+        return run
+
+    async def get_backtest_run(self, run_id: str) -> Optional[BacktestRun]:
+        stmt = select(BacktestRun).where(BacktestRun.id == run_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_backtest_history(self, limit: int = 50) -> List[BacktestRun]:
+        stmt = select(BacktestRun).order_by(BacktestRun.created_at.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def update_backtest_run(self, run_id: str, **kwargs: Any) -> Optional[BacktestRun]:
+        obj = await self.get_backtest_run(run_id)
+        if obj is None:
+            return None
+        for key, value in kwargs.items():
+            if key in ("parameters", "results", "equity_curve", "extra") and isinstance(value, (dict, list)):
+                value = _to_json(value)
+            if hasattr(obj, key):
+                setattr(obj, key, value)
+        obj.updated_at = _ist_now()
+        await self.session.flush()
+        return obj
+
+    async def delete_backtest_run(self, run_id: str) -> bool:
+        stmt = delete(BacktestRun).where(BacktestRun.id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return result.rowcount > 0
+
+    # ────────────────────────────────────────
     # BULK / AGGREGATE HELPERS
     # ────────────────────────────────────────
 

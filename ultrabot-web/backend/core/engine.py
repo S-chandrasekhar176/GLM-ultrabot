@@ -930,6 +930,25 @@ class UltraBotEngine:
         opportunity_id = str(uuid.uuid4())
         created_dt = datetime.now(IST)
 
+        # Standardize 1-5 Conviction Score
+        raw_conf = float(signal.get("confidence", 0.6) or 0.6)
+        rr_bonus = 0.05 if risk_reward >= 2.0 else 0.0
+        all_gates = risk_result.get("all_gates", [])
+        passed_gates = sum(1 for g in all_gates if (isinstance(g, dict) and g.get("passed", False)) or (hasattr(g, "passed") and getattr(g, "passed", False)))
+        gate_ratio = (passed_gates / len(all_gates)) if all_gates else 1.0
+        
+        composite_score = min(1.0, max(0.0, raw_conf * 0.7 + (gate_ratio * 0.2) + rr_bonus))
+        conviction_stars = max(1, min(5, int(round(1 + 4 * composite_score))))
+        
+        conviction_labels = {
+            1: "1 Star - Low Conviction",
+            2: "2 Stars - Moderate Setup",
+            3: "3 Stars - Standard Setup",
+            4: "4 Stars - High Probability",
+            5: "5 Stars - A+ Institutional Grade",
+        }
+        conviction_label = conviction_labels.get(conviction_stars, "3 Stars - Standard Setup")
+
         return {
             "id": opportunity_id,
             "signal_id": str(uuid.uuid4()),
@@ -940,6 +959,16 @@ class UltraBotEngine:
             "direction": signal.get("direction", "LONG"),
             "strategy": strategy_name,
             "confidence": signal.get("confidence", 0),
+            "conviction_score": conviction_stars,
+            "conviction_stars": conviction_stars,
+            "conviction_label": conviction_label,
+            "composite_score": round(composite_score * 100, 1),
+            "conviction_breakdown": {
+                "technical_confidence": round(raw_conf * 100, 1),
+                "risk_gates_passed": f"{passed_gates}/{len(all_gates)}",
+                "risk_reward": risk_reward,
+                "composite_score": round(composite_score * 100, 1),
+            },
             "entry_price": entry_price,
             "current_price": current_price,
             "stop_loss": stop_loss,
