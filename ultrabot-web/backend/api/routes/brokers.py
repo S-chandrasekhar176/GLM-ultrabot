@@ -407,6 +407,88 @@ async def test_fyers(
         return {"broker": "fyers", "connected": False, "message": str(exc)}
 
 
+@router.post("/zerodha/credentials")
+@router.post("/kite/credentials")
+async def save_zerodha_credentials(
+    body: BrokerCredentialInput,
+    username: str = Depends(get_current_user),
+    repo: Repository = Depends(get_repository),
+) -> Dict[str, Any]:
+    """Save (encrypted) Zerodha Kite Connect credentials."""
+    try:
+        cred_data = {
+            "api_key": body.api_key or body.client_id or "",
+            "api_secret": body.client_secret or body.secret_key or "",
+            "access_token": body.access_token or "",
+            "user_id": body.user_id or body.client_id or "",
+        }
+        encrypted = encrypt_credentials(cred_data)
+        await repo.save_broker_credentials(
+            broker_name="zerodha",
+            encrypted_creds=encrypted,
+            extra={"account_type": body.account_type or "live"},
+        )
+        logger.info("Zerodha Kite credentials saved/updated")
+        return {"message": "Zerodha Kite Connect credentials saved successfully"}
+    except Exception as exc:
+        logger.error("Failed to save Zerodha credentials: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save credentials: {str(exc)}",
+        )
+
+
+@router.post("/zerodha/test")
+@router.post("/kite/test")
+async def test_zerodha(
+    username: str = Depends(get_current_user),
+    repo: Repository = Depends(get_repository),
+) -> Dict[str, Any]:
+    """Test Zerodha Kite Connect connection."""
+    try:
+        cred_record = await repo.get_broker_credentials("zerodha")
+        if cred_record is None or not cred_record.encrypted_credentials:
+            return {
+                "broker": "zerodha",
+                "connected": False,
+                "message": "Zerodha credentials not found in database. Please click 'Save Credentials' first.",
+            }
+
+        try:
+            cred_data = decrypt_credentials(cred_record.encrypted_credentials)
+        except Exception as dec_exc:
+            return {
+                "broker": "zerodha",
+                "connected": False,
+                "message": f"Failed to decrypt credentials: {str(dec_exc)}. Please re-save your credentials.",
+            }
+
+        try:
+            from brokers.kite import KiteBroker
+            broker = KiteBroker(
+                api_key=cred_data.get("api_key", ""),
+                api_secret=cred_data.get("api_secret", ""),
+                access_token=cred_data.get("access_token", ""),
+                user_id=cred_data.get("user_id", ""),
+            )
+            auth_res = await broker.authenticate()
+            connected = auth_res.get("success", False)
+            message = auth_res.get("message", "Authentication check complete")
+            if hasattr(broker, "disconnect"):
+                await broker.disconnect()
+        except Exception as conn_exc:
+            connected = False
+            message = f"Connection failed: {str(conn_exc)}"
+
+        return {
+            "broker": "zerodha",
+            "connected": connected,
+            "message": message,
+        }
+    except Exception as exc:
+        return {"broker": "zerodha", "connected": False, "message": str(exc)}
+
+
 @router.put("/active")
 async def set_active_broker(
     body: ActiveBrokerRequest,

@@ -6,6 +6,7 @@ from brokers.angel_one import AngelOneBroker
 from brokers.shoonya import ShoonyaBroker
 from brokers.dhan import DhanBroker
 from brokers.fyers import FyersBroker
+from brokers.kite import KiteBroker
 from fees.nse_fee_calculator import NSEFeeCalculator
 
 
@@ -14,6 +15,7 @@ class BrokerFactory:
 
     Usage:
         broker = BrokerFactory.create('paper', mode='paper', initial_capital=100000)
+        broker = BrokerFactory.create('zerodha', mode='live', api_key='...', access_token='...')
         broker = BrokerFactory.create('dhan', mode='live', client_id='...', access_token='...')
         broker = BrokerFactory.create('fyers', mode='live', app_id='...', access_token='...')
     """
@@ -24,6 +26,8 @@ class BrokerFactory:
         'shoonya': ShoonyaBroker,
         'dhan': DhanBroker,
         'fyers': FyersBroker,
+        'zerodha': KiteBroker,
+        'kite': KiteBroker,
     }
 
     @staticmethod

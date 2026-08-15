@@ -74,9 +74,10 @@ class StrategyRegistry:
             ".advanced.adaptive_supertrend",
         ]
 
+        pkg = __package__ or "strategies"
         for module_path in core_modules + advanced_modules:
             try:
-                mod = importlib.import_module(module_path, package="backend.strategies")
+                mod = importlib.import_module(module_path, package=pkg)
                 # Find strategy classes in the module
                 for attr_name in dir(mod):
                     attr = getattr(mod, attr_name)
