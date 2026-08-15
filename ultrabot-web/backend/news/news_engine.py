@@ -121,15 +121,20 @@ class NewsEngine:
             classified = self.analyzer.classify_news(item)
             analysed.append(classified)
 
-        # Sort by impact level (high > medium > low) then timestamp desc
+        # Single multi-key sort: impact level asc (high=0, med=1, low=2), then timestamp desc (newest first)
         _impact_rank = {"high": 0, "medium": 1, "low": 2}
-        analysed.sort(
-            key=lambda x: (_impact_rank.get(x.get("impact_level", "low"), 2), x.get("timestamp", "")),
-            reverse=False,  # high=0 sorts first, then timestamp desc handled below
-        )
-        # Within same impact, sort timestamp desc
-        analysed.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        analysed.sort(key=lambda x: _impact_rank.get(x.get("impact_level", "low"), 2))
+        def _sort_key(item: dict):
+            rank = _impact_rank.get(str(item.get("impact_level", "low")).lower(), 2)
+            ts_str = item.get("timestamp") or item.get("published_at") or ""
+            ts_val = 0.0
+            if ts_str:
+                try:
+                    ts_val = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    ts_val = 0.0
+            return (rank, -ts_val)
+
+        analysed.sort(key=_sort_key)
 
         logger.info("Analysed %d unique news items", len(analysed))
         return analysed

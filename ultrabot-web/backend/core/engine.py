@@ -562,7 +562,7 @@ class UltraBotEngine:
         # Run each active strategy
         for strategy_name in self.active_strategies:
             try:
-                signal = await run_strategy_scan(
+                signal = await self._execute_strategy_scan(
                     symbol=symbol,
                     candles=candles,
                     strategy_name=strategy_name,
@@ -626,9 +626,101 @@ class UltraBotEngine:
                     strategy_name, symbol, strat_exc,
                 )
 
+    async def _execute_strategy_scan(
+        self,
+        symbol: str,
+        candles: list,
+        strategy_name: str,
+        regime: str,
+        vix: float,
+    ) -> Optional[dict]:
+        """Execute a strategy's scan method on incoming candle data."""
+        if not hasattr(self, "strategy_registry") or not self.strategy_registry:
+            return None
+        strat = self.strategy_registry.get(strategy_name)
+        if not strat:
+            return None
+
+        try:
+            import inspect
+            res = None
+            if hasattr(strat, "scan"):
+                if inspect.iscoroutinefunction(strat.scan):
+                    res = await strat.scan(candles, symbol=symbol, regime=regime, vix=vix)
+                else:
+                    res = strat.scan(candles, symbol=symbol, regime=regime, vix=vix)
+            elif hasattr(strat, "generate_signals"):
+                if inspect.iscoroutinefunction(strat.generate_signals):
+                    res = await strat.generate_signals(candles, symbol=symbol)
+                else:
+                    res = strat.generate_signals(candles, symbol=symbol)
+
+            if res and isinstance(res, list) and len(res) > 0:
+                res = res[0]
+            if res and isinstance(res, dict):
+                res.setdefault("strategy", strategy_name)
+                res.setdefault("symbol", symbol)
+                return res
+        except Exception as scan_err:
+            logger.debug("Strategy %s scan exception on %s: %s", strategy_name, symbol, scan_err)
+        return None
+
     # ------------------------------------------------------------------
     # Risk Gates
     # ------------------------------------------------------------------
+
+    async def _build_risk_context(self, signal: dict, symbol: str, current_price: float) -> dict:
+        """Assemble all 12+ context parameters required by Risk Gates G1-G16."""
+        repo = await self._get_repo()
+        open_positions = await repo.get_open_positions()
+
+        # Group positions by sector for G2 / G6
+        from utils.market_utils import get_stock_sector
+        positions_by_sector: Dict[str, int] = {}
+        for pos in open_positions:
+            sec = get_stock_sector(pos.symbol)
+            positions_by_sector[sec] = positions_by_sector.get(sec, 0) + 1
+
+        daily_status = self.daily_risk.check_daily_limits() if self.daily_risk else None
+        daily_loss = abs(daily_status.net_pnl) if daily_status and daily_status.net_pnl < 0 else 0.0
+        daily_trades = daily_status.total_trades if daily_status else 0
+        consecutive_losses = daily_status.consecutive_losses if daily_status else 0
+
+        margin_avail = float(self.initial_capital or 100000.0)
+        if self.broker and hasattr(self.broker, "get_margins"):
+            try:
+                margins = await self.broker.get_margins()
+                margin_avail = float(margins.get("available_cash", margin_avail))
+            except Exception:
+                pass
+
+        total_cap = float(self.initial_capital or 100000.0)
+        open_syms = [pos.symbol for pos in open_positions]
+        return {
+            "symbol": symbol,
+            "current_price": current_price,
+            "vix": self.vix,
+            "india_vix": self.vix,
+            "regime": self.current_regime,
+            "open_positions": len(open_positions),
+            "open_positions_count": len(open_positions),
+            "open_position_symbols": open_syms,
+            "open_positions_list": open_syms,
+            "positions_by_sector": positions_by_sector,
+            "daily_loss": daily_loss,
+            "daily_loss_rupees": daily_loss,
+            "daily_trades": daily_trades,
+            "daily_trade_count": daily_trades,
+            "consecutive_losses": consecutive_losses,
+            "capital": total_cap,
+            "total_capital": total_cap,
+            "margin_available": margin_avail,
+            "available_capital": margin_avail,
+            "available_margin": margin_avail,
+            "session_id": self.session_id,
+            "current_time": datetime.now(IST),
+            "time_of_day": datetime.now(IST).strftime("%H:%M"),
+        }
 
     async def _run_risk_gates(self, signal: dict, symbol: str, current_price: float) -> dict:
         """Run all risk gates on a signal.
@@ -637,10 +729,12 @@ class UltraBotEngine:
         reduced_size, notes.
         """
         try:
+            context = await self._build_risk_context(signal, symbol, current_price)
             risk_result = await self.risk_engine.evaluate(
                 signal=signal,
                 symbol=symbol,
                 current_price=current_price,
+                context=context,
                 session_id=self.session_id,
             )
             if hasattr(risk_result, "model_dump"):
@@ -695,6 +789,8 @@ class UltraBotEngine:
         risk_config = self.config.get_risk_config() if hasattr(self.config, "get_risk_config") else {}
         mismatch_threshold = risk_config.get("price_mismatch_threshold_pct", 0.6)
         ttl_seconds = risk_config.get("opportunity_ttl_seconds", risk_config.get("opportunity_ttl_minutes", 2) * 60)
+
+        invalidated_items: List[tuple] = []
 
         # Check 0: Market Hours Check — If market closed, all intraday pending setups expire
         if self.market_hours and not self.market_hours.is_market_open():

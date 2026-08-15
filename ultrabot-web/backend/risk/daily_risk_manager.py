@@ -109,6 +109,10 @@ class DailyRiskManager:
             block_reason=block_reason,
         )
 
+    async def get_daily_risk_status(self) -> DailyRiskStatus:
+        """Async-compatible alias to check_daily_limits for engine callers."""
+        return self.check_daily_limits()
+
     def should_reduce_size(self) -> bool:
         """Return True when daily loss is >= 67 % of the max daily loss limit."""
         loss_limit = self._max_daily_loss_rupee()

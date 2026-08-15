@@ -9,6 +9,28 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.dhan.co/v2"
 
+# Comprehensive Dhan NSE security IDs mapping
+_DHAN_SECURITY_MAP: Dict[str, str] = {
+    "HDFCBANK": "1333",
+    "RELIANCE": "2885",
+    "TCS": "11536",
+    "INFY": "1594",
+    "ICICIBANK": "4963",
+    "SBIN": "3045",
+    "BHARTIARTL": "10604",
+    "ITC": "1660",
+    "TATAMOTORS": "3456",
+    "LT": "11483",
+    "BAJFINANCE": "317",
+    "MARUTI": "10999",
+    "SUNPHARMA": "3351",
+    "WIPRO": "3787",
+    "AXISBANK": "5900",
+    "KOTAKBANK": "1922",
+    "NIFTY": "26000",
+    "BANKNIFTY": "26009",
+}
+
 
 class DhanBroker(BaseBroker):
     """Dhan HQ API v2 broker integration.
@@ -22,9 +44,11 @@ class DhanBroker(BaseBroker):
         client_id: str = "",
         access_token: str = "",
         account_type: str = "live",
+        config: Optional[Dict[str, Any]] = None,
     ):
-        self.client_id = client_id
-        self.access_token = access_token
+        super().__init__(config)
+        self.client_id = client_id or self.config.get("client_id", "")
+        self.access_token = access_token or self.config.get("access_token", "")
         self.account_type = account_type
         self._client: Optional[httpx.AsyncClient] = None
         self._authenticated = False
@@ -33,13 +57,7 @@ class DhanBroker(BaseBroker):
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 base_url=_BASE_URL,
-                timeout=30.0,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "client-id": self.client_id,
-                    "access-token": self.access_token,
-                },
+                timeout=20.0,
             )
         return self._client
 
@@ -78,22 +96,35 @@ class DhanBroker(BaseBroker):
             }
 
     async def get_ltp(self, symbol: str, exchange: str = "NSE") -> float:
-        """Fetch latest LTP from Dhan."""
+        """Fetch latest real LTP from Dhan or live market feed."""
+        # 1. If authenticated, try Dhan MarketFeed API
+        if self._authenticated and self.access_token:
+            try:
+                sec_id = _DHAN_SECURITY_MAP.get(symbol.upper(), "")
+                if sec_id:
+                    client = self._get_client()
+                    dhan_seg = "NSE_EQ" if exchange == "NSE" else "NSE_FNO"
+                    payload = {"NSE_EQ": [int(sec_id)]} if dhan_seg == "NSE_EQ" else {"NSE_FNO": [int(sec_id)]}
+                    res = await client.post("/marketfeed/quote", json=payload, headers=self._headers())
+                    if res.status_code == 200:
+                        data = res.json()
+                        ltp = data.get("data", {}).get("last_price", 0.0)
+                        if ltp > 0:
+                            return float(ltp)
+            except Exception as e:
+                logger.debug("Dhan direct quote error for %s: %s", symbol, e)
+
+        # 2. Live FeedManager fallback
         try:
-            # Fallback to Yahoo / online price if Dhan token is demo
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.NS?interval=1d&range=1d"
-            async with httpx.AsyncClient(timeout=10.0) as cl:
-                res = await cl.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                if res.status_code == 200:
-                    data = res.json()
-                    meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
-                    price = meta.get("regularMarketPrice", 0.0)
-                    if price > 0:
-                        return float(price)
-            return 1000.0
+            from feeds.feed_manager import FeedManager
+            feed = FeedManager()
+            price = await feed.get_latest_price(symbol)
+            if price and price > 0:
+                return float(price)
         except Exception as exc:
-            logger.warning("Failed to fetch LTP for %s: %s", symbol, exc)
-            return 1000.0
+            logger.warning("Failed to fetch real LTP for %s: %s", symbol, exc)
+
+        return 0.0
 
     async def get_margin(self) -> Dict[str, float]:
         """Get available funds from Dhan."""
@@ -132,6 +163,7 @@ class DhanBroker(BaseBroker):
             dhan_segment = "NSE_EQ" if exchange == "NSE" else "NSE_FNO"
             dhan_product = "INTRADAY" if product in ("MIS", "INTRADAY") else "CNC"
             dhan_order_type = "MARKET" if order_type == "MARKET" else "LIMIT"
+            security_id = _DHAN_SECURITY_MAP.get(symbol.upper(), "1333")
 
             payload = {
                 "dhanClientId": self.client_id,
@@ -141,7 +173,7 @@ class DhanBroker(BaseBroker):
                 "orderType": dhan_order_type,
                 "validity": "DAY",
                 "tradingSymbol": symbol,
-                "securityId": "1333",
+                "securityId": str(security_id),
                 "quantity": quantity,
                 "price": price if dhan_order_type == "LIMIT" else 0,
             }

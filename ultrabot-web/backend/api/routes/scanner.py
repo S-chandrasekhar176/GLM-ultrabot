@@ -56,7 +56,7 @@ async def get_kronos_hotlist(
         market_data: Dict[str, Dict[str, Any]] = {}
         
         for sym in symbols:
-            ltp = BASELINE_PRICES.get(sym, 1000.0)
+            ltp = PRICE_MAP.get(sym, 1000.0)
             close = round(ltp * 0.99, 2)
             volume = 150000
             avg_vol = 75000
