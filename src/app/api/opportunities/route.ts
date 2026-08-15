@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getMarketHoursInfo } from '@/lib/marketHours';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -68,6 +69,7 @@ const STOCK_UNIVERSE: Record<string, { sector: string; defaultQty: number; defau
 
 export async function GET(request: Request) {
   try {
+    const marketInfo = getMarketHoursInfo();
     const symbolKeys = Object.keys(STOCK_UNIVERSE);
     const querySymbols = [...symbolKeys.slice(0, 16), 'VIX', 'NIFTY'];
 
@@ -130,7 +132,7 @@ export async function GET(request: Request) {
         { name: 'Max Sector', passed: gatePassFail, detail: gatePassFail ? `${meta.sector} sector within limit` : `${meta.sector} exposure at maximum ceiling` },
         { name: 'Risk-Reward', passed: gatePassFail, detail: gatePassFail ? `Calculated 1:${riskReward} RR exceeds minimum 1:1.5` : 'Calculated 1:1.3 RR below 1:1.5 threshold' },
         { name: 'Confidence', passed: gatePassFail, detail: gatePassFail ? `Kronos AI score ${(cappedScore * 100).toFixed(0)}% exceeds minimum 75%` : `Kronos score ${(cappedScore * 100).toFixed(0)}% below 75% threshold` },
-        { name: 'Market Timing', passed: true, detail: 'Execution within active intraday window' },
+        { name: 'Market Timing', passed: marketInfo.isOpen, detail: marketInfo.isOpen ? 'Execution within active intraday window' : 'Market is closed (09:15 - 15:30 IST)' },
         { name: 'Cooldown', passed: true, detail: 'Zero consecutive losses, no cooldown' },
         { name: 'Max Drawdown', passed: true, detail: 'Drawdown safe well below 5.0% limit' },
         { name: 'Slippage Buffer', passed: true, detail: 'Liquid volume, spread < 0.05%' },
@@ -145,7 +147,13 @@ export async function GET(request: Request) {
       const createdAgoSecs = Math.max(10, Math.min(180, (idx * 17) % 120 + 15));
       const createdDate = new Date(Date.now() - createdAgoSecs * 1000);
 
-      if (!isRejected && q?.price && q.price > 0) {
+      // If market is CLOSED, all intraday setups must be expired to prevent overnight risk
+      if (!marketInfo.isOpen) {
+        if (!isRejected) {
+          oppStatus = 'expired';
+          invalidationReason = `Market Session Closed (${marketInfo.statusText}) — Intraday setup expired with market close to prevent overnight risk`;
+        }
+      } else if (!isRejected && q?.price && q.price > 0) {
         const curPrice = q.price;
         const driftPct = Math.abs(curPrice - entryPrice) / entryPrice * 100;
 
@@ -181,12 +189,13 @@ export async function GET(request: Request) {
       }
 
       // Realistic strategy-tailored intraday TTLs (in seconds):
-      // Intraday breakouts & momentum scalps are valid for only 60s - 180s (1 - 3 mins)
       const isBreakout = meta.defaultStrategy.includes('Breakout') || meta.defaultStrategy.includes('ORB');
-      const baseTtlSeconds = isBreakout ? 90 : 150; // 90s for Breakouts, 150s for Pullback/Reversions
+      const baseTtlSeconds = isBreakout ? 90 : 150; 
       const staggeredSeconds = [75, 120, 45, 160, 30, 90, 0, 110, 0, 140, 60, 0, 180, 0, 95, 0];
       const offsetSecs = staggeredSeconds[idx % staggeredSeconds.length];
-      const expiryDate = new Date(Date.now() + offsetSecs * 1000);
+      const expiryDate = marketInfo.isOpen
+        ? new Date(Date.now() + offsetSecs * 1000)
+        : new Date(Date.now() - 3600 * 1000); // in past when market is closed
       const isTimeExpired = offsetSecs <= 0 || expiryDate.getTime() <= Date.now();
 
       if (!isRejected && isTimeExpired && oppStatus === 'pending') {
@@ -221,35 +230,50 @@ export async function GET(request: Request) {
         createdAt: createdDate.toISOString(),
       };
 
+      allEvaluated.push(oppItem);
+
       if (oppStatus === 'rejected') {
         rejectedList.push(oppItem);
       } else if (oppStatus === 'expired') {
         expiredList.push(oppItem);
-      } else {
-        allEvaluated.push(oppItem);
       }
     });
 
+    const pendingOpps = allEvaluated.filter((o) => o.status === 'pending');
+
     return NextResponse.json({
       success: true,
-      data: allEvaluated,
-      rejected: rejectedList,
-      expired: expiredList,
-      vix: liveVix,
-      niftyTrend,
-      symbolsScanned: 204,
-      timestamp: new Date().toISOString(),
+      data: {
+        isMarketOpen: marketInfo.isOpen,
+        marketStatus: marketInfo.statusText,
+        nextSessionSeconds: marketInfo.secondsToOpen,
+        opportunities: pendingOpps,
+        all: allEvaluated,
+        rejected: rejectedList,
+        expired: expiredList,
+        counts: {
+          total: allEvaluated.length,
+          pending: pendingOpps.length,
+          rejected: rejectedList.length,
+          expired: expiredList.length,
+        },
+        marketData: {
+          vix: liveVix,
+          niftyTrend,
+          niftyChange: +(liveQuotes.NIFTY?.change ?? -70.50).toFixed(2),
+          niftyPrice: +(liveQuotes.NIFTY?.price ?? 24361.90).toFixed(2),
+        },
+        scannedCount: 204,
+        timestamp: new Date().toISOString(),
+      },
     });
   } catch (error: any) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to scan opportunities',
-        data: [],
-        vix: 11.40,
-        symbolsScanned: 204,
+        error: error?.message || 'Failed to scan opportunities',
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
 }

@@ -696,9 +696,19 @@ class UltraBotEngine:
         mismatch_threshold = risk_config.get("price_mismatch_threshold_pct", 0.6)
         ttl_seconds = risk_config.get("opportunity_ttl_seconds", risk_config.get("opportunity_ttl_minutes", 2) * 60)
 
-        invalidated_items = []
+        # Check 0: Market Hours Check — If market closed, all intraday pending setups expire
+        if self.market_hours and not self.market_hours.is_market_open():
+            for opp_id in list(self.pending_opportunities.keys()):
+                invalidated_items.append((
+                    opp_id,
+                    "MARKET_SESSION_CLOSED",
+                    "Market session is closed (09:15 - 15:30 IST) — Intraday setup expired with market close to prevent overnight risk"
+                ))
 
         for opp_id, opp in list(self.pending_opportunities.items()):
+            if any(item[0] == opp_id for item in invalidated_items):
+                continue
+
             symbol = opp.get("symbol", "")
             direction = opp.get("direction", "BUY").upper()
             strategy = opp.get("strategy", "")

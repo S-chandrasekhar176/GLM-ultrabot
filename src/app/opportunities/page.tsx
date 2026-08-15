@@ -4,7 +4,15 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useEngine } from '@/lib/store';
-import { getConfirmedOppIds, getSkippedOppIds, executeOpportunityTrade, addSkippedOppId } from '@/lib/tradeExecution';
+import { getMarketHoursInfo, type MarketHoursInfo } from '@/lib/marketHours';
+import {
+  getStoredExpiredOppIds,
+  saveStoredExpiredOppId,
+  getStoredOpportunitiesSession,
+  saveStoredOpportunitiesSession,
+  clearStoredOpportunitiesSession,
+} from '@/lib/opportunityStorage';
+import { getConfirmedOppIds, getSkippedOppIds, executeOpportunityTrade, addSkippedOppId, checkAndAutoSquareoffPositions } from '@/lib/tradeExecution';
 import { getOpportunities, confirmOpportunity, skipOpportunity, runBacktest, getBacktestStatus, getBacktestResult } from '@/lib/api';
 import {
   Clock,
@@ -1022,47 +1030,85 @@ export default function OpportunitiesPage() {
   const [scanInterval, setScanInterval] = useState<number>(60); // 30s, 60s, 180s, 300s, 900s
   const [countdown, setCountdown] = useState<number>(60);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [marketInfo, setMarketInfo] = useState<MarketHoursInfo>(getMarketHoursInfo());
   const backtestPollRef = useRef<Record<string, NodeJS.Timeout>>({});
 
-  // Real-time 1-second ticker to re-evaluate expiry timestamps live in UI
+  // Listen to market hours every second & auto square-off
+  useEffect(() => {
+    const updateMarket = () => {
+      const info = getMarketHoursInfo();
+      setMarketInfo(info);
+      if (info.isSafeExitPassed) {
+        checkAndAutoSquareoffPositions();
+      }
+    };
+    updateMarket();
+    const interval = setInterval(updateMarket, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Tick elapsed time and auto-expire setups past their expiry timestamp
   useEffect(() => {
     const ticker = setInterval(() => {
       const now = Date.now();
       setCurrentTime(now);
 
-      // Auto-transition any newly expired opportunity in state
+      const info = getMarketHoursInfo();
       setOpportunities((prev) => {
         let hasChanges = false;
         const next = prev.map((opp) => {
-          if (opp.status === 'pending' && !opp.invalidationReason && opp.expiryAt && new Date(opp.expiryAt).getTime() <= now) {
+          // If market is closed or safe exit passed, auto-expire intraday pending setups
+          if (!info.isOpen && opp.status === 'pending') {
             hasChanges = true;
+            const reason = 'Market Session Closed (09:15 - 15:30 IST) — Intraday setup expired with market close';
+            saveStoredExpiredOppId(opp.id, reason);
             return {
               ...opp,
               status: 'expired' as OppStatus,
-              invalidationReason: 'Setup TTL expired (15m momentum window elapsed) — opportunity invalidated to prevent stale execution',
+              invalidationReason: reason,
+            };
+          }
+
+          // If setup timer reached 0s, auto-expire
+          const isTimeExpired = opp.expiryAt ? new Date(opp.expiryAt).getTime() <= now : false;
+          if (isTimeExpired && opp.status === 'pending') {
+            hasChanges = true;
+            const reason = opp.invalidationReason || 'Momentum window elapsed (TTL Expired) — opportunity invalidated to prevent stale execution';
+            saveStoredExpiredOppId(opp.id, reason);
+            return {
+              ...opp,
+              status: 'expired' as OppStatus,
+              invalidationReason: reason,
             };
           }
           return opp;
         });
+        if (hasChanges) {
+          saveStoredOpportunitiesSession(next as any);
+        }
         return hasChanges ? next : prev;
       });
     }, 1000);
     return () => clearInterval(ticker);
   }, []);
 
-  const handleExpireOpportunity = useCallback((id: string) => {
-    setOpportunities((prev) =>
-      prev.map((opp) => {
+  const handleExpireOpportunity = useCallback((id: string, reason?: string) => {
+    const defaultReason = reason || 'Setup TTL expired (15m momentum window elapsed) — opportunity invalidated to prevent stale execution';
+    saveStoredExpiredOppId(id, defaultReason);
+    setOpportunities((prev) => {
+      const next = prev.map((opp) => {
         if (opp.id === id && opp.status === 'pending') {
           return {
             ...opp,
             status: 'expired' as OppStatus,
-            invalidationReason: 'Setup TTL expired (15m momentum window elapsed) — opportunity invalidated to prevent stale execution',
+            invalidationReason: defaultReason,
           };
         }
         return opp;
-      })
-    );
+      });
+      saveStoredOpportunitiesSession(next as any);
+      return next;
+    });
   }, []);
 
   // Sync live LTP quotes for opportunities with continuous invalidation checks
@@ -1074,12 +1120,11 @@ export default function OpportunitiesPage() {
         const json = await res.json();
         if (json.success && json.data) {
           const quotes = json.data;
-          setOpportunities((prev) =>
-            prev.map((opp) => {
+          setOpportunities((prev) => {
+            const next = prev.map((opp) => {
               const live = quotes[opp.symbol];
               if (live && live.price > 0) {
                 const curPrice = live.price;
-                const entry = opp.entry;
                 const target = opp.target;
                 const stopLoss = opp.stopLoss;
                 const isBuy = opp.direction === 'BUY';
@@ -1092,15 +1137,19 @@ export default function OpportunitiesPage() {
                   if (isBuy && curPrice >= target) {
                     status = 'expired';
                     invReason = `Target price ₹${target.toFixed(2)} reached (+2.2% move finished at LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent chasing top`;
+                    saveStoredExpiredOppId(opp.id, invReason);
                   } else if (isBuy && curPrice <= stopLoss) {
                     status = 'expired';
-                    invReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated`;
+                    invReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent buying falling knife`;
+                    saveStoredExpiredOppId(opp.id, invReason);
                   } else if (!isBuy && curPrice <= target) {
                     status = 'expired';
                     invReason = `Target price ₹${target.toFixed(2)} reached (-2.2% move finished at LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent selling bottom`;
+                    saveStoredExpiredOppId(opp.id, invReason);
                   } else if (!isBuy && curPrice >= stopLoss) {
                     status = 'expired';
-                    invReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated`;
+                    invReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent shorting squeeze`;
+                    saveStoredExpiredOppId(opp.id, invReason);
                   }
                 }
 
@@ -1115,8 +1164,10 @@ export default function OpportunitiesPage() {
                 };
               }
               return opp;
-            })
-          );
+            });
+            saveStoredOpportunitiesSession(next as any);
+            return next;
+          });
         }
       }
     } catch {
@@ -1124,75 +1175,134 @@ export default function OpportunitiesPage() {
     }
   }, []);
 
-  // Fetch real opportunities and restore confirmed/skipped IDs
+  // Fetch real opportunities with persistent storage & market hours awareness
   const loadOpportunities = useCallback(async (showToast = false) => {
     setIsScanning(true);
     try {
       const confirmedIds = getConfirmedOppIds();
       const skippedIds = getSkippedOppIds();
+      const expiredIds = getStoredExpiredOppIds();
+      const currentMarketInfo = getMarketHoursInfo();
+      setMarketInfo(currentMarketInfo);
+
+      // Check if we have a valid stored session in localStorage
+      const storedSession = getStoredOpportunitiesSession();
 
       const res = await fetch('/api/opportunities');
       if (res.ok) {
         const json = await res.json();
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const mapped = json.data.map((opp: any) => ({
-            ...opp,
-            status: (confirmedIds.includes(opp.id)
-              ? 'confirmed'
-              : skippedIds.includes(opp.id)
-              ? 'skipped'
-              : opp.status || 'pending') as OppStatus,
-          }));
+        const rawOpps = json?.data?.all || (Array.isArray(json?.data) ? json.data : null);
+
+        if (json.success && Array.isArray(rawOpps) && rawOpps.length > 0) {
+          const mapped: OpportunityData[] = rawOpps.map((opp: any) => {
+            const isConfirmed = confirmedIds.includes(opp.id);
+            const isSkipped = skippedIds.includes(opp.id);
+            const isPersistentlyExpired = expiredIds.has(opp.id) || !currentMarketInfo.isOpen;
+
+            let oppStatus: OppStatus = 'pending';
+            let invReason = opp.invalidationReason;
+
+            if (opp.status === 'rejected') {
+              oppStatus = 'rejected';
+            } else if (isConfirmed) {
+              oppStatus = 'confirmed';
+            } else if (isSkipped) {
+              oppStatus = 'skipped';
+            } else if (isPersistentlyExpired || opp.status === 'expired') {
+              oppStatus = 'expired';
+              if (!invReason) {
+                invReason = !currentMarketInfo.isOpen
+                  ? `Market Session Closed (${currentMarketInfo.statusText}) — Intraday setup expired with market close`
+                  : 'Opportunity expired in earlier session';
+              }
+              saveStoredExpiredOppId(opp.id, invReason);
+            }
+
+            return {
+              ...opp,
+              status: oppStatus,
+              invalidationReason: invReason,
+            };
+          });
+
           setOpportunities(mapped);
-          if (Array.isArray(json.rejected) && json.rejected.length > 0) {
+          saveStoredOpportunitiesSession(mapped as any);
+
+          if (Array.isArray(json.data?.rejected) && json.data.rejected.length > 0) {
+            setRejectedList(json.data.rejected);
+          } else if (Array.isArray(json.rejected) && json.rejected.length > 0) {
             setRejectedList(json.rejected);
           }
-          if (Array.isArray(json.expired) && json.expired.length > 0) {
+
+          if (Array.isArray(json.data?.expired) && json.data.expired.length > 0) {
+            setExpiredList(json.data.expired);
+          } else if (Array.isArray(json.expired) && json.expired.length > 0) {
             setExpiredList(json.expired);
           }
+
           if (showToast) {
-            const actionableNum = mapped.filter((m: any) => m.status === 'pending' && !m.invalidationReason).length;
-            const expiredNum = (json.expired?.length || 0) + mapped.filter((m: any) => m.status === 'expired' || m.invalidationReason).length;
-            toast.success(`Scanned 204 symbols: ${actionableNum} actionable, ${expiredNum} invalidated/expired pruned!`);
+            const actionableNum = mapped.filter((m) => m.status === 'pending' && !m.invalidationReason).length;
+            const expiredNum = mapped.filter((m) => m.status === 'expired' || m.invalidationReason).length;
+            if (!currentMarketInfo.isOpen) {
+              toast.info(`Market is Closed (${currentMarketInfo.statusText}). Setups preserved in Invalidated/Expired list.`);
+            } else {
+              toast.success(`Scanned 204 symbols: ${actionableNum} actionable, ${expiredNum} invalidated/expired pruned!`);
+            }
           }
+
           setIsLoading(false);
           setIsScanning(false);
           return;
         }
       }
 
-      // Fallback to live quotes scan
-      const quotesRes = await fetch('/api/live-quotes?symbols=RELIANCE,HDFCBANK,SBIN,TCS,INFY,ICICIBANK,TATAMOTORS,VIX');
-      if (quotesRes.ok) {
-        const qjson = await quotesRes.json();
-        const quotes = qjson.data || {};
-        const liveVix = +(quotes.VIX?.price ?? (vix > 0 ? vix : 11.36)).toFixed(2);
+      // Fallback if API fails — use persistent stored session or INITIAL_OPPORTUNITIES
+      const sourceOpps = storedSession && storedSession.length > 0 ? storedSession : INITIAL_OPPORTUNITIES;
+      const mappedFallback: OpportunityData[] = sourceOpps.map((opp) => {
+        const isConfirmed = confirmedIds.includes(opp.id);
+        const isSkipped = skippedIds.includes(opp.id);
+        const isPersistentlyExpired = expiredIds.has(opp.id) || !currentMarketInfo.isOpen;
 
-        setOpportunities(
-          INITIAL_OPPORTUNITIES.map((opp) => {
-            const live = quotes[opp.symbol];
-            const entryPrice = live?.price && live.price > 0 ? live.price : opp.entry;
-            const isConfirmed = confirmedIds.includes(opp.id);
-            const isSkipped = skippedIds.includes(opp.id);
-            return {
-              ...opp,
-              entry: entryPrice,
-              target: +(entryPrice * (1 + (opp.direction === 'BUY' ? 0.021 : -0.021))).toFixed(2),
-              stopLoss: +(entryPrice * (1 - (opp.direction === 'BUY' ? 0.010 : -0.010))).toFixed(2),
-              margin: +(entryPrice * opp.quantity * 0.2).toFixed(2),
-              vix: liveVix,
-              status: (isConfirmed ? 'confirmed' : isSkipped ? 'skipped' : 'pending') as OppStatus,
-            };
-          })
-        );
-      }
+        let status: OppStatus = opp.status || 'pending';
+        let invReason = opp.invalidationReason;
+
+        if (isConfirmed) status = 'confirmed';
+        else if (isSkipped) status = 'skipped';
+        else if (isPersistentlyExpired || opp.status === 'expired') {
+          status = 'expired';
+          if (!invReason) {
+            invReason = !currentMarketInfo.isOpen
+              ? 'Market Session Closed (09:15 - 15:30 IST) — Intraday setup expired with market close'
+              : 'Setup expired in previous scan';
+          }
+        }
+
+        return {
+          ...opp,
+          status,
+          invalidationReason: invReason,
+        };
+      });
+
+      setOpportunities(mappedFallback);
+      saveStoredOpportunitiesSession(mappedFallback as any);
     } catch {
       const confirmedIds = getConfirmedOppIds();
       const skippedIds = getSkippedOppIds();
+      const expiredIds = getStoredExpiredOppIds();
+      const currentMarketInfo = getMarketHoursInfo();
+
       setOpportunities(
         INITIAL_OPPORTUNITIES.map((opp) => ({
           ...opp,
-          status: (confirmedIds.includes(opp.id) ? 'confirmed' : skippedIds.includes(opp.id) ? 'skipped' : 'pending') as OppStatus,
+          status: (confirmedIds.includes(opp.id)
+            ? 'confirmed'
+            : skippedIds.includes(opp.id)
+            ? 'skipped'
+            : expiredIds.has(opp.id) || !currentMarketInfo.isOpen
+            ? 'expired'
+            : 'pending') as OppStatus,
+          invalidationReason: !currentMarketInfo.isOpen ? 'Market Session Closed' : undefined,
         }))
       );
     } finally {
@@ -1206,7 +1316,7 @@ export default function OpportunitiesPage() {
     loadOpportunities();
   }, [loadOpportunities]);
 
-  // Interval countdown timer
+  // Interval countdown timer (only runs active scan countdown if market is open)
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -1222,12 +1332,17 @@ export default function OpportunitiesPage() {
   }, [scanInterval, loadOpportunities]);
 
   const handleManualRescan = useCallback(() => {
+    const info = getMarketHoursInfo();
+    if (!info.isOpen) {
+      toast.info(`Market is Closed (${info.statusText}). Real-time scanning will resume at 09:15 AM next session.`);
+    }
     setCountdown(scanInterval);
     setScanCycle((c) => c + 1);
     loadOpportunities(true);
   }, [scanInterval, loadOpportunities]);
 
   const handleResetFilters = useCallback(() => {
+    clearStoredOpportunitiesSession();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('ultrabot_confirmed_opportunities');
       localStorage.removeItem('ultrabot_skipped_opportunities');
@@ -1631,35 +1746,77 @@ export default function OpportunitiesPage() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="h-14 w-14 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-3">
-                <Clock className="h-6 w-6 text-ub-text-muted" />
+            !marketInfo.isOpen && (activeTab === 'actionable' || activeTab === 'pending') ? (
+              <div className="flex flex-col items-center justify-center py-12 px-6 text-center rounded-xl bg-ub-surface/60 border border-ub-border/80 my-2">
+                <div className="h-16 w-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mb-3">
+                  <Clock className="h-8 w-8 text-rose-400" />
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/40 text-[11px] font-bold">
+                    🔴 {marketInfo.statusText}
+                  </Badge>
+                  <Badge variant="outline" className="text-[11px] text-ub-text-muted border-ub-border">
+                    Session: Mon-Fri 09:15 - 15:30 IST
+                  </Badge>
+                </div>
+                <h3 className="text-base font-bold text-ub-text-primary mb-1">
+                  Intraday Opportunity Scanner Paused
+                </h3>
+                <p className="text-xs text-ub-text-muted max-w-md mb-5 leading-relaxed">
+                  Indian equity and derivatives markets are currently closed. The live algorithmic scanner and 12-point risk gates operate exclusively during active market hours. All intraday opportunities automatically expire at session close to prevent overnight gap risk.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-semibold"
+                    onClick={() => setActiveTab('expired')}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
+                    View Expired / Closed Setups ({expiredCount})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-rose-500/40 text-rose-300 hover:bg-rose-500/10 text-xs font-semibold"
+                    onClick={() => setActiveTab('rejected')}
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5 mr-1.5 text-rose-400" />
+                    View Risk Gate Rejections ({rejectedCount})
+                  </Button>
+                </div>
               </div>
-              <h3 className="text-base font-semibold text-ub-text-primary mb-1">
-                No {activeTab} opportunities found
-              </h3>
-              <p className="text-xs text-ub-text-muted max-w-sm mb-4">
-                All candidates in this batch have been acted upon. The scanner automatically re-scans every {scanInterval < 60 ? `${scanInterval} seconds` : `${scanInterval / 60} minute(s)`} across 204 universe stocks.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold"
-                  onClick={handleManualRescan}
-                >
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Scan Next Universe Batch
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-ub-border text-xs"
-                  onClick={handleResetFilters}
-                >
-                  Reset Completed Setups
-                </Button>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="h-14 w-14 rounded-full bg-ub-surface border border-ub-border flex items-center justify-center mb-3">
+                  <Clock className="h-6 w-6 text-ub-text-muted" />
+                </div>
+                <h3 className="text-base font-semibold text-ub-text-primary mb-1">
+                  No {activeTab} opportunities found
+                </h3>
+                <p className="text-xs text-ub-text-muted max-w-sm mb-4">
+                  All candidates in this batch have been acted upon. The scanner automatically re-scans every {scanInterval < 60 ? `${scanInterval} seconds` : `${scanInterval / 60} minute(s)`} across 204 universe stocks.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold"
+                    onClick={handleManualRescan}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    Scan Next Universe Batch
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-ub-border text-xs"
+                    onClick={handleResetFilters}
+                  >
+                    Reset Completed Setups
+                  </Button>
+                </div>
               </div>
-            </div>
+            )
           ) : (
             <div className="space-y-4">
               <AnimatePresence mode="popLayout">

@@ -1,10 +1,12 @@
 'use client';
 
-import { Menu, TrendingUp, TrendingDown, Minus, Activity, Clock } from 'lucide-react';
+import { Menu, TrendingUp, TrendingDown, Minus, Activity, Clock, ShieldCheck } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useSidebar, useEngine, type MarketRegime } from '@/lib/store';
 import { useMarketData, useEngineStatus } from '@/hooks/useApi';
+import { getMarketHoursInfo, type MarketHoursInfo } from '@/lib/marketHours';
+import { checkAndAutoSquareoffPositions } from '@/lib/tradeExecution';
 import { theme } from '@/styles/theme';
 
 interface MarketIndexItem {
@@ -40,13 +42,27 @@ const REGIME_CONFIG: Record<MarketRegime, { label: string; color: string; Icon: 
   volatile: { label: 'VOL', color: theme.colors.volatile, Icon: Activity, defaultScore: '88%' },
 };
 
-function formatCountdown(seconds: number): string {
-  if (seconds <= 0) return 'Market Closed';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
-  return `${m}:${s.toString().padStart(2, '0')}`;
+function formatMarketTimer(marketInfo: MarketHoursInfo): string {
+  if (marketInfo.isOpen) {
+    const s = marketInfo.secondsToClose;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 0) return `Closes in ${h}h ${m}m`;
+    return `Closes in ${m}m ${s % 60}s`;
+  }
+  
+  if (marketInfo.isPreMarket) {
+    const s = marketInfo.secondsToOpen;
+    return `Pre-Market (Opens ${Math.floor(s / 60)}m)`;
+  }
+
+  const s = marketInfo.secondsToOpen;
+  if (s > 24 * 3600) {
+    return `Closed (Opens Mon 09:15 AM)`;
+  }
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  return `Closed (Opens in ${hours}h ${mins}m)`;
 }
 
 export default function Header() {
@@ -58,7 +74,6 @@ export default function Header() {
     vix,
     setVix,
     activeBroker,
-    marketCloseSeconds,
   } = useEngine();
 
   const { data: marketData } = useMarketData();
@@ -66,8 +81,8 @@ export default function Header() {
 
   const [indices, setIndices] = useState<MarketIndexItem[]>(INITIAL_INDICES);
   const [flashingIndex, setFlashingIndex] = useState<{ id: string; dir: 'up' | 'down' } | null>(null);
+  const [marketInfo, setMarketInfo] = useState<MarketHoursInfo>(getMarketHoursInfo());
 
-  // Sync engine status from backend API
   useEffect(() => {
     if (engineData && (engineData as any).state) {
       const state = (engineData as any).state.toLowerCase();
@@ -77,7 +92,21 @@ export default function Header() {
     }
   }, [engineData, setEngineStatus]);
 
-  // Fetch real-time live quotes for all 5 indices and India VIX
+  useEffect(() => {
+    const checkMarket = () => {
+      const info = getMarketHoursInfo();
+      setMarketInfo(info);
+      
+      if (info.isSafeExitPassed) {
+        checkAndAutoSquareoffPositions();
+      }
+    };
+
+    checkMarket();
+    const interval = setInterval(checkMarket, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchLiveQuotes = useCallback(async () => {
     try {
       const res = await fetch('/api/live-quotes?symbols=NIFTY,SENSEX,BANKNIFTY,MIDCPNIFTY,FINNIFTY,VIX', {
@@ -101,54 +130,18 @@ export default function Header() {
         }
       }
     } catch {
-      // Fallback to existing
     }
   }, [setVix]);
 
   useEffect(() => {
     fetchLiveQuotes();
-    const interval = setInterval(fetchLiveQuotes, 10000);
+    const pollTime = marketInfo.isOpen ? 10000 : 30000;
+    const interval = setInterval(fetchLiveQuotes, pollTime);
     return () => clearInterval(interval);
-  }, [fetchLiveQuotes]);
+  }, [fetchLiveQuotes, marketInfo.isOpen]);
 
-  const [countdown, setCountdown] = useState(marketCloseSeconds);
-  const [currentTime, setCurrentTime] = useState<string>('');
+  const isMarketOpen = marketInfo.isOpen;
 
-  useEffect(() => {
-    setCountdown(marketCloseSeconds);
-  }, [marketCloseSeconds]);
-
-  // Tick countdown and clock every second
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCountdown((prev) => Math.max(0, prev - 1));
-      setCurrentTime(
-        new Date().toLocaleTimeString('en-IN', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        }),
-      );
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const effectiveSeconds = useMemo(() => {
-    if (countdown > 0) return countdown;
-    const now = new Date();
-    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const isWeekday = istNow.getDay() >= 1 && istNow.getDay() <= 5;
-    const sec = istNow.getHours() * 3600 + istNow.getMinutes() * 60 + istNow.getSeconds();
-    if (isWeekday && sec >= 9 * 3600 + 15 * 60 && sec < 15 * 3600 + 30 * 60) {
-      return 15 * 3600 + 30 * 60 - sec;
-    }
-    return 0;
-  }, [countdown, currentTime]);
-
-  const isMarketOpen = effectiveSeconds > 0;
-
-  // Real-time live sub-second tick simulation (ONLY active when market is open)
   useEffect(() => {
     if (!isMarketOpen) {
       setFlashingIndex(null);
@@ -311,20 +304,27 @@ export default function Header() {
             VIX {displayVix.toFixed(1)}
           </Badge>
 
-          {/* Market Close Countdown */}
+          {/* Market Status & Countdown Timer */}
           <Badge
-            className="hidden lg:flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-semibold border-0 rounded-full bg-ub-surface"
+            className="hidden lg:flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-semibold border rounded-full"
             style={{
-              color: effectiveSeconds > 0 && effectiveSeconds <= 300 ? theme.colors.warning : theme.colors.textMuted,
+              backgroundColor: isMarketOpen ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)',
+              borderColor: isMarketOpen ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)',
+              color: isMarketOpen ? '#34d399' : '#fb7185',
             }}
           >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isMarketOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+              }`}
+            />
             <Clock className="h-2.5 w-2.5" />
-            {formatCountdown(effectiveSeconds)}
+            {formatMarketTimer(marketInfo)}
           </Badge>
 
-          {/* Clock */}
+          {/* Real IST Clock */}
           <span className="hidden sm:block text-[11px] font-mono text-ub-text-muted tabular-nums">
-            {currentTime}
+            {marketInfo.istTimeString}
           </span>
         </div>
       </div>
