@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -26,6 +26,16 @@ import {
 } from 'lucide-react';
 import { useStore, BROKER_LIST, BROKER_FIELDS, type BrokerCredentialFields } from '@/lib/store';
 import { theme } from '@/styles/theme';
+import {
+  saveAngelOneCredentials,
+  saveShoonyaCredentials,
+  saveDhanCredentials,
+  saveFyersCredentials,
+  testAngelOneConnection,
+  testShoonyaConnection,
+  testDhanConnection,
+  testFyersConnection,
+} from '@/lib/api';
 
 /* ─────────────────────────────────────────────
    Stable constants (avoid new refs on every render)
@@ -63,9 +73,71 @@ function BrokerCredentialCard({ brokerId }: { brokerId: string }) {
   const [testing, setTesting] = useState(false);
   const hasChanges = JSON.stringify(localCreds) !== JSON.stringify(credentials);
 
-  const handleSave = useCallback(() => {
+  // Sync local credentials when the store completes hydration
+  useEffect(() => {
+    if (credentials && Object.keys(credentials).length > 0) {
+      setLocalCreds(credentials);
+    }
+  }, [credentials]);
+
+  const handleSave = useCallback(async () => {
+    // 1. Save to local Zustand store / localStorage
     saveCreds(brokerId, localCreds);
-    toast.success(`${brokerMeta?.name || brokerId} credentials saved`);
+
+    // 2. Sync to backend API
+    if (brokerId === 'angelone') {
+      try {
+        await saveAngelOneCredentials({
+          client_id: localCreds.clientCode || '',
+          client_secret: localCreds.apiKey || '',
+          api_key: localCreds.apiKey || '',
+          pin: localCreds.pin || '',
+          totp_secret: localCreds.totpSecret || '',
+          account_type: 'live',
+        });
+        toast.success(`Angel One credentials synced to backend`);
+      } catch (err: any) {
+        toast.error(`Failed to sync to backend: ${err.response?.data?.detail || err.message || err}`);
+      }
+    } else if (brokerId === 'shoonya') {
+      try {
+        await saveShoonyaCredentials({
+          client_id: localCreds.userId || '',
+          client_secret: localCreds.password || '',
+          totp_secret: localCreds.totpSecret || '',
+          account_type: 'live',
+        });
+        toast.success(`Shoonya credentials synced to backend`);
+      } catch (err: any) {
+        toast.error(`Failed to sync to backend: ${err.response?.data?.detail || err.message || err}`);
+      }
+    } else if (brokerId === 'dhan') {
+      try {
+        await saveDhanCredentials({
+          client_id: localCreds.clientId || '',
+          access_token: localCreds.accessToken || '',
+          account_type: 'live',
+        });
+        toast.success(`Dhan credentials synced to backend`);
+      } catch (err: any) {
+        toast.error(`Failed to sync to backend: ${err.response?.data?.detail || err.message || err}`);
+      }
+    } else if (brokerId === 'fyers') {
+      try {
+        await saveFyersCredentials({
+          app_id: localCreds.appId || '',
+          access_token: localCreds.accessToken || '',
+          secret_key: localCreds.secretKey || '',
+          pin: localCreds.pin || '',
+          account_type: 'live',
+        });
+        toast.success(`Fyers credentials synced to backend`);
+      } catch (err: any) {
+        toast.error(`Failed to sync to backend: ${err.response?.data?.detail || err.message || err}`);
+      }
+    } else {
+      toast.success(`${brokerMeta?.name || brokerId} credentials saved`);
+    }
   }, [brokerId, localCreds, saveCreds, brokerMeta?.name]);
 
   const handleClear = useCallback(() => {
@@ -74,13 +146,35 @@ function BrokerCredentialCard({ brokerId }: { brokerId: string }) {
     toast.success(`${brokerMeta?.name || brokerId} credentials cleared`);
   }, [brokerId, clearCreds, brokerMeta?.name]);
 
-  const handleTest = useCallback(() => {
+  const handleTest = useCallback(async () => {
     setTesting(true);
-    setTimeout(() => {
+    try {
+      let res: any;
+      if (brokerId === 'angelone') {
+        res = await testAngelOneConnection(localCreds);
+      } else if (brokerId === 'shoonya') {
+        res = await testShoonyaConnection(localCreds);
+      } else if (brokerId === 'dhan') {
+        res = await testDhanConnection(localCreds);
+      } else if (brokerId === 'fyers') {
+        res = await testFyersConnection(localCreds);
+      } else {
+        toast.success(`${brokerMeta?.name} connection test successful (demo)`);
+        setTesting(false);
+        return;
+      }
+
+      if (res && res.connected) {
+        toast.success(`${brokerMeta?.name} connection successful: ${res.message}`);
+      } else {
+        toast.error(`${brokerMeta?.name} connection failed: ${res?.message || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      toast.error(`Connection test error: ${err.response?.data?.detail || err.message || err}`);
+    } finally {
       setTesting(false);
-      toast.success(`${brokerMeta?.name} connection test successful (demo)`);
-    }, 1500);
-  }, [brokerMeta?.name]);
+    }
+  }, [brokerId, brokerMeta?.name]);
 
   const updateField = (key: string, value: string) => {
     setLocalCreds((prev) => ({ ...prev, [key]: value }));

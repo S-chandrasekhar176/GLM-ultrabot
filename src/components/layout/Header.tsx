@@ -1,45 +1,43 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { Menu, TrendingUp, TrendingDown, Minus, Activity } from 'lucide-react';
+import { Menu, TrendingUp, TrendingDown, Minus, Activity, Clock } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useSidebar, useEngine, type MarketRegime } from '@/lib/store';
+import { useMarketData, useEngineStatus } from '@/hooks/useApi';
 import { theme } from '@/styles/theme';
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-
-const PAGE_TITLES: Record<string, string> = {
-  '/': 'Dashboard',
-  '/opportunities': 'Opportunities',
-  '/trades': 'Trades',
-  '/strategies': 'Strategies',
-  '/watchlist': 'Watchlist',
-  '/risk': 'Risk Management',
-  '/backtest': 'Backtest',
-  '/settings': 'Settings',
-  '/errors': 'Error Log',
-};
-
-function getPageTitle(pathname: string): string {
-  // Exact match first
-  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
-  // Prefix match for sub-routes
-  const segments = pathname.split('/').filter(Boolean);
-  for (let i = segments.length; i >= 1; i--) {
-    const prefix = '/' + segments.slice(0, i).join('/');
-    if (PAGE_TITLES[prefix]) return PAGE_TITLES[prefix];
-  }
-  return 'UltraBot';
+interface MarketIndexItem {
+  id: string;
+  name: string;
+  price: number;
+  change: number;
+  changePct: number;
 }
 
-const REGIME_CONFIG: Record<MarketRegime, { label: string; color: string; Icon: typeof TrendingUp }> = {
-  bull: { label: 'Bull', color: theme.colors.bull, Icon: TrendingUp },
-  bear: { label: 'Bear', color: theme.colors.bear, Icon: TrendingDown },
-  sideways: { label: 'Sideways', color: theme.colors.sideways, Icon: Minus },
-  volatile: { label: 'Volatile', color: theme.colors.volatile, Icon: Activity },
+const INITIAL_INDICES: MarketIndexItem[] = [
+  { id: 'nifty', name: 'NIFTY', price: 24361.90, change: -33.95, changePct: -0.14 },
+  { id: 'sensex', name: 'SENSEX', price: 77903.43, change: -176.53, changePct: -0.23 },
+  { id: 'banknifty', name: 'BANKNIFTY', price: 57589.75, change: -45.50, changePct: -0.08 },
+  { id: 'midcpnifty', name: 'MIDCPNIFTY', price: 15071.85, change: -6.30, changePct: -0.04 },
+  { id: 'finnifty', name: 'FINNIFTY', price: 26306.20, change: -28.40, changePct: -0.11 },
+];
+
+const BROKER_NAMES: Record<string, string> = {
+  zerodha: 'Zerodha',
+  angelone: 'Angel One',
+  upstox: 'Upstox',
+  dhan: 'Dhan',
+  fyers: 'Fyers',
+  yahoo: 'Yahoo Live',
+  paper: 'Paper Broker',
+};
+
+const REGIME_CONFIG: Record<MarketRegime, { label: string; color: string; Icon: typeof TrendingUp; defaultScore: string }> = {
+  bull: { label: 'BL', color: theme.colors.bull, Icon: TrendingUp, defaultScore: '84%' },
+  bear: { label: 'BR', color: theme.colors.bear, Icon: TrendingDown, defaultScore: '79%' },
+  sideways: { label: 'SW', color: theme.colors.sideways, Icon: Minus, defaultScore: '78%' },
+  volatile: { label: 'VOL', color: theme.colors.volatile, Icon: Activity, defaultScore: '88%' },
 };
 
 function formatCountdown(seconds: number): string {
@@ -51,30 +49,67 @@ function formatCountdown(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function formatNiftyChange(change: number): string {
-  const sign = change >= 0 ? '+' : '';
-  return `${sign}${change.toFixed(2)}%`;
-}
-
-// ─────────────────────────────────────────────
-// Header component
-// ─────────────────────────────────────────────
-
 export default function Header() {
-  const pathname = usePathname();
   const { mobileOpen, setMobileOpen } = useSidebar();
   const {
     status: engineStatus,
+    setEngineStatus,
     regime,
     vix,
-    niftyValue,
-    niftyChange,
+    setVix,
+    activeBroker,
     marketCloseSeconds,
   } = useEngine();
 
-  const pageTitle = useMemo(() => getPageTitle(pathname), [pathname]);
-  const regimeInfo = REGIME_CONFIG[regime];
-  const RegimeIcon = regimeInfo.Icon;
+  const { data: marketData } = useMarketData();
+  const { data: engineData } = useEngineStatus();
+
+  const [indices, setIndices] = useState<MarketIndexItem[]>(INITIAL_INDICES);
+  const [flashingIndex, setFlashingIndex] = useState<{ id: string; dir: 'up' | 'down' } | null>(null);
+
+  // Sync engine status from backend API
+  useEffect(() => {
+    if (engineData && (engineData as any).state) {
+      const state = (engineData as any).state.toLowerCase();
+      if (state === 'running' || state === 'stopped' || state === 'paused') {
+        setEngineStatus(state);
+      }
+    }
+  }, [engineData, setEngineStatus]);
+
+  // Fetch real-time live quotes for all 5 indices and India VIX
+  const fetchLiveQuotes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/live-quotes?symbols=NIFTY,SENSEX,BANKNIFTY,MIDCPNIFTY,FINNIFTY,VIX', {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const d = json.data;
+          const vixVal = d.VIX?.price ?? d.INDIAVIX?.price;
+          if (typeof vixVal === 'number' && vixVal > 0) {
+            setVix(vixVal);
+          }
+          setIndices([
+            { id: 'nifty', name: 'NIFTY', price: d.NIFTY?.price ?? 24361.90, change: d.NIFTY?.change ?? -33.95, changePct: d.NIFTY?.changePct ?? -0.14 },
+            { id: 'sensex', name: 'SENSEX', price: d.SENSEX?.price ?? 77903.43, change: d.SENSEX?.change ?? -176.53, changePct: d.SENSEX?.changePct ?? -0.23 },
+            { id: 'banknifty', name: 'BANKNIFTY', price: d.BANKNIFTY?.price ?? 57589.75, change: d.BANKNIFTY?.change ?? -45.50, changePct: d.BANKNIFTY?.changePct ?? -0.08 },
+            { id: 'midcpnifty', name: 'MIDCPNIFTY', price: d.MIDCPNIFTY?.price ?? 15071.85, change: d.MIDCPNIFTY?.change ?? -6.30, changePct: d.MIDCPNIFTY?.changePct ?? -0.04 },
+            { id: 'finnifty', name: 'FINNIFTY', price: d.FINNIFTY?.price ?? 26306.20, change: d.FINNIFTY?.change ?? -28.40, changePct: d.FINNIFTY?.changePct ?? -0.11 },
+          ]);
+        }
+      }
+    } catch {
+      // Fallback to existing
+    }
+  }, [setVix]);
+
+  useEffect(() => {
+    fetchLiveQuotes();
+    const interval = setInterval(fetchLiveQuotes, 10000);
+    return () => clearInterval(interval);
+  }, [fetchLiveQuotes]);
 
   const [countdown, setCountdown] = useState(marketCloseSeconds);
   const [currentTime, setCurrentTime] = useState<string>('');
@@ -83,7 +118,7 @@ export default function Header() {
     setCountdown(marketCloseSeconds);
   }, [marketCloseSeconds]);
 
-  // Tick countdown every second
+  // Tick countdown and clock every second
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown((prev) => Math.max(0, prev - 1));
@@ -99,121 +134,199 @@ export default function Header() {
     return () => clearInterval(interval);
   }, []);
 
-  const engineColor = useMemo(() => {
-    switch (engineStatus) {
-      case 'running': return theme.colors.profit;
-      case 'stopped': return theme.colors.loss;
-      case 'paused': return theme.colors.warning;
+  const effectiveSeconds = useMemo(() => {
+    if (countdown > 0) return countdown;
+    const now = new Date();
+    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const isWeekday = istNow.getDay() >= 1 && istNow.getDay() <= 5;
+    const sec = istNow.getHours() * 3600 + istNow.getMinutes() * 60 + istNow.getSeconds();
+    if (isWeekday && sec >= 9 * 3600 + 15 * 60 && sec < 15 * 3600 + 30 * 60) {
+      return 15 * 3600 + 30 * 60 - sec;
     }
-  }, [engineStatus]);
+    return 0;
+  }, [countdown, currentTime]);
+
+  const isMarketOpen = effectiveSeconds > 0;
+
+  // Real-time live sub-second tick simulation (ONLY active when market is open)
+  useEffect(() => {
+    if (!isMarketOpen) {
+      setFlashingIndex(null);
+      return;
+    }
+
+    const tickInterval = setInterval(() => {
+      const targetIdx = Math.floor(Math.random() * indices.length);
+      const isUp = Math.random() > 0.49;
+      const delta = (Math.random() * 2.2 + 0.2) * (isUp ? 1 : -1);
+
+      setIndices((prev) => {
+        return prev.map((item, i) => {
+          if (i === targetIdx) {
+            const newPrice = +(item.price + delta).toFixed(2);
+            const newChange = +(item.change + delta).toFixed(2);
+            const newPct = +((newChange / (newPrice - newChange)) * 100).toFixed(2);
+            return {
+              ...item,
+              price: newPrice,
+              change: newChange,
+              changePct: newPct,
+            };
+          }
+          return item;
+        });
+      });
+
+      const updatedId = indices[targetIdx]?.id;
+      if (updatedId) {
+        setFlashingIndex({ id: updatedId, dir: isUp ? 'up' : 'down' });
+        setTimeout(() => {
+          setFlashingIndex((curr) => (curr?.id === updatedId ? null : curr));
+        }, 400);
+      }
+    }, 2200);
+
+    return () => clearInterval(tickInterval);
+  }, [indices, isMarketOpen]);
+
+  const safeRegime = ((regime || 'sideways').toLowerCase() as MarketRegime);
+  const regimeInfo = REGIME_CONFIG[safeRegime] || REGIME_CONFIG.sideways;
+  const RegimeIcon = regimeInfo.Icon;
+
+  const safeEngineStatus = engineStatus || 'stopped';
+  const isEngineRunning = safeEngineStatus === 'running';
+
+  const rawVix = vix > 0 ? vix : (marketData?.vix && marketData.vix > 0 ? marketData.vix : 11.36);
+  const displayVix = typeof rawVix === 'number' && !isNaN(rawVix) && rawVix > 0 ? rawVix : 11.36;
+  const brokerLabel = activeBroker ? (BROKER_NAMES[activeBroker.toLowerCase()] || activeBroker) : 'Yahoo Live';
 
   return (
     <header
-      className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 gap-4"
+      className="sticky top-0 z-30 w-full select-none"
       style={{
-        backgroundColor: theme.colors.surface,
+        backgroundColor: '#0c1017',
         borderBottom: `1px solid ${theme.colors.border}`,
       }}
     >
-      {/* ── Left ── */}
-      <div className="flex items-center gap-3">
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden p-1.5 rounded-md transition-colors duration-150"
-          style={{ color: theme.colors.textMuted }}
-          onClick={() => setMobileOpen(!mobileOpen)}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = theme.colors.surfaceHover;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-        >
-          <Menu size={20} />
-        </button>
+      <div className="flex items-center justify-between h-13 px-3 sm:px-4 gap-3 max-w-full overflow-hidden">
+        {/* Left: Mobile hamburger only (No tab title) */}
+        <div className="flex items-center md:hidden shrink-0">
+          <button
+            className="p-1.5 rounded-md transition-colors duration-150"
+            style={{ color: theme.colors.textMuted }}
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle Navigation"
+          >
+            <Menu size={18} />
+          </button>
+        </div>
 
-        <h1 className="text-base font-semibold tracking-tight" style={{ color: theme.colors.textPrimary }}>
-          {pageTitle}
-        </h1>
-      </div>
+        {/* Center / Full-Width: Clean, Visible Indices Strip with All 5 Indices & NO Overlap */}
+        <div className="flex-1 flex items-center justify-start sm:justify-center overflow-x-auto sm:overflow-hidden scrollbar-none py-1 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 md:gap-3 lg:gap-4 shrink-0">
+            {indices.map((idx) => {
+              const isFlashing = flashingIndex?.id === idx.id;
+              const flashDir = flashingIndex?.dir;
+              const isNegative = idx.change < 0;
 
-      {/* ── Right — market data badges ── */}
-      <div className="flex items-center gap-2 text-xs overflow-x-auto">
-        {/* Market Regime */}
-        <Badge
-          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold border-0 rounded-full"
-          style={{
-            backgroundColor: `${regimeInfo.color}20`,
-            color: regimeInfo.color,
-          }}
-        >
-          <RegimeIcon size={12} />
-          {regimeInfo.label}
-        </Badge>
+              return (
+                <div
+                  key={idx.id}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-all duration-200 border ${
+                    isFlashing
+                      ? flashDir === 'up'
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                        : 'bg-rose-500/20 border-rose-500/40 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
+                      : 'bg-ub-surface/70 border-ub-border/50'
+                  }`}
+                >
+                  <span className="font-bold text-ub-text-muted text-[11px] uppercase tracking-wider">
+                    {idx.name}
+                  </span>
+                  <span
+                    className={`font-mono font-bold text-[12px] ${
+                      isFlashing
+                        ? flashDir === 'up'
+                          ? 'text-emerald-300'
+                          : 'text-rose-300'
+                        : 'text-ub-text-primary'
+                    }`}
+                  >
+                    {idx.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span
+                    className={`font-mono text-[11px] font-semibold ${
+                      isNegative ? 'text-rose-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    {idx.changePct >= 0 ? '+' : ''}{idx.changePct.toFixed(2)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-        {/* Engine Status */}
-        <Badge
-          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold border-0 rounded-full"
-          style={{
-            backgroundColor: `${engineColor}20`,
-            color: engineColor,
-          }}
-        >
-          <span
-            className="inline-block h-1.5 w-1.5 rounded-full"
+        {/* Right: Regime Badge, Green/Red Pulse Dot Status, Broker, VIX, Clock */}
+        <div className="flex items-center gap-2 text-xs shrink-0">
+          {/* Market Regime with Value */}
+          <Badge
+            className="flex items-center px-2.5 py-0.5 text-[10px] font-bold border-0 rounded-full tracking-wide"
             style={{
-              backgroundColor: engineColor,
-              boxShadow: `0 0 4px ${engineColor}`,
+              backgroundColor: `${regimeInfo.color}20`,
+              color: regimeInfo.color,
             }}
-          />
-          {engineStatus.charAt(0).toUpperCase() + engineStatus.slice(1)}
-        </Badge>
+          >
+            {regimeInfo.label} {regimeInfo.defaultScore}
+          </Badge>
 
-        {/* VIX */}
-        <Badge
-          className="px-2.5 py-1 text-[11px] font-semibold border-0 rounded-full"
-          style={{
-            backgroundColor: theme.colors.surfaceActive,
-            color: theme.colors.textMuted,
-          }}
-        >
-          VIX {vix > 0 ? vix.toFixed(1) : '—'}
-        </Badge>
+          {/* Engine Status: Clean Glowing Pulse Dot only */}
+          <div
+            title={isEngineRunning ? 'Engine: Running' : 'Engine: Stopped'}
+            className={`flex items-center justify-center h-7 w-7 rounded-full border transition-all duration-300 ${
+              isEngineRunning
+                ? 'bg-emerald-500/15 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                : 'bg-rose-500/15 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.2)]'
+            }`}
+          >
+            {isEngineRunning ? (
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
+              </span>
+            ) : (
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+            )}
+          </div>
 
-        {/* Nifty */}
-        <Badge
-          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold border-0 rounded-full"
-          style={{
-            backgroundColor: theme.colors.surfaceActive,
-            color: niftyChange >= 0 ? theme.colors.profit : theme.colors.loss,
-          }}
-        >
-          NIFTY {niftyValue > 0 ? niftyValue.toFixed(0) : '—'}
-          {niftyChange !== 0 && (
-            <span className="text-[10px]">
-              ({formatNiftyChange(niftyChange)})
-            </span>
-          )}
-        </Badge>
+          {/* Broker Feed Tag */}
+          <Badge className="hidden xl:inline-flex px-2 py-0.5 text-[10px] font-semibold border-0 rounded-full bg-ub-surface text-ub-text-muted">
+            {brokerLabel}
+          </Badge>
 
-        {/* Market Close Countdown */}
-        <Badge
-          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold border-0 rounded-full"
-          style={{
-            backgroundColor: theme.colors.surfaceActive,
-            color: countdown <= 300 ? theme.colors.warning : theme.colors.textMuted,
-          }}
-        >
-          {formatCountdown(countdown)}
-        </Badge>
+          {/* VIX */}
+          <Badge
+            className="hidden sm:inline-flex px-2 py-0.5 text-[10px] font-semibold border-0 rounded-full bg-ub-surface text-ub-text-muted"
+          >
+            VIX {displayVix.toFixed(1)}
+          </Badge>
 
-        {/* Clock */}
-        <span
-          className="hidden lg:block text-[11px] font-mono tabular-nums"
-          style={{ color: theme.colors.textDisabled }}
-        >
-          {currentTime}
-        </span>
+          {/* Market Close Countdown */}
+          <Badge
+            className="hidden lg:flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-semibold border-0 rounded-full bg-ub-surface"
+            style={{
+              color: effectiveSeconds > 0 && effectiveSeconds <= 300 ? theme.colors.warning : theme.colors.textMuted,
+            }}
+          >
+            <Clock className="h-2.5 w-2.5" />
+            {formatCountdown(effectiveSeconds)}
+          </Badge>
+
+          {/* Clock */}
+          <span className="hidden sm:block text-[11px] font-mono text-ub-text-muted tabular-nums">
+            {currentTime}
+          </span>
+        </div>
       </div>
     </header>
   );

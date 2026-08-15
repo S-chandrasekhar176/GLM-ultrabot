@@ -42,8 +42,10 @@ export const BROKER_LIST = [
   { id: 'yahoofinance', name: 'Yahoo Finance', needsCredentials: false, category: 'paper' as const },
   { id: 'zerodha', name: 'Zerodha', needsCredentials: true, category: 'live' as const },
   { id: 'angelone', name: 'Angel One', needsCredentials: true, category: 'live' as const },
-  { id: 'upstox', name: 'Upstox', needsCredentials: true, category: 'live' as const },
   { id: 'dhan', name: 'Dhan', needsCredentials: true, category: 'live' as const },
+  { id: 'fyers', name: 'Fyers', needsCredentials: true, category: 'live' as const },
+  { id: 'upstox', name: 'Upstox', needsCredentials: true, category: 'live' as const },
+  { id: 'shoonya', name: 'Shoonya', needsCredentials: true, category: 'live' as const },
   { id: 'icici', name: 'ICICI Direct', needsCredentials: true, category: 'live' as const },
   { id: 'groww', name: 'Groww', needsCredentials: true, category: 'live' as const },
 ] as const;
@@ -68,14 +70,25 @@ export const BROKER_FIELDS: Record<string, { key: string; label: string; placeho
     { key: 'pin', label: 'PIN', placeholder: 'Your PIN', type: 'password' },
     { key: 'totpSecret', label: 'TOTP Secret', placeholder: 'For auto-login (optional)', type: 'password' },
   ],
+  dhan: [
+    { key: 'clientId', label: 'Client ID', placeholder: 'Your Dhan Client ID (e.g. 1000000123)' },
+    { key: 'accessToken', label: 'Access Token (JWT)', placeholder: 'Paste your Dhan JWT Access Token', type: 'password' },
+  ],
+  fyers: [
+    { key: 'appId', label: 'App ID / Client ID', placeholder: 'Your Fyers App ID (e.g. XC12345-100)' },
+    { key: 'accessToken', label: 'Access Token', placeholder: 'Generated Fyers Access Token', type: 'password' },
+    { key: 'secretKey', label: 'Secret Key', placeholder: 'Your Fyers App Secret Key', type: 'password' },
+    { key: 'pin', label: 'User PIN', placeholder: 'Your Fyers PIN (optional)', type: 'password' },
+  ],
+  shoonya: [
+    { key: 'userId', label: 'User ID', placeholder: 'Your Shoonya User ID' },
+    { key: 'password', label: 'Password', placeholder: 'Your Shoonya Password', type: 'password' },
+    { key: 'totpSecret', label: 'TOTP Secret', placeholder: 'Your TOTP Secret Key', type: 'password' },
+  ],
   upstox: [
     { key: 'apiKey', label: 'API Key', placeholder: 'Your Upstox API key' },
     { key: 'apiSecret', label: 'API Secret', placeholder: 'Your Upstox API secret', type: 'password' },
     { key: 'userId', label: 'User ID', placeholder: 'Your Upstox user ID' },
-  ],
-  dhan: [
-    { key: 'accessToken', label: 'Access Token', placeholder: 'Your Dhan access token', type: 'password' },
-    { key: 'clientId', label: 'Client ID', placeholder: 'Your Dhan client ID' },
   ],
   icici: [
     { key: 'apiKey', label: 'API Key', placeholder: 'Your ICICI Direct API key' },
@@ -132,6 +145,7 @@ export interface EngineSlice {
   start: (mode: EngineMode, brokerId: string) => void;
   stop: () => void;
   heartbeat: () => void;
+  hydrateEngine: () => void;
 }
 
 // ─────────────────────────────────────────────
@@ -233,7 +247,32 @@ export const useStore = create<StoreState>((set, get) => ({
     errorMessage: null,
     lastHeartbeat: null,
 
-    setEngineStatus(status) { set({ engine: { ...get().engine, status } }); },
+    hydrateEngine() {
+      if (typeof window === 'undefined') return;
+      const saved = localStorage.getItem('ultrabot_engine_state');
+      const savedMode = (localStorage.getItem('ultrabot_engine_mode') as EngineMode) || 'paper';
+      const savedBroker = localStorage.getItem('ultrabot_active_broker');
+      const savedStartedAt = localStorage.getItem('ultrabot_started_at');
+
+      if (saved && (saved === 'running' || saved === 'stopped' || saved === 'paused')) {
+        set({
+          engine: {
+            ...get().engine,
+            status: saved as EngineStatus,
+            mode: savedMode,
+            activeBroker: saved === 'running' ? (savedBroker || 'paper') : null,
+            startedAt: saved === 'running' && savedStartedAt ? Number(savedStartedAt) : null,
+          },
+        });
+      }
+    },
+
+    setEngineStatus(status) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_engine_state', status);
+      }
+      set({ engine: { ...get().engine, status } });
+    },
     setMode(mode) { set({ engine: { ...get().engine, mode } }); },
     setRegime(regime) { set({ engine: { ...get().engine, regime } }); },
     setVix(vix) { set({ engine: { ...get().engine, vix } }); },
@@ -242,20 +281,32 @@ export const useStore = create<StoreState>((set, get) => ({
     setErrorMessage(msg) { set({ engine: { ...get().engine, errorMessage: msg } }); },
 
     start(mode, brokerId) {
+      const now = Date.now();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_engine_state', 'running');
+        localStorage.setItem('ultrabot_engine_mode', mode);
+        localStorage.setItem('ultrabot_active_broker', brokerId);
+        localStorage.setItem('ultrabot_started_at', String(now));
+      }
       set({
         engine: {
           ...get().engine,
           status: 'running',
           mode,
           activeBroker: brokerId,
-          startedAt: Date.now(),
+          startedAt: now,
           errorMessage: null,
-          lastHeartbeat: Date.now(),
+          lastHeartbeat: now,
         },
       });
     },
 
     stop() {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ultrabot_engine_state', 'stopped');
+        localStorage.removeItem('ultrabot_active_broker');
+        localStorage.removeItem('ultrabot_started_at');
+      }
       set({
         engine: {
           ...get().engine,

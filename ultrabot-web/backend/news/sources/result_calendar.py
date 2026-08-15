@@ -11,7 +11,7 @@ from utils.market_utils import FNO_UNIVERSE, get_all_fno_symbols
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
-_NSE_RESULTS_URL = "https://www.nseindia.com/companies-listing/upcoming-events"
+_NSE_RESULTS_URL = "https://www.nseindia.com/api/event-calendar"
 _MONEYCONTROL_RESULTS_URL = "https://www.moneycontrol.com/markets/earnings/"
 
 _FNO_SET: set = set(get_all_fno_symbols())
@@ -123,33 +123,29 @@ class ResultCalendarSource:
 
     async def _fetch_nse_results(self) -> List[Dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self.timeout, headers=self._headers) as client:
+            await client.get("https://www.nseindia.com/", follow_redirects=True)
             response = await client.get(_NSE_RESULTS_URL, follow_redirects=True)
             response.raise_for_status()
+            data = response.json()
 
-        soup = BeautifulSoup(response.text, "html.parser")
         items = []
         today = date.today()
 
-        rows = soup.select("table tbody tr")
-        for row in rows[:50]:
-            cells = row.select("td")
-            if len(cells) < 2:
-                continue
-
-            symbol = cells[0].get_text(strip=True).upper()
-            event_type = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-            event_date = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+        for row in data[:150]:
+            symbol = row.get("symbol", "").upper()
+            purpose = row.get("purpose", "")
+            event_date = row.get("date", "")
 
             if symbol not in _FNO_SET:
                 continue
 
-            if "result" not in event_type.lower():
+            if "result" not in purpose.lower():
                 continue
 
             result_date = self._parse_date(event_date)
             if result_date is not None and result_date == today:
                 items.append({
-                    "headline": f"Results TODAY: {symbol} - {event_type}",
+                    "headline": f"Results TODAY: {symbol} - {purpose}",
                     "source": "result_calendar",
                     "url": _NSE_RESULTS_URL,
                     "category": "results",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Card,
@@ -218,7 +218,19 @@ const ITEMS_PER_PAGE = 8;
 // ─────────────────────────────────────────────
 
 export default function ErrorsPage() {
-  const [activeErrors, setActiveErrors] = useState<ActiveError[]>(ACTIVE_ERRORS);
+  const { data: apiErrors } = useErrors();
+  const rawErrors = (apiErrors as any) || {};
+
+  const [activeErrors, setActiveErrors] = useState<ActiveError[]>([]);
+
+  useEffect(() => {
+    if (Array.isArray(rawErrors.active)) {
+      setActiveErrors(rawErrors.active);
+    }
+  }, [rawErrors.active]);
+
+  const ERROR_HISTORY: ErrorHistoryEntry[] = Array.isArray(rawErrors.history) ? rawErrors.history : [];
+
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
@@ -704,4 +716,5 @@ export default function ErrorsPage() {
       </div>
     </div>
   );
-}
+}import { useErrors } from '@/hooks/useApi';
+

@@ -6,7 +6,7 @@ app:
   port: 8000
 auth:
   username: "admin"
-  password_hash: "$2b$12$LJ3m4ys3Hzg5Kg5HbXNOAeYr1J5Z3X8K9P0Q1R2S3T4U5V6W7X8Y9Z0"
+  password_hash: "admin"
 engine:
   scan_interval_seconds: 180
   max_scan_retries: 3
@@ -15,6 +15,7 @@ market:
   nse_close: "15:30"
   pre_market_start: "09:00"
   post_market_end: "16:00"
+  auto_squareoff_time: "15:15"
   timezone: "Asia/Kolkata"
 capital:
   virtual_capital: 100000
@@ -31,9 +32,11 @@ risk:
   vix_threshold: 20
   new_trade_window_start: "09:30"
   new_trade_window_end: "14:30"
+  auto_squareoff_time: "15:15"
   price_mismatch_threshold_pct: 0.5
   min_signal_confidence: 0.6
   max_drawdown_pct: 5
+  opportunity_ttl_seconds: 120
 partial_booking:
   enabled: true
   level1_rr: 1.0

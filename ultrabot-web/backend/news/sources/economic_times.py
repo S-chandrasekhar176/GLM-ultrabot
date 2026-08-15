@@ -11,8 +11,8 @@ from utils.market_utils import FNO_UNIVERSE, get_all_fno_symbols
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
-_ET_RSS_URL = "https://economictimes.indiatimes.com/rssfeedsmarkets"
-_ET_TOP_STORIES_URL = "https://economictimes.indiatimes.com/rssfeeds/13358312.cms"
+_ET_RSS_URL = "https://economictimes.indiatimes.com/markets/rssfeeds/2146842.cms"
+_ET_TOP_STORIES_URL = "https://economictimes.indiatimes.com/rssfeeds/1221656.cms"
 
 _FNO_NAME_LOOKUP: Dict[str, str] = {}
 for _s in FNO_UNIVERSE:

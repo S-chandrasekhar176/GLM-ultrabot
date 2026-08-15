@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getDashboard,
+  getMarketData,
   getOpportunities,
   confirmOpportunity,
   skipOpportunity,
@@ -19,6 +20,8 @@ import {
   getSettings,
   updateSettings,
   getBacktestHistory,
+  getKronosHotlist,
+  getNews,
 } from '@/lib/api';
 
 // ─────────────────────────────────────────────
@@ -43,6 +46,14 @@ export function useDashboard() {
     queryKey: ['dashboard'],
     queryFn: getDashboard,
     ...sharedOptions,
+  });
+}
+
+export function useMarketData() {
+  return useQuery({
+    queryKey: ['market-data'],
+    queryFn: getMarketData,
+    refetchInterval: 10_000, // Fetch every 10 seconds
   });
 }
 
@@ -236,5 +247,25 @@ export function useBacktestHistory(params?: { strategy?: string; limit?: number;
     queryKey: ['backtest-history', params],
     queryFn: () => getBacktestHistory(params),
     staleTime: 60_000,
+  });
+}
+
+// ─────────────────────────────────────────────
+// Scanner & News
+// ─────────────────────────────────────────────
+
+export function useKronosHotlist() {
+  return useQuery({
+    queryKey: ['kronos-hotlist'],
+    queryFn: getKronosHotlist,
+    ...sharedOptions,
+  });
+}
+
+export function useNews() {
+  return useQuery({
+    queryKey: ['news'],
+    queryFn: getNews,
+    ...sharedOptions,
   });
 }

@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Any, Dict, List, Optional
+import pyotp
 
 import httpx
 
@@ -37,6 +38,7 @@ class AngelOneBroker(BaseBroker):
         api_key: str = "",
         client_code: str = "",
         pin: str = "",
+        totp_secret: str = "",
         jwt_token: str = "",
         refresh_token: str = "",
         feed_token: str = "",
@@ -45,6 +47,7 @@ class AngelOneBroker(BaseBroker):
         self.api_key = api_key
         self.client_code = client_code
         self.pin = pin
+        self.totp_secret = totp_secret
         self.jwt_token = jwt_token
         self.refresh_token = refresh_token
         self.feed_token = feed_token
@@ -71,25 +74,58 @@ class AngelOneBroker(BaseBroker):
         }
 
     async def authenticate(self) -> Dict[str, Any]:
+        """Authenticate with Angel One SmartAPI.
+        
+        Ref: https://smartapi.angelbroking.com/docs/Introduction
+        """
         try:
+            if not self.api_key or not self.client_code or not self.pin:
+                return {
+                    "success": False,
+                    "message": "Missing credentials. Please provide API Key, Client Code, and PIN.",
+                }
+
             client = self._get_client()
+            
+            # Generate TOTP if secret is provided
+            totp = ""
+            if self.totp_secret and self.totp_secret.strip():
+                try:
+                    # Clean spaces from TOTP secret
+                    secret_cleaned = self.totp_secret.replace(" ", "").upper()
+                    totp_obj = pyotp.TOTP(secret_cleaned)
+                    totp = totp_obj.now()
+                except Exception as e:
+                    logger.warning("Failed to generate TOTP: %s", e)
+
             payload = {
-                "clientcode": self.client_code,
-                "password": self.pin,
+                "clientcode": self.client_code.strip().upper(),
+                "password": self.pin.strip(),
+                "totp": totp,
             }
             headers = {
-                "X-ClientPublicIP": "127.0.0.1",
-                "X-PrivateKey": self.api_key,
+                "X-ClientPublicIP": "106.193.147.98",
+                "X-ClientLocalIP": "192.168.1.1",
+                "X-UserType": "USER",
+                "X-SourceID": "WEB",
+                "X-MACAddress": "fe80::216e:6507:4b90:3719",
+                "X-PrivateKey": self.api_key.strip(),
                 "Content-Type": "application/json",
+                "Accept": "application/json",
             }
+            
             response = await client.post(_LOGIN_URL, json=payload, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+            
+            try:
+                data = response.json()
+            except Exception:
+                data = {}
 
-            if data.get("status") is True:
-                self.jwt_token = data["data"].get("jwtToken", "")
-                self.refresh_token = data["data"].get("refreshToken", "")
-                self.feed_token = data["data"].get("feedToken", "")
+            if response.status_code == 200 and data.get("status") is True:
+                d = data.get("data", {})
+                self.jwt_token = d.get("jwtToken", "")
+                self.refresh_token = d.get("refreshToken", "")
+                self.feed_token = d.get("feedToken", "")
                 self._authenticated = True
 
                 self.token_manager.store_token(
@@ -100,18 +136,31 @@ class AngelOneBroker(BaseBroker):
                 )
 
                 logger.info("Angel One authentication successful for client %s", self.client_code)
-                return {"success": True, "message": "Authenticated with Angel One"}
+                return {
+                    "success": True,
+                    "message": "Authenticated with Angel One successfully",
+                    "data": data,
+                }
             else:
-                msg = data.get("message", "Login failed")
-                logger.error("Angel One auth failed: %s", msg)
-                return {"success": False, "message": msg}
+                err_msg = data.get("message") or f"Login failed (status {response.status_code})"
+                err_code = data.get("errorcode", "")
+                full_msg = f"{err_msg} ({err_code})" if err_code else err_msg
+                logger.error("Angel One auth failed: %s", full_msg)
+                return {"success": False, "message": full_msg}
 
         except httpx.HTTPStatusError as e:
-            logger.error("Angel One auth HTTP error: %s", e)
-            return {"success": False, "message": f"HTTP error: {e.response.status_code}"}
+            err_msg = f"HTTP error {e.response.status_code}"
+            try:
+                err_json = e.response.json()
+                if "message" in err_json:
+                    err_msg = err_json["message"]
+            except Exception:
+                pass
+            logger.error("Angel One auth HTTP error: %s", err_msg)
+            return {"success": False, "message": err_msg}
         except httpx.RequestError as e:
-            logger.error("Angel One auth connection error: %s", e)
-            raise ConnectionLostError(broker="angel_one", what_happened=str(e)) from e
+            logger.error("Angel One connection error: %s", e)
+            return {"success": False, "message": f"Connection error: {str(e)}"}
         except Exception as e:
             logger.error("Angel One auth unexpected error: %s", e)
             return {"success": False, "message": str(e)}

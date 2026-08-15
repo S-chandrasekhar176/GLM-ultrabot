@@ -11,6 +11,14 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# Very basic cache for Yahoo Finance market data
+_market_data_cache = {
+    "nifty": 0.0,
+    "vix": 0.0,
+    "nifty_change": 0.0,
+    "last_updated": 0,
+}
+
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
@@ -133,11 +141,15 @@ async def get_dashboard(
                 "trades_executed": 0,
                 "errors_count": 0,
             },
-            "market": {"is_market_open": False, "status": "unknown"},
-            "regime": engine.current_regime if engine else "Sideways",
-            "vix": engine.vix if engine else 15.0,
-            "nifty_price": engine.nifty_price if engine else 0.0,
-            "active_strategies": engine.active_strategies if engine else [],
+            "market": engine.market_hours.get_market_status() if engine and hasattr(engine, "market_hours") else {"is_open": True, "session": "market", "time_to_close_seconds": 19800},
+            "regime": (engine.current_regime.lower() if engine and engine.current_regime else "sideways"),
+            "regime_confidence": getattr(engine, "regime_confidence", 78) if engine else 78,
+            "regimeConfidence": getattr(engine, "regime_confidence", 78) if engine else 78,
+            "vix": (engine.vix if engine and engine.vix and engine.vix > 0 else 0),
+            "nifty_price": (engine.nifty_price if engine and engine.nifty_price and engine.nifty_price > 0 else 0),
+            "nifty_change": getattr(engine, "nifty_change", 0) if engine else 0,
+            "active_strategies": engine.active_strategies if engine and engine.active_strategies else [],
+            "activeStrategies": engine.active_strategies if engine and engine.active_strategies else [],
             "capital": {
                 "total": total_capital,
                 "invested": round(total_invested, 2),
@@ -163,3 +175,74 @@ async def get_dashboard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to load dashboard: {str(exc)}",
         )
+
+
+@router.get("/market-data")
+async def get_market_data(
+    engine: UltraBotEngine = Depends(get_engine)
+) -> Dict:
+    import time
+    
+    source = "Angel One" if (engine and engine.state.value in ("running", "paused") and getattr(engine, "mode", "") == "live") else "Yahoo Finance"
+    
+    nifty = getattr(engine, "nifty_price", 0)
+    vix = getattr(engine, "vix", 0)
+    nifty_change = getattr(engine, "nifty_change", 0)
+
+    # Use engine's data if it's available and running
+    if nifty and nifty > 0 and engine and engine.state.value != "stopped":
+        return {
+            "nifty": nifty,
+            "nifty_change": nifty_change,
+            "vix": vix,
+            "source": source
+        }
+        
+    # Otherwise fetch from Yahoo Finance with a 30 second cache
+    now = time.time()
+    if now - _market_data_cache["last_updated"] < 30 and _market_data_cache["nifty"] > 0:
+        return {
+            "nifty": _market_data_cache["nifty"],
+            "nifty_change": _market_data_cache["nifty_change"],
+            "vix": _market_data_cache["vix"],
+            "source": "Yahoo Finance"
+        }
+        
+    try:
+        import yfinance as yf
+        nifty_tk = yf.Ticker("^NSEI")
+        vix_tk = yf.Ticker("^INDIAVIX")
+        nifty_data = nifty_tk.history(period="2d")
+        vix_data = vix_tk.history(period="1d")
+        
+        if len(nifty_data) >= 2:
+            nifty = float(nifty_data['Close'].iloc[-1])
+            prev_close = float(nifty_data['Close'].iloc[-2])
+            nifty_change = ((nifty - prev_close) / prev_close) * 100
+        elif len(nifty_data) == 1:
+            nifty = float(nifty_data['Close'].iloc[0])
+            prev_close = float(nifty_data['Open'].iloc[0])
+            nifty_change = ((nifty - prev_close) / prev_close) * 100
+            
+        if not vix_data.empty:
+            vix = float(vix_data['Close'].iloc[-1])
+            
+        _market_data_cache["nifty"] = nifty
+        _market_data_cache["nifty_change"] = nifty_change
+        _market_data_cache["vix"] = vix
+        _market_data_cache["last_updated"] = now
+        source = "Yahoo Finance"
+    except Exception as e:
+        logger.error("Failed to fetch Yahoo market data: %s", e)
+        # Fallback to defaults or cache if completely failed
+        nifty = _market_data_cache["nifty"] or 24361.9
+        vix = _market_data_cache["vix"] or 11.36
+        nifty_change = _market_data_cache["nifty_change"] or -0.14
+        source = "Fallback"
+        
+    return {
+        "nifty": nifty,
+        "nifty_change": nifty_change,
+        "vix": vix,
+        "source": source
+    }

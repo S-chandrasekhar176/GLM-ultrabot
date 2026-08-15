@@ -4,6 +4,8 @@ from brokers.base import BaseBroker
 from brokers.paper_broker import PaperBroker
 from brokers.angel_one import AngelOneBroker
 from brokers.shoonya import ShoonyaBroker
+from brokers.dhan import DhanBroker
+from brokers.fyers import FyersBroker
 from fees.nse_fee_calculator import NSEFeeCalculator
 
 
@@ -12,13 +14,16 @@ class BrokerFactory:
 
     Usage:
         broker = BrokerFactory.create('paper', mode='paper', initial_capital=100000)
-        broker = BrokerFactory.create('angel_one', mode='live', api_key='...', ...)
+        broker = BrokerFactory.create('dhan', mode='live', client_id='...', access_token='...')
+        broker = BrokerFactory.create('fyers', mode='live', app_id='...', access_token='...')
     """
 
     _registry: Dict[str, type] = {
         'paper': PaperBroker,
         'angel_one': AngelOneBroker,
         'shoonya': ShoonyaBroker,
+        'dhan': DhanBroker,
+        'fyers': FyersBroker,
     }
 
     @staticmethod

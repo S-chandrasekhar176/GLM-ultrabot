@@ -87,3 +87,8 @@ class BaseFeed(ABC):
     @abstractmethod
     def get_name(self) -> str:
         """Return the feed's name identifier."""
+
+    async def get_latest_price(self, symbol: str) -> float:
+        """Get the latest price (LTP) for a symbol."""
+        return await self.get_ltp(symbol)
+

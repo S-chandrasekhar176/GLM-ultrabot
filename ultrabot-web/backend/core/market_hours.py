@@ -18,6 +18,9 @@ NSE_OPEN = time(9, 15)
 NSE_CLOSE = time(15, 30)
 NSE_POST_MARKET_END = time(16, 0)
 
+# Safe auto square-off time (intraday positions auto-closed to prevent penalties)
+SAFE_EXIT_TIME = time(15, 15)
+
 # New trade window (configurable, defaults from defaults.yaml)
 NEW_TRADE_WINDOW_START = time(9, 30)
 NEW_TRADE_WINDOW_END = time(14, 30)
@@ -54,6 +57,7 @@ class MarketHours:
         post_market_end: time = NSE_POST_MARKET_END,
         trade_window_start: time = NEW_TRADE_WINDOW_START,
         trade_window_end: time = NEW_TRADE_WINDOW_END,
+        safe_exit_time: time = SAFE_EXIT_TIME,
         holidays: Optional[list[date]] = None,
     ):
         self.pre_market_start = pre_market_start
@@ -62,6 +66,7 @@ class MarketHours:
         self.post_market_end = post_market_end
         self.trade_window_start = trade_window_start
         self.trade_window_end = trade_window_end
+        self.safe_exit_time = safe_exit_time
         self.holidays = holidays if holidays is not None else NSE_HOLIDAYS_2025
 
     def _ist_now(self) -> datetime:
@@ -129,6 +134,12 @@ class MarketHours:
         is_open = self.is_market_open()
         session = self.get_current_session()
 
+        # Calculate time to close if market is open
+        time_to_close_seconds = 0
+        if is_open:
+            close_dt = datetime.combine(now.date(), self.market_close, tzinfo=IST)
+            time_to_close_seconds = max(0, int((close_dt - now).total_seconds()))
+
         # Calculate next market open
         next_open_dt = self._calculate_next_open(now)
         if next_open_dt is not None:
@@ -143,6 +154,7 @@ class MarketHours:
             "session": session,
             "next_open": next_open_str,
             "time_to_open_seconds": time_to_open.total_seconds() if time_to_open else None,
+            "time_to_close_seconds": time_to_close_seconds,
             "current_time_ist": now.strftime("%Y-%m-%d %H:%M:%S %Z"),
         }
 
@@ -213,3 +225,22 @@ class MarketHours:
             return False
         current_time = now.time()
         return self.trade_window_start <= current_time < self.trade_window_end
+
+    def is_safe_exit_time(self) -> bool:
+        """Check if current time is at or past the safe square-off time (default 15:15 IST)
+        or if the market has closed for the day.
+
+        When this is True, all open intraday positions should be squared off immediately.
+
+        Returns:
+            True if it's weekend/holiday, or on a trading day if IST time >= safe_exit_time.
+        """
+        now = self._ist_now()
+        if now.weekday() >= 5:
+            return True
+        if self.is_market_holiday(now.date()):
+            return True
+        current_time = now.time()
+        # If past square-off time or past market close
+        return current_time >= self.safe_exit_time
+

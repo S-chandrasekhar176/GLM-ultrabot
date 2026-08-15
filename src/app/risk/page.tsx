@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRiskStatus, useRiskGates } from '@/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -173,6 +174,66 @@ function useCountdown(initialSeconds: number, active: boolean) {
 // ─────────────────────────────────────────────
 
 export default function RiskDashboardPage() {
+  const { data: statusData } = useRiskStatus();
+  const { data: gatesData } = useRiskGates();
+
+  const status = (statusData as any) || {};
+  const gates = (gatesData as any) || { gates: {}, limits: {} };
+
+  const RISK_LIMITS: RiskLimit[] = [
+    { 
+      label: 'Daily P&L', 
+      current: '₹' + (status.net_pnl || 0), 
+      limit: '₹' + (gates.limits?.max_daily_loss_pct || 3000), 
+      currentNum: Math.abs(status.net_pnl || 0), 
+      limitNum: 3000, 
+      unit: '₹' 
+    },
+    { 
+      label: 'Daily Trades', 
+      current: String(status.total_trades || 0), 
+      limit: String(gates.limits?.max_daily_trades || 10), 
+      currentNum: status.total_trades || 0, 
+      limitNum: gates.limits?.max_daily_trades || 10, 
+      unit: '' 
+    },
+    { 
+      label: 'Consecutive Losses', 
+      current: String(status.consecutive_losses || 0), 
+      limit: String(gates.limits?.max_consecutive_losses || 3), 
+      currentNum: status.consecutive_losses || 0, 
+      limitNum: gates.limits?.max_consecutive_losses || 3, 
+      unit: '' 
+    },
+    { 
+      label: 'Capital Usage', 
+      current: '₹' + (status.capital_in_use || 0), 
+      limit: '₹100000', 
+      currentNum: status.capital_in_use || 0, 
+      limitNum: 100000, 
+      unit: '₹' 
+    },
+  ];
+
+  const RISK_GATES: RiskGate[] = Object.values(gates.gates || {}).map((g: any, i: number) => ({
+    id: 'G' + (i + 1),
+    name: g.name,
+    status: g.last_passed === false ? 'FAIL' : 'PASS',
+    detail: g.last_result?.reason || 'OK'
+  }));
+
+  const RISK_EVENTS: RiskEvent[] = [];
+  const REJECTIONS: RejectionBreakdown[] = [];
+  const SIGNALS_REJECTED = 0;
+  const TOTAL_SIGNALS = status.total_trades || 1;
+
+  const getOverallStatus = () => {
+    if (status.in_cooloff) return 'stopped';
+    if (!status.can_take_new_trades) return 'stopped';
+    if (status.consecutive_losses > 0 || status.net_pnl < 0) return 'caution';
+    return 'normal';
+  };
+
   const overallStatus = getOverallStatus();
   const cooloffActive = overallStatus === 'stopped';
   const { display: countdownDisplay } = useCountdown(847, cooloffActive);

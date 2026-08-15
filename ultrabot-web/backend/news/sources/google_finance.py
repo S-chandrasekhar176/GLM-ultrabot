@@ -48,49 +48,56 @@ class GoogleFinanceSource:
                 response = await client.get(_GOOGLE_FINANCE_URL, follow_redirects=True)
                 response.raise_for_status()
 
-            # Extract trending ticker names from the page
+            # Extract trending tickers from the page
             trending = self._parse_trending(response.text)
-            for name, change_pct in trending:
-                symbol = self._name_to_symbol(name)
-                if symbol:
-                    direction = "positive" if change_pct >= 0 else "negative"
-                    items.append({
-                        "headline": f"{name} trending on Google Finance ({change_pct:+.2f}%)",
-                        "source": "google_finance",
-                        "url": _GOOGLE_FINANCE_URL,
-                        "category": "trending",
-                        "sentiment": direction,
-                        "impact_level": "medium" if abs(change_pct) > 2 else "low",
-                        "symbols": [symbol],
-                        "timestamp": datetime.now(IST).isoformat(),
-                        "extra": {"name": name, "change_pct": change_pct},
-                    })
+            for symbol, change_pct in trending:
+                direction = "positive" if change_pct >= 0 else "negative"
+                items.append({
+                    "headline": f"{symbol} trending on Google Finance ({change_pct:+.2f}%)",
+                    "source": "google_finance",
+                    "url": _GOOGLE_FINANCE_URL,
+                    "category": "trending",
+                    "sentiment": direction,
+                    "impact_level": "medium" if abs(change_pct) > 2 else "low",
+                    "symbols": [symbol],
+                    "timestamp": datetime.now(IST).isoformat(),
+                    "extra": {"name": symbol, "change_pct": change_pct},
+                })
         except Exception as e:
             logger.error("Failed to fetch Google Finance trending: %s", e)
 
         return items
 
     def _parse_trending(self, html: str) -> List[tuple]:
-        """Parse trending tickers from Google Finance HTML.
-
-        Returns list of (name, change_pct) tuples.
-        """
+        """Parse trending tickers from Google Finance HTML."""
         from bs4 import BeautifulSoup
         results = []
         soup = BeautifulSoup(html, "html.parser")
 
-        # Look for trending section links
-        for link in soup.select("a[role='link']"):
-            href = link.get("href", "")
-            text = link.get_text(strip=True)
-            if "/quote/" in href and text:
-                change_match = re.search(r"([+-]?[\d.]+)%", text)
-                change_pct = float(change_match.group(1)) if change_match else 0.0
-                name = re.sub(r"[+-]?[\d.]+%.*", "", text).strip()
-                if name and len(name) > 2:
-                    results.append((name, change_pct))
+        # Find all links
+        for a in soup.find_all("a"):
+            href = a.get("href", "")
+            if "/quote/" in href and ":NSE" in href:
+                text = a.get_text(strip=True)
+                if "%" in text:
+                    # extract symbol from href, e.g. /quote/TCS:NSE
+                    symbol = href.split("/quote/")[-1].split(":")[0]
+                    # extract change percentage
+                    change_match = re.search(r"([+-]?[\d.]+)%", text)
+                    change_pct = float(change_match.group(1)) if change_match else 0.0
+                    
+                    if symbol:
+                        results.append((symbol, change_pct))
 
-        return results[:20]
+        # Deduplicate
+        seen = set()
+        dedup_results = []
+        for sym, pct in results:
+            if sym not in seen:
+                seen.add(sym)
+                dedup_results.append((sym, pct))
+
+        return dedup_results[:20]
 
     def _name_to_symbol(self, name: str) -> str:
         """Convert a stock name to NSE symbol."""

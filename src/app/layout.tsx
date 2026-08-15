@@ -1,13 +1,7 @@
-'use client';
-
 import './globals.css';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider } from 'next-themes';
-import { useState, useEffect } from 'react';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import AppShell from '@/components/layout/AppShell';
-import { useStore } from '@/lib/store';
-import { Toaster } from '@/components/ui/sonner';
+import Providers from '@/components/Providers';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -15,36 +9,10 @@ const inter = Inter({
   display: 'swap',
 });
 
-function Providers({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 10_000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
-  );
-
-  const hydrate = useStore((s) => s.auth.hydrate);
-  const hydrateBrokers = useStore((s) => s.brokers.hydrateBrokers);
-
-  useEffect(() => {
-    hydrate();
-    hydrateBrokers();
-  }, [hydrate, hydrateBrokers]);
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
-        {children}
-      </ThemeProvider>
-    </QueryClientProvider>
-  );
-}
+export const metadata: Metadata = {
+  title: 'UltraBot Web | High-Precision Automated Trading System',
+  description: 'Multi-broker autonomous trading platform with real-time risk management, Kronos AI validation, and multi-strategy execution.',
+};
 
 export default function RootLayout({
   children,
@@ -53,20 +21,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`} style={{ backgroundColor: '#0a0e17', color: '#f1f5f9' }}>
-        <Providers>
-          <AppShell>{children}</AppShell>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: {
-                background: '#111827',
-                border: '1px solid #1e293b',
-                color: '#f1f5f9',
-              },
-            }}
-          />
-        </Providers>
+      <body
+        className={`${inter.variable} font-sans antialiased`}
+        style={{ backgroundColor: '#0a0e17', color: '#f1f5f9' }}
+      >
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

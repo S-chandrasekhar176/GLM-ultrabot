@@ -92,14 +92,14 @@ class Repository:
     # SESSIONS
     # ────────────────────────────────────────
 
-    async def create_session(self, date_str: Optional[str] = None, engine_state: Optional[Dict] = None) -> SessionModel:
+    async def create_session(self, date_str: Optional[str] = None, engine_state: Optional[Dict] = None, metadata_json: Optional[Dict] = None) -> SessionModel:
         obj = SessionModel(
             id=str(uuid.uuid4()),
             date=date_str or _today_str(),
             start_time=_ist_now(),
             status="running",
             engine_state=_to_json(engine_state or {}),
-            metadata_json=_to_json({}),
+            metadata_json=_to_json(metadata_json or {}),
             created_at=_ist_now(),
             updated_at=_ist_now(),
         )
@@ -618,6 +618,21 @@ class Repository:
     async def create_backtest_run(self, **kwargs) -> BacktestRun:
         data = {
             "id": str(uuid.uuid4()),
+            "status": "pending",
+            "total_trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "total_pnl": 0.0,
+            "max_drawdown_pct": 0.0,
+            "sharpe_ratio": 0.0,
+            "profit_factor": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "parameters": "{}",
+            "results": "{}",
+            "equity_curve": "[]",
+            "extra": "{}",
             "created_at": _ist_now(),
             "updated_at": _ist_now(),
         }

@@ -12,8 +12,8 @@ from utils.market_utils import FNO_UNIVERSE, get_all_fno_symbols
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
-_NSE_CORPORATE_URL = "https://www.nseindia.com/companies-listing/corporate-filings-new"
-_NSE_CORP_ACTIONS_URL = "https://www.nseindia.com/market-data/corporate-actions"
+_NSE_CORPORATE_URL = "https://www.nseindia.com/api/corporate-announcements?index=equities"
+_NSE_CORP_ACTIONS_URL = "https://www.nseindia.com/api/corporates-corporateActions?index=equities"
 
 # Build a quick lookup: name fragment -> symbol
 _NAME_TO_SYMBOL: Dict[str, str] = {}
@@ -51,38 +51,35 @@ class NSECorporateSource:
         """
         items = []
         try:
-            items = await self._fetch_corporate_actions()
-        except Exception as e:
-            logger.warning("Failed to fetch NSE corporate actions: %s", e)
+            # Create a single client session to handle cookies properly for NSE
+            async with httpx.AsyncClient(timeout=self.timeout, headers=self._session_headers) as client:
+                # 1. Fetch homepage to set cookies
+                await client.get("https://www.nseindia.com/", follow_redirects=True)
 
-        try:
-            filings = await self._fetch_corporate_filings()
-            items.extend(filings)
+                # 2. Fetch actions & filings using the same client
+                items.extend(await self._fetch_corporate_actions(client))
+                items.extend(await self._fetch_corporate_filings(client))
         except Exception as e:
-            logger.warning("Failed to fetch NSE corporate filings: %s", e)
+            logger.warning("Failed to fetch NSE corporate data: %s", e)
 
         return items
 
-    async def _fetch_corporate_actions(self) -> List[Dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=self.timeout, headers=self._session_headers) as client:
+    async def _fetch_corporate_actions(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+        try:
             response = await client.get(_NSE_CORP_ACTIONS_URL, follow_redirects=True)
             response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            logger.warning("Failed to parse corporate actions JSON: %s", e)
+            return []
 
-        soup = BeautifulSoup(response.text, "html.parser")
         items = []
-
-        # Try to find table rows with corporate action data
-        rows = soup.select("table tbody tr")
-        for row in rows[:50]:
-            cells = row.select("td")
-            if len(cells) < 3:
-                continue
-
-            symbol = cells[0].get_text(strip=True).upper()
-            company = cells[1].get_text(strip=True)
-            purpose = cells[2].get_text(strip=True) if len(cells) > 2 else ""
-            ex_date = cells[3].get_text(strip=True) if len(cells) > 3 else ""
-            record_date = cells[4].get_text(strip=True) if len(cells) > 4 else ""
+        for row in data[:50]:
+            symbol = row.get("symbol", "").upper()
+            company = row.get("comp", "")
+            purpose = row.get("subject", "")
+            ex_date = row.get("exDate", "")
+            record_date = row.get("recDate", "")
 
             # Only include F&O stocks
             if symbol not in _FNO_SET:
@@ -110,23 +107,20 @@ class NSECorporateSource:
 
         return items
 
-    async def _fetch_corporate_filings(self) -> List[Dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=self.timeout, headers=self._session_headers) as client:
+    async def _fetch_corporate_filings(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+        try:
             response = await client.get(_NSE_CORPORATE_URL, follow_redirects=True)
             response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            logger.warning("Failed to parse corporate announcements JSON: %s", e)
+            return []
 
-        soup = BeautifulSoup(response.text, "html.parser")
         items = []
-
-        rows = soup.select("table tbody tr")
-        for row in rows[:30]:
-            cells = row.select("td")
-            if len(cells) < 2:
-                continue
-
-            symbol = cells[0].get_text(strip=True).upper()
-            description = cells[1].get_text(strip=True) if len(cells) > 1 else ""
-            filing_date = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+        for row in data[:30]:
+            symbol = row.get("symbol", "").upper()
+            description = row.get("desc", "")
+            filing_date = row.get("an_dt", "")
 
             if symbol not in _FNO_SET:
                 continue

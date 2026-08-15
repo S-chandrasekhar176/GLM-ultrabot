@@ -102,3 +102,8 @@ class BaseBroker(ABC):
     @abstractmethod
     def get_name(self) -> str:
         """Return the broker's name identifier."""
+
+    async def get_latest_price(self, symbol: str, exchange: str = "NSE") -> float:
+        """Get the latest price (LTP) for a symbol."""
+        return await self.get_ltp(symbol, exchange)
+

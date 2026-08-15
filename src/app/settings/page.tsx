@@ -1,6 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import {
+  updateRiskLimits,
+  updateSettingsFull,
+  getRiskGates,
+  getSettings,
+} from '@/lib/api';
 import { motion } from 'framer-motion';
 import {
   Card,
@@ -209,10 +215,87 @@ export default function SettingsPage() {
   const [capital, setCapital] = useState<CapitalConfig>(defaultCapital);
   const [general, setGeneral] = useState<GeneralConfig>(defaultGeneral);
 
+  // Save loading states per-section
+  const [savingRisk, setSavingRisk] = useState(false);
+  const [savingCapital, setSavingCapital] = useState(false);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
   // Testing connection states
   const [testingAngel, setTestingAngel] = useState(false);
   const [testingShoonya, setTestingShoonya] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
+
+  // ── Load current values from backend on mount ──
+  useEffect(() => {
+    // Load risk config from backend
+    getRiskGates()
+      .then((res: any) => {
+        const limits = res?.limits;
+        if (!limits) return;
+        setRisk((prev) => ({
+          ...prev,
+          maxOpenPositions: limits.max_open_positions ?? prev.maxOpenPositions,
+          maxDailyTrades: limits.max_daily_trades ?? prev.maxDailyTrades,
+          maxDailyLossPct: limits.max_daily_loss_pct ?? prev.maxDailyLossPct,
+          maxConsecutiveLosses: limits.max_consecutive_losses ?? prev.maxConsecutiveLosses,
+          coolOffMinutes: limits.cooloff_minutes ?? prev.coolOffMinutes,
+          maxDrawdownPct: limits.max_drawdown_pct ?? prev.maxDrawdownPct,
+          vixThreshold: limits.vix_high_threshold ?? prev.vixThreshold,
+          minSignalConfidence: limits.min_signal_confidence ?? prev.minSignalConfidence,
+        }));
+      })
+      .catch(() => {/* silently use defaults if backend not reachable */});
+
+    // Load capital/general settings from backend
+    getSettings()
+      .then((res: any) => {
+        if (!res) return;
+        // Backend returns { app_name, config: { capital: {}, engine: {}, market: {}, notifications: {} } }
+        const cfg = res.config || res;
+        const cap = cfg.capital || {};
+        const gen = cfg.engine || {};
+        const market = cfg.market || {};
+        const notif = cfg.notifications || {};
+
+        if (Object.keys(cap).length) {
+          setCapital((prev) => ({
+            ...prev,
+            virtualCapital: cap.virtual_capital ?? prev.virtualCapital,
+            maxCapitalUsagePct: cap.max_capital_usage_pct ?? prev.maxCapitalUsagePct,
+            minPositionSize: cap.min_position_size ?? prev.minPositionSize,
+            perPositionMaxPct: cap.max_per_position_pct ?? prev.perPositionMaxPct,
+          }));
+        }
+        if (Object.keys(gen).length) {
+          setGeneral((prev) => ({
+            ...prev,
+            scanIntervalSeconds: gen.scan_interval_seconds ?? prev.scanIntervalSeconds,
+            autoStartEngine: gen.auto_start ?? prev.autoStartEngine,
+            autoSquareoffTime: gen.auto_squareoff_time ?? prev.autoSquareoffTime,
+          }));
+        }
+        if (Object.keys(market).length) {
+          setGeneral((prev) => ({
+            ...prev,
+            marketOpen: market.nse_open ?? prev.marketOpen,
+            marketClose: market.nse_close ?? prev.marketClose,
+            premarketStart: market.pre_market_start ?? prev.premarketStart,
+            postmarketEnd: market.post_market_end ?? prev.postmarketEnd,
+          }));
+        }
+        if (Object.keys(notif).length) {
+          setNotifications((prev) => ({
+            ...prev,
+            telegramBotToken: notif.telegram_bot_token ?? prev.telegramBotToken,
+            telegramChatId: notif.telegram_chat_id ?? prev.telegramChatId,
+            morningBriefingTime: notif.morning_briefing_time ?? prev.morningBriefingTime,
+            eodReportTime: notif.eod_report_time ?? prev.eodReportTime,
+          }));
+        }
+      })
+      .catch(() => {/* silently use defaults */});
+  }, []);
 
   const handleTestAngel = useCallback(() => {
     setTestingAngel(true);
@@ -246,9 +329,91 @@ export default function SettingsPage() {
     }, 1500);
   }, []);
 
-  const handleSave = useCallback((section: string) => {
-    toast.success(`${section} settings saved successfully`);
-  }, []);
+  // ── Real save handlers ──
+  const handleSaveRisk = useCallback(async () => {
+    setSavingRisk(true);
+    try {
+      await updateRiskLimits({
+        max_open_positions: risk.maxOpenPositions,
+        max_daily_trades: risk.maxDailyTrades,
+        max_daily_loss_pct: risk.maxDailyLossPct,
+        max_consecutive_losses: risk.maxConsecutiveLosses,
+        cooloff_minutes: risk.coolOffMinutes,
+        max_drawdown_pct: risk.maxDrawdownPct,
+        vix_high_threshold: risk.vixThreshold,
+        min_signal_confidence: risk.minSignalConfidence,
+        max_sector_concentration_pct: risk.maxPerSector * 20,
+        max_position_size_pct: risk.kellyMaxFraction * 100,
+      });
+      toast.success('Risk parameters saved successfully');
+    } catch {
+      toast.error('Failed to save risk parameters — check if backend is running');
+    } finally {
+      setSavingRisk(false);
+    }
+  }, [risk]);
+
+  const handleSaveCapital = useCallback(async () => {
+    setSavingCapital(true);
+    try {
+      await updateSettingsFull({
+        capital: {
+          virtual_capital: capital.virtualCapital,
+          max_capital_usage_pct: capital.maxCapitalUsagePct,
+          min_position_size: capital.minPositionSize,
+          max_per_position_pct: capital.perPositionMaxPct,
+        },
+      });
+      toast.success('Capital settings saved successfully');
+    } catch {
+      toast.error('Failed to save capital settings — check if backend is running');
+    } finally {
+      setSavingCapital(false);
+    }
+  }, [capital]);
+
+  const handleSaveGeneral = useCallback(async () => {
+    setSavingGeneral(true);
+    try {
+      await updateSettingsFull({
+        engine: {
+          scan_interval_seconds: general.scanIntervalSeconds,
+          auto_squareoff_time: general.autoSquareoffTime,
+          auto_start: general.autoStartEngine,
+        },
+        market: {
+          nse_open: general.marketOpen,
+          nse_close: general.marketClose,
+          pre_market_start: general.premarketStart,
+          post_market_end: general.postmarketEnd,
+        },
+      });
+      toast.success('General settings saved successfully');
+    } catch {
+      toast.error('Failed to save general settings — check if backend is running');
+    } finally {
+      setSavingGeneral(false);
+    }
+  }, [general]);
+
+  const handleSaveNotifications = useCallback(async () => {
+    setSavingNotifications(true);
+    try {
+      await updateSettingsFull({
+        notifications: {
+          telegram_bot_token: notifications.telegramBotToken,
+          telegram_chat_id: notifications.telegramChatId,
+          morning_briefing_time: notifications.morningBriefingTime,
+          eod_report_time: notifications.eodReportTime,
+        },
+      });
+      toast.success('Notification settings saved successfully');
+    } catch {
+      toast.error('Failed to save notification settings — check if backend is running');
+    } finally {
+      setSavingNotifications(false);
+    }
+  }, [notifications]);
 
   // Helper for number input updates
   const updateRisk = (key: keyof RiskConfig, value: number | string | boolean) => {
@@ -258,6 +423,7 @@ export default function SettingsPage() {
   const updateNotifications = (key: keyof NotificationConfig, value: boolean | string) => {
     setNotifications((p) => ({ ...p, [key]: value }));
   };
+
 
   return (
     <div className="space-y-6">
@@ -613,9 +779,9 @@ export default function SettingsPage() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={() => handleSave('Risk Parameters')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSaveRisk} disabled={savingRisk} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+              {savingRisk ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              {savingRisk ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </TabsContent>
@@ -729,9 +895,9 @@ export default function SettingsPage() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={() => handleSave('Notifications')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSaveNotifications} disabled={savingNotifications} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+              {savingNotifications ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              {savingNotifications ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </TabsContent>
@@ -830,9 +996,9 @@ export default function SettingsPage() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={() => handleSave('Capital')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSaveCapital} disabled={savingCapital} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+              {savingCapital ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              {savingCapital ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </TabsContent>
@@ -929,9 +1095,9 @@ export default function SettingsPage() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={() => handleSave('General')} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSaveGeneral} disabled={savingGeneral} className="bg-ub-accent hover:bg-ub-accent-hover text-ub-background font-semibold">
+              {savingGeneral ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              {savingGeneral ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </TabsContent>

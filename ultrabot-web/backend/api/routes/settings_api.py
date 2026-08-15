@@ -101,13 +101,22 @@ async def update_settings(
 
         updated_keys = []
         for key, value in updates.items():
-            # Support dot notation: "risk.max_daily_trades" -> {"risk": {"max_daily_trades": value}}
-            parts = key.split(".")
-            target = settings._raw_config
-            for part in parts[:-1]:
-                target = target.setdefault(part, {})
-            target[parts[-1]] = value
-            updated_keys.append(key)
+            if isinstance(value, dict):
+                # Nested dict: merge into existing section
+                section = settings._raw_config.setdefault(key, {})
+                section.update(value)
+                updated_keys.append(key)
+            else:
+                # Support dot notation: "risk.max_daily_trades" -> {"risk": {"max_daily_trades": value}}
+                parts = key.split(".")
+                target = settings._raw_config
+                for part in parts[:-1]:
+                    target = target.setdefault(part, {})
+                target[parts[-1]] = value
+                updated_keys.append(key)
+
+        # Persist to disk
+        settings.save()
 
         return {
             "message": "Settings updated successfully",
@@ -161,6 +170,9 @@ async def update_capital(
         capital_config = settings._raw_config.setdefault("capital", {})
         old_capital = capital_config.get("virtual_capital", 100000)
         capital_config["virtual_capital"] = body.virtual_capital
+
+        # Persist to disk
+        settings.save()
 
         return {
             "message": "Capital updated successfully",

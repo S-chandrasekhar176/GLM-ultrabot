@@ -46,6 +46,23 @@ async def get_pending_opportunities(
         )
 
 
+@router.get("/invalidated")
+async def get_invalidated_opportunities(
+    username: str = Depends(get_current_user),
+    engine: UltraBotEngine = Depends(get_engine),
+) -> List[Dict[str, Any]]:
+    """Get recently expired/invalidated opportunities from the engine."""
+    try:
+        if engine is None:
+            return []
+        if hasattr(engine, "invalidated_opportunities"):
+            return list(engine.invalidated_opportunities.values())
+        return []
+    except Exception as exc:
+        logger.error("Failed to get invalidated opportunities: %s", exc, exc_info=True)
+        return []
+
+
 @router.post("/{opportunity_id}/confirm")
 async def confirm_opportunity(
     opportunity_id: str,

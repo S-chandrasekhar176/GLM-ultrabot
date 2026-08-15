@@ -49,6 +49,8 @@ from api.routes import (
     notifications,
     errors,
     settings_api,
+    scanner,
+    news,
 )
 from api.websocket import WebSocketManager, router as ws_router
 
@@ -230,6 +232,8 @@ app.include_router(opportunities.router)
 app.include_router(notifications.router)
 app.include_router(errors.router)
 app.include_router(settings_api.router)
+app.include_router(scanner.router)
+app.include_router(news.router)
 app.include_router(ws_router)
 
 

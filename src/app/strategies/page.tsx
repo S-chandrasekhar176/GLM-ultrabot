@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useStrategies } from '@/hooks/useApi';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -49,179 +50,7 @@ interface Strategy {
 // Mock Data
 // ─────────────────────────────────────────────
 
-const MOCK_STRATEGIES: Strategy[] = [
-  {
-    id: 'breakout',
-    name: 'Breakout',
-    description: 'Identifies price breakouts above key resistance levels with volume confirmation',
-    category: 'core',
-    active: true,
-    winRate: 68.5,
-    signals: 5,
-    trades: 3,
-    sparkline: [62, 65, 60, 67, 70, 64, 72, 68.5],
-    params: { lookback: 20, volumeMultiplier: 1.5, atrPeriod: 14, minBreakoutPct: 1.5, timeframe: '5m' },
-  },
-  {
-    id: 'meanreversion',
-    name: 'Mean Reversion',
-    description: 'Trades overextended moves expecting price to revert to VWAP or moving average',
-    category: 'core',
-    active: true,
-    winRate: 64.2,
-    signals: 8,
-    trades: 5,
-    sparkline: [58, 62, 66, 63, 60, 65, 67, 64.2],
-    params: { bbPeriod: 20, bbStdDev: 2.0, rsiPeriod: 14, rsiOversold: 30, rsiOverbought: 70, meanSource: 'VWAP' },
-  },
-  {
-    id: 'momentum',
-    name: 'Momentum',
-    description: 'Captures strong directional moves using MACD crossover and ADX strength filter',
-    category: 'core',
-    active: true,
-    winRate: 61.8,
-    signals: 4,
-    trades: 2,
-    sparkline: [55, 58, 63, 60, 59, 64, 62, 61.8],
-    params: { macdFast: 12, macdSlow: 26, macdSignal: 9, adxPeriod: 14, adxThreshold: 25 },
-  },
-  {
-    id: 'orb',
-    name: 'ORB',
-    description: 'Opening Range Breakout strategy trading the first 15-min candle range',
-    category: 'core',
-    active: true,
-    winRate: 70.1,
-    signals: 3,
-    trades: 3,
-    sparkline: [66, 68, 71, 69, 72, 67, 74, 70.1],
-    params: { rangeMinutes: 15, entryBuffer: 0.2, stopBuffer: 0.3, maxHoldingMin: 120, direction: 'Both' },
-  },
-  {
-    id: 'rsidivergence',
-    name: 'RSI Divergence',
-    description: 'Detects bullish/bearish divergence between RSI and price for reversal signals',
-    category: 'core',
-    active: false,
-    winRate: 57.3,
-    signals: 6,
-    trades: 4,
-    pauseReason: 'regime_mismatch',
-    sparkline: [52, 55, 53, 58, 56, 54, 60, 57.3],
-    params: { rsiPeriod: 14, divergenceLookback: 30, minDivergencePct: 0.5, confirmationCandles: 2 },
-  },
-  {
-    id: 'supertrend',
-    name: 'Supertrend',
-    description: 'Trend-following using Supertrend indicator with ATR-based trailing stops',
-    category: 'core',
-    active: true,
-    winRate: 66.4,
-    signals: 7,
-    trades: 4,
-    sparkline: [60, 63, 61, 65, 68, 64, 70, 66.4],
-    params: { atrPeriod: 10, multiplier: 3.0, timeframe: '15m', reentryCooldown: 5 },
-  },
-  {
-    id: 'vwapreversion',
-    name: 'VWAP Reversion',
-    description: 'Mean reversion to VWAP with standard deviation bands for intraday trades',
-    category: 'core',
-    active: true,
-    winRate: 63.7,
-    signals: 9,
-    trades: 6,
-    sparkline: [58, 61, 60, 64, 62, 66, 63, 63.7],
-    params: { sdMultiplier: 2.0, minDistanceSd: 1.5, maxHoldingMin: 90, exitAtVwap: true },
-  },
-  {
-    id: 'gapfill',
-    name: 'Gap Fill',
-    description: 'Trades gap-down/up openings with statistical probability of gap filling',
-    category: 'advanced',
-    active: true,
-    winRate: 72.8,
-    signals: 2,
-    trades: 2,
-    sparkline: [68, 70, 74, 71, 69, 73, 76, 72.8],
-    params: { minGapPct: 0.8, maxGapPct: 3.0, fillTimeLimit: 120, volumeConfirm: true, gapType: 'Both' },
-  },
-  {
-    id: 'sectorrotation',
-    name: 'Sector Rotation',
-    description: 'Identifies sector strength rotation and picks leading stocks in hot sectors',
-    category: 'advanced',
-    active: false,
-    winRate: 59.4,
-    signals: 4,
-    trades: 2,
-    pauseReason: 'manual_pause',
-    sparkline: [54, 57, 55, 60, 58, 62, 56, 59.4],
-    params: { sectorLookback: 5, topNSectors: 2, topNStocks: 3, rebalanceMin: 30, minRelativeStrength: 60 },
-  },
-  {
-    id: 'multitimeframe',
-    name: 'Multi-Timeframe',
-    description: 'Aligns signals across 5m, 15m, and 1h timeframes for high-conviction entries',
-    category: 'advanced',
-    active: true,
-    winRate: 71.2,
-    signals: 3,
-    trades: 3,
-    sparkline: [64, 67, 69, 66, 70, 73, 68, 71.2],
-    params: { timeframes: '5m,15m,1h', minAlignment: 2, primaryTf: '15m', signalWeight: 0.7 },
-  },
-  {
-    id: 'orbvolume',
-    name: 'ORB Volume',
-    description: 'Enhanced ORB with volume profile analysis to predict breakout direction',
-    category: 'advanced',
-    active: true,
-    winRate: 69.5,
-    signals: 3,
-    trades: 2,
-    sparkline: [63, 66, 68, 65, 71, 67, 72, 69.5],
-    params: { rangeMinutes: 30, vpMinVolume: 1.8, vpAsymmetry: 0.3, minPocDistance: 0.5 },
-  },
-  {
-    id: 'trendexhaustion',
-    name: 'Trend Exhaustion',
-    description: 'Identifies exhaustion patterns using volume climaxes and wedge breakdowns',
-    category: 'advanced',
-    active: false,
-    winRate: 55.9,
-    signals: 5,
-    trades: 3,
-    pauseReason: 'regime_mismatch',
-    sparkline: [50, 53, 51, 56, 54, 52, 57, 55.9],
-    params: { volumeRatio: 2.5, rsiExtreme: 75, wedgePeriod: 20, confirmationBars: 3 },
-  },
-  {
-    id: 'newsmomentum',
-    name: 'News Momentum',
-    description: 'Trades stocks with strong news sentiment and price gap alignment',
-    category: 'advanced',
-    active: true,
-    winRate: 67.1,
-    signals: 6,
-    trades: 4,
-    sparkline: [61, 64, 66, 63, 68, 65, 70, 67.1],
-    params: { sentimentThreshold: 0.7, gapAlignMin: 0.5, maxEntryDelay: 15, stopMultiplier: 1.5 },
-  },
-  {
-    id: 'adaptivesupertrend',
-    name: 'Adaptive Supertrend',
-    description: 'Dynamic Supertrend with regime-adaptive ATR multiplier and trend strength filter',
-    category: 'advanced',
-    active: true,
-    winRate: 73.6,
-    signals: 4,
-    trades: 3,
-    sparkline: [67, 70, 72, 69, 74, 71, 76, 73.6],
-    params: { baseMultiplier: 2.5, volatileMultiplier: 4.0, trendStrengthMin: 0.6, reentryCooldown: 10 },
-  },
-];
+
 
 // ─────────────────────────────────────────────
 // Regime Config
@@ -380,15 +209,23 @@ function StrategyCard({ strategy, onToggle }: { strategy: Strategy; onToggle: (i
 // Page Component
 // ─────────────────────────────────────────────
 
+const EMPTY_ARRAY: Strategy[] = [];
+
 export default function StrategiesPage() {
   const { regime, vix } = useEngine();
   const [isAutoMode, setIsAutoMode] = useState(true);
-  const [manualEnabled, setManualEnabled] = useState<Record<string, boolean>>(() => {
+
+  const { data: apiStrategies, toggle } = useStrategies();
+  const strategies = (apiStrategies as Strategy[]) || EMPTY_ARRAY;
+  
+  const [manualEnabled, setManualEnabled] = useState<Record<string, boolean>>({});
+  
+  useEffect(() => {
+    if (!apiStrategies) return;
     const map: Record<string, boolean> = {};
-    MOCK_STRATEGIES.forEach((s) => { map[s.id] = s.active; });
-    return map;
-  });
-  const [strategies, setStrategies] = useState<Strategy[]>(MOCK_STRATEGIES);
+    strategies.forEach((s) => { map[s.id] = s.active; });
+    setManualEnabled(map);
+  }, [apiStrategies]);
 
   const regimeConfig = REGIME_CONFIG[regime];
   const RegimeIcon = regimeConfig.icon;
@@ -406,17 +243,11 @@ export default function StrategiesPage() {
   const advancedStrategies = useMemo(() => strategies.filter((s) => s.category === 'advanced'), [strategies]);
 
   const handleToggle = (id: string, enabled: boolean) => {
-    setStrategies((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, active: enabled, pauseReason: enabled ? undefined : 'manual_pause' as const } : s)),
-    );
-    setManualEnabled((prev) => ({ ...prev, [id]: enabled }));
+    toggle({ name: id, isEnabled: enabled });
   };
 
   const handleManualCheck = (id: string, checked: boolean) => {
-    setManualEnabled((prev) => ({ ...prev, [id]: checked }));
-    setStrategies((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, active: checked, pauseReason: checked ? undefined : 'manual_pause' as const } : s)),
-    );
+    toggle({ name: id, isEnabled: checked });
   };
 
   return (
@@ -461,7 +292,7 @@ export default function StrategiesPage() {
             <BarChart3 className="h-3 w-3" />
             <span>India VIX:</span>
             <span className={cn('font-medium', vix > 20 ? 'text-ub-volatile' : vix > 15 ? 'text-ub-warning' : 'text-ub-profit')}>
-              {vix > 0 ? vix.toFixed(1) : '16.5'}
+              {vix > 0 ? vix.toFixed(2) : '11.36'}
             </span>
           </div>
 

@@ -77,10 +77,12 @@ async def _execute_backtest(req: BacktestRequest) -> Dict[str, Any]:
 
         # Get historical candles
         feed = YahooHistoricalFeed()
+        candles = []
         if req.symbol:
-            candles = await feed.get_historical(req.symbol, req.start_date, req.end_date, req.timeframe)
-        else:
-            candles = []
+            symbols = [s.strip() for s in req.symbol.split(",") if s.strip()]
+            for sym in symbols:
+                sym_candles = await feed.get_historical(sym, req.start_date, req.end_date, req.timeframe)
+                candles.extend(sym_candles)
 
         if not candles:
             return {

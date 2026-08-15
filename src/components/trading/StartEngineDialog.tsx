@@ -88,8 +88,10 @@ function getBrokerDescription(id: string): string {
   const descriptions: Record<string, string> = {
     zerodha: 'Kite Connect API — most popular retail broker in India',
     angelone: 'SmartAPI — multi-exchange trading with advanced charting',
+    dhan: 'Dhan HQ API v2 — fast execution, modern API-first broker with option chains',
+    fyers: 'Fyers API v3 — high-speed trading terminal, webhook support and instant ticks',
+    shoonya: 'Shoonya Finvasia — zero brokerage trading with multi-exchange connectivity',
     upstox: 'Upstox API v2 — fast and reliable order placement',
-    dhan: 'Dhan HQ — modern API-first broker with option chains',
     icici: 'ICICI Direct API — full-service broker with research',
     groww: 'Groww Connect API — simple and commission-free',
   };
@@ -100,8 +102,10 @@ function getBrokerFeatures(id: string): string[] {
   const features: Record<string, string[]> = {
     zerodha: ['Real-time quotes', 'Order execution', 'Historical data', 'Webhook support'],
     angelone: ['Real-time quotes', 'Smart order types', 'Margin trading', 'Portfolio analytics'],
+    dhan: ['Dhan API v2', 'Option chains', 'Real-time LTP', 'Instant execution'],
+    fyers: ['Fyers API v3', 'Multi-timeframe data', 'Zero latency orders', 'Live feed'],
+    shoonya: ['Shoonya API', 'Zero brokerage', 'F&O trading', 'Real-time quotes'],
     upstox: ['Real-time quotes', 'GTT orders', 'Margin trading', 'Multi-exchange'],
-    dhan: ['Real-time quotes', 'Option chains', 'IPO alerts', 'Treasury data'],
     icici: ['Real-time quotes', 'Research calls', 'Margin trading', 'BTST/STBT'],
     groww: ['Real-time quotes', 'Zero commission', 'Simple UI', 'Mutual funds'],
   };

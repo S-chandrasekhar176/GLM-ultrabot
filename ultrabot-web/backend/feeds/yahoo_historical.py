@@ -9,12 +9,20 @@ logger = logging.getLogger(__name__)
 # Mapping of candle intervals to yfinance format
 _TIMEFRAME_MAP = {
     "1m": "1m",
+    "1min": "1m",
     "5m": "5m",
+    "5min": "5m",
     "15m": "15m",
+    "15min": "15m",
     "30m": "30m",
+    "30min": "30m",
     "1h": "60m",
+    "1hour": "60m",
+    "60m": "60m",
     "1d": "1d",
+    "1day": "1d",
     "1w": "1wk",
+    "1week": "1wk",
 }
 
 # Yahoo Finance suffix for NSE
@@ -128,6 +136,71 @@ class YahooHistoricalFeed(BaseFeed):
             logger.error("Failed to get candles for %s: %s", symbol, e)
             return []
 
+    async def get_historical(
+        self,
+        symbol: str,
+        start_date: str = "",
+        end_date: str = "",
+        timeframe: str = "5m",
+    ) -> List[Dict[str, Any]]:
+        """Fetch historical candles for given symbol and date range."""
+        try:
+            import yfinance as yf
+
+            tf_clean = timeframe.replace("min", "m").replace("hour", "h").replace("day", "d")
+            yf_interval = _TIMEFRAME_MAP.get(tf_clean, _TIMEFRAME_MAP.get(timeframe, "5m"))
+
+            yahoo_sym = self._to_yahoo_symbol(symbol.strip())
+            ticker = yf.Ticker(yahoo_sym)
+
+            # Convert dates from DD-MM-YYYY to YYYY-MM-DD if needed
+            start_dt = None
+            end_dt = None
+            if start_date:
+                try:
+                    start_dt = datetime.strptime(start_date, "%d-%m-%Y").strftime("%Y-%m-%d")
+                except ValueError:
+                    start_dt = start_date
+            if end_date:
+                try:
+                    end_dt = datetime.strptime(end_date, "%d-%m-%Y").strftime("%Y-%m-%d")
+                except ValueError:
+                    end_dt = end_date
+
+            if start_dt and end_dt:
+                hist = ticker.history(start=start_dt, end=end_dt, interval=yf_interval)
+            elif start_dt:
+                hist = ticker.history(start=start_dt, interval=yf_interval)
+            else:
+                hist = ticker.history(period="1mo", interval=yf_interval)
+
+            if hist is None or hist.empty:
+                logger.warning("No historical data for %s between %s and %s, trying default 1mo period", symbol, start_date, end_date)
+                hist = ticker.history(period="1mo", interval=yf_interval)
+
+            if hist is None or hist.empty:
+                return []
+
+            candles = []
+            for idx, row in hist.iterrows():
+                ts = idx
+                if hasattr(ts, "tzinfo") and ts.tzinfo is not None:
+                    ts = ts.tz_convert("Asia/Kolkata")
+                candles.append({
+                    "timestamp": ts.isoformat(),
+                    "open": round(float(row["Open"]), 2),
+                    "high": round(float(row["High"]), 2),
+                    "low": round(float(row["Low"]), 2),
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]),
+                })
+            return candles
+        except Exception as e:
+            logger.error("Failed to get historical candles for %s: %s", symbol, e)
+    async def get_latest_price(self, symbol: str) -> float:
+        """Alias for get_ltp to support engine interface."""
+        return await self.get_ltp(symbol)
+
     def is_connected(self) -> bool:
         return self._connected
 
@@ -138,8 +211,22 @@ class YahooHistoricalFeed(BaseFeed):
     def _to_yahoo_symbol(symbol: str) -> str:
         """Convert NSE symbol to Yahoo Finance format.
 
-        E.g. 'RELIANCE' -> 'RELIANCE.NS'
+        E.g. 'RELIANCE' -> 'RELIANCE.NS', 'INDIAVIX' -> '^INDIAVIX'
         """
-        if symbol.endswith(".NS"):
-            return symbol
-        return f"{symbol}{_YAHOO_NSE_SUFFIX}"
+        clean = symbol.strip().upper()
+        if clean in ("INDIAVIX", "VIX", "^INDIAVIX"):
+            return "^INDIAVIX"
+        if clean in ("NIFTY", "NIFTY 50", "NIFTY50", "^NSEI"):
+            return "^NSEI"
+        if clean in ("BANKNIFTY", "NIFTY BANK", "NIFTYBANK", "^NSEBANK"):
+            return "^NSEBANK"
+        if clean in ("SENSEX", "^BSESN"):
+            return "^BSESN"
+        if clean in ("MIDCPNIFTY", "NIFTY_MIDCAP_100.NS"):
+            return "NIFTY_MIDCAP_100.NS"
+        if clean in ("FINNIFTY", "NIFTY_FIN_SERVICE.NS"):
+            return "NIFTY_FIN_SERVICE.NS"
+
+        if clean.endswith(".NS") or clean.startswith("^"):
+            return clean
+        return f"{clean}{_YAHOO_NSE_SUFFIX}"

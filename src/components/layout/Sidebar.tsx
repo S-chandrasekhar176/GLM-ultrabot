@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Newspaper,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar, useAuth, useStore, BROKER_LIST } from '@/lib/store';
@@ -33,6 +35,7 @@ const navItems = [
   { label: 'Watchlist', icon: Eye, path: '/watchlist' },
   { label: 'Risk', icon: ShieldAlert, path: '/risk' },
   { label: 'Backtest', icon: LineChart, path: '/backtest' },
+  { label: 'Real-time News', icon: Newspaper, path: '/news' },
   { label: 'Settings', icon: Settings, path: '/settings' },
   { label: 'Errors', icon: AlertTriangle, path: '/errors' },
 ];
@@ -42,14 +45,21 @@ const navItems = [
 // ─────────────────────────────────────────────
 
 function EngineIndicator({ collapsed }: { collapsed: boolean }) {
+  const [mounted, setMounted] = useState(false);
   const { status, mode, activeBroker } = useStore((s) => s.engine);
-  const isRunning = status === 'running';
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentStatus = mounted ? status : 'stopped';
+  const isRunning = currentStatus === 'running';
   const brokerName = activeBroker ? BROKER_LIST.find((b) => b.id === activeBroker)?.name : null;
 
   return (
     <div className="flex items-center gap-2 px-3 py-2">
       <span
-        className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+        className="inline-block h-2.5 w-2.5 rounded-full shrink-0 transition-colors"
         style={{
           backgroundColor: isRunning ? theme.colors.profit : theme.colors.textDisabled,
           boxShadow: isRunning ? `0 0 6px ${theme.colors.profit}` : 'none',
@@ -60,7 +70,7 @@ function EngineIndicator({ collapsed }: { collapsed: boolean }) {
         <div className="flex flex-col min-w-0">
           <span className="text-xs font-medium" style={{ color: isRunning ? theme.colors.profit : theme.colors.textDisabled }}>
             {isRunning ? 'Running' : 'Stopped'}
-            {mode && (
+            {mounted && mode && (
               <span className="ml-1.5 text-[10px] px-1.5 py-0 rounded" style={{ backgroundColor: mode === 'live' ? theme.colors.loss + '15' : theme.colors.accentMuted, color: mode === 'live' ? theme.colors.loss : theme.colors.accent }}>
                 {mode}
               </span>

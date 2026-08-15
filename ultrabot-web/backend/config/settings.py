@@ -35,13 +35,32 @@ class Settings(BaseSettings):
         self._load_yaml()
 
     def _load_yaml(self):
-        """Load defaults.yaml and merge with env overrides."""
-        yaml_path = Path(__file__).parent / "defaults.yaml"
-        if yaml_path.exists():
-            with open(yaml_path, "r") as f:
+        """Load defaults.yaml and merge with defaults.local.yaml and env overrides."""
+        self._yaml_path = Path(__file__).parent / "defaults.yaml"
+        if self._yaml_path.exists():
+            with open(self._yaml_path, "r") as f:
                 self._raw_config = yaml.safe_load(f) or {}
+
+        # Merge local overrides if defaults.local.yaml exists (gitignored for secrets)
+        local_yaml = Path(__file__).parent / "defaults.local.yaml"
+        if local_yaml.exists():
+            try:
+                with open(local_yaml, "r") as f:
+                    local_config = yaml.safe_load(f) or {}
+                    self._deep_merge(self._raw_config, local_config)
+            except Exception:
+                pass
+
         # Override with env vars
         self._apply_env_overrides()
+
+    def _deep_merge(self, base: Dict[str, Any], override: Dict[str, Any]) -> None:
+        """Recursively merge override dictionary into base dictionary."""
+        for key, value in override.items():
+            if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+                self._deep_merge(base[key], value)
+            else:
+                base[key] = value
 
     def _apply_env_overrides(self):
         """Apply environment variable overrides to both flat and nested config."""
@@ -101,6 +120,16 @@ class Settings(BaseSettings):
 
     def get_watchlist_config(self) -> Dict[str, Any]:
         return self._raw_config.get("watchlist", {})
+
+    def save(self) -> bool:
+        """Write current _raw_config back to defaults.yaml for persistence."""
+        try:
+            yaml_path = getattr(self, '_yaml_path', Path(__file__).parent / "defaults.yaml")
+            with open(yaml_path, "w") as f:
+                yaml.dump(self._raw_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            return True
+        except Exception:
+            return False
 
     @property
     def secret_key(self) -> str:

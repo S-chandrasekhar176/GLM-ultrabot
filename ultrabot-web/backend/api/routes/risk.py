@@ -195,6 +195,9 @@ async def update_risk_limits(
         for key, value in update_data.items():
             risk_config[key] = value
 
+        # Persist to disk
+        settings.save()
+
         return {
             "message": "Risk limits updated successfully",
             "updated": update_data,

@@ -11,7 +11,7 @@ from utils.market_utils import FNO_UNIVERSE, get_all_fno_symbols
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
-_MONEYCONTROL_RSS_URL = "https://www.moneycontrol.com/rss/MCtopnews.xml"
+_MONEYCONTROL_RSS_URL = "https://www.moneycontrol.com/rss/latestnews.xml"
 
 # Build name fragment to symbol lookup
 _FNO_NAME_LOOKUP: Dict[str, str] = {}

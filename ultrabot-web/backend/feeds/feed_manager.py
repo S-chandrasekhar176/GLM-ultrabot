@@ -177,3 +177,8 @@ class FeedManager:
             backup_result = await self.backup.disconnect()
             result["backup"] = backup_result
         return result
+
+    async def get_latest_price(self, symbol: str) -> float:
+        """Get the latest price (LTP) for a symbol."""
+        return await self.get_ltp(symbol)
+
