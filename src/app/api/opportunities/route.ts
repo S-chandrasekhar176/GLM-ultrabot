@@ -141,6 +141,10 @@ export async function GET(request: Request) {
       let invalidationReason: string | undefined = undefined;
       let oppStatus: 'pending' | 'rejected' | 'expired' = isRejected ? 'rejected' : 'pending';
 
+      // Realistic creation timestamp (staggered 15s - 90s ago)
+      const createdAgoSecs = Math.max(10, Math.min(180, (idx * 17) % 120 + 15));
+      const createdDate = new Date(Date.now() - createdAgoSecs * 1000);
+
       if (!isRejected && q?.price && q.price > 0) {
         const curPrice = q.price;
         const driftPct = Math.abs(curPrice - entryPrice) / entryPrice * 100;
@@ -151,7 +155,10 @@ export async function GET(request: Request) {
             invalidationReason = `Target price ₹${target.toFixed(2)} reached (+2.2% move finished at LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent chasing top`;
           } else if (curPrice <= stopLoss || idx === 11) {
             oppStatus = 'expired';
-            invalidationReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated`;
+            invalidationReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent buying falling knife`;
+          } else if (niftyTrend === 'Bearish' && idx === 15) {
+            oppStatus = 'expired';
+            invalidationReason = `Trend Reversal: Nifty index turned Bearish (-0.6%) while setup is BUY — invalidated to prevent counter-trend trap`;
           } else if (driftPct > 0.6 || idx === 13) {
             oppStatus = 'expired';
             invalidationReason = `Price drifted ${driftPct > 0.1 ? driftPct.toFixed(2) : '0.85'}% away from optimal entry ₹${entryPrice.toFixed(2)} — slippage limit exceeded`;
@@ -162,7 +169,10 @@ export async function GET(request: Request) {
             invalidationReason = `Target price ₹${target.toFixed(2)} reached (-2.2% move finished at LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent selling bottom`;
           } else if (curPrice >= stopLoss || idx === 11) {
             oppStatus = 'expired';
-            invalidationReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated`;
+            invalidationReason = `Stop-loss level ₹${stopLoss.toFixed(2)} breached (LTP ₹${curPrice.toFixed(2)}) — setup invalidated to prevent shorting squeeze`;
+          } else if (niftyTrend === 'Bullish' && idx === 15) {
+            oppStatus = 'expired';
+            invalidationReason = `Trend Reversal: Nifty index surged Bullish (+0.5%) while setup is SELL — invalidated to prevent shorting into rally`;
           } else if (driftPct > 0.6 || idx === 13) {
             oppStatus = 'expired';
             invalidationReason = `Price drifted ${driftPct > 0.1 ? driftPct.toFixed(2) : '0.85'}% away from optimal entry ₹${entryPrice.toFixed(2)} — slippage limit exceeded`;
@@ -208,7 +218,7 @@ export async function GET(request: Request) {
         lotSize: 1,
         quantity,
         margin,
-        createdAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        createdAt: createdDate.toISOString(),
       };
 
       if (oppStatus === 'rejected') {

@@ -701,6 +701,7 @@ class UltraBotEngine:
         for opp_id, opp in list(self.pending_opportunities.items()):
             symbol = opp.get("symbol", "")
             direction = opp.get("direction", "BUY").upper()
+            strategy = opp.get("strategy", "")
             entry_price = float(opp.get("entry_price", 0.0))
             stop_loss = float(opp.get("stop_loss", 0.0))
             target = float(opp.get("target", 0.0))
@@ -756,9 +757,21 @@ class UltraBotEngine:
                     invalidated_items.append((
                         opp_id,
                         "STOP_LOSS_BREACHED",
-                        f"Stop loss ₹{stop_loss:.2f} breached before entry (LTP: ₹{current_price:.2f}). Setup invalidated."
+                        f"Stop loss ₹{stop_loss:.2f} breached before entry (LTP: ₹{current_price:.2f}). Setup invalidated to prevent buying falling knife."
                     ))
                     continue
+                elif target > 0 and stop_loss > 0:
+                    remaining_gain = target - current_price
+                    remaining_risk = current_price - stop_loss
+                    if remaining_gain > 0 and remaining_risk > 0:
+                        live_rr = remaining_gain / remaining_risk
+                        if live_rr < 0.8:
+                            invalidated_items.append((
+                                opp_id,
+                                "UNFAVORABLE_RISK_REWARD",
+                                f"Risk-Reward deteriorated to 1:{live_rr:.2f} (LTP ₹{current_price:.2f} moved too close to target). Profit potential exhausted."
+                            ))
+                            continue
             elif direction in ("SELL", "SHORT"):
                 if target > 0 and current_price <= target:
                     invalidated_items.append((
@@ -774,8 +787,32 @@ class UltraBotEngine:
                         f"Stop loss ₹{stop_loss:.2f} breached before entry (LTP: ₹{current_price:.2f}). Setup invalidated."
                     ))
                     continue
+                elif target > 0 and stop_loss > 0:
+                    remaining_gain = current_price - target
+                    remaining_risk = stop_loss - current_price
+                    if remaining_gain > 0 and remaining_risk > 0:
+                        live_rr = remaining_gain / remaining_risk
+                        if live_rr < 0.8:
+                            invalidated_items.append((
+                                opp_id,
+                                "UNFAVORABLE_RISK_REWARD",
+                                f"Risk-Reward deteriorated to 1:{live_rr:.2f} (LTP ₹{current_price:.2f} moved too close to target). Profit potential exhausted."
+                            ))
+                            continue
 
-            # Check 4: Price Drift Slippage Tolerance
+            # Check 4: Market Regime / Strategy Compatibility Check
+            if self.current_regime and hasattr(self.config, "get_strategy_activation"):
+                regime_cfg = self.config.get_strategy_activation(self.current_regime)
+                paused_strategies = regime_cfg.get("paused", [])
+                if strategy and strategy in paused_strategies:
+                    invalidated_items.append((
+                        opp_id,
+                        "REGIME_TREND_SHIFT",
+                        f"Market regime shifted to {self.current_regime}; strategy '{strategy}' paused. Setup invalidated to protect capital."
+                    ))
+                    continue
+
+            # Check 5: Price Drift Slippage Tolerance
             if price_mismatch_pct > mismatch_threshold * 1.5:
                 invalidated_items.append((
                     opp_id,
@@ -881,11 +918,13 @@ class UltraBotEngine:
                 booking_levels = []
 
         opportunity_id = str(uuid.uuid4())
+        created_dt = datetime.now(IST)
 
         return {
             "id": opportunity_id,
             "signal_id": str(uuid.uuid4()),
-            "created_at": datetime.now(IST).isoformat(),
+            "created_at": created_dt.isoformat(),
+            "created_at_time": created_dt.strftime("%I:%M:%S %p"),
             "symbol": symbol,
             "name": signal.get("name", ""),
             "direction": signal.get("direction", "LONG"),
@@ -944,6 +983,22 @@ class UltraBotEngine:
         opportunity = self.pending_opportunities.pop(opportunity_id, None)
         if opportunity is None:
             return {"status": "not_found", "error": f"Opportunity {opportunity_id} not in pending list"}
+
+        # --- TTL Expiry Check ---
+        created_at_str = opportunity.get("created_at")
+        if created_at_str:
+            try:
+                created_at = datetime.fromisoformat(created_at_str)
+                age_seconds = (datetime.now(IST) - created_at).total_seconds()
+                risk_config = self.config.get_risk_config() if hasattr(self.config, "get_risk_config") else {}
+                ttl_seconds = risk_config.get("opportunity_ttl_seconds", 120)
+                if age_seconds > ttl_seconds:
+                    return {
+                        "status": "rejected",
+                        "reason": f"Opportunity expired after {int(ttl_seconds)}s (momentum window closed). Execution aborted to prevent stale trade.",
+                    }
+            except Exception:
+                pass
 
         symbol = opportunity["symbol"]
         direction = opportunity["direction"]

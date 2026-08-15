@@ -136,7 +136,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 13825,
-    createdAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: new Date(Date.now() - 35 * 1000).toISOString(),
   },
   {
     id: 'opp-2',
@@ -173,7 +173,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 16428,
-    createdAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: new Date(Date.now() - 65 * 1000).toISOString(),
   },
   {
     id: 'opp-3',
@@ -210,7 +210,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 75,
     margin: 12276,
-    createdAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: new Date(Date.now() - 20 * 1000).toISOString(),
   },
   {
     id: 'opp-4',
@@ -247,7 +247,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 20,
     margin: 16460,
-    createdAt: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: new Date(Date.now() - 50 * 1000).toISOString(),
   },
 ];
 
@@ -279,7 +279,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 200,
     margin: 6168,
-    createdAt: '10:14 AM',
+    createdAt: new Date(Date.now() - 120 * 1000).toISOString(),
   },
   {
     id: 'rej-2',
@@ -307,7 +307,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 100,
     margin: 10960,
-    createdAt: '10:08 AM',
+    createdAt: new Date(Date.now() - 180 * 1000).toISOString(),
   },
   {
     id: 'rej-3',
@@ -335,7 +335,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 10,
     margin: 13700,
-    createdAt: '09:58 AM',
+    createdAt: new Date(Date.now() - 240 * 1000).toISOString(),
   },
   {
     id: 'rej-4',
@@ -363,7 +363,7 @@ const REJECTED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 30,
     margin: 10710,
-    createdAt: '09:45 AM',
+    createdAt: new Date(Date.now() - 300 * 1000).toISOString(),
   },
 ];
 
@@ -394,7 +394,7 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 9805,
-    createdAt: '09:30 AM',
+    createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
   },
   {
     id: 'exp-2',
@@ -417,15 +417,16 @@ const INITIAL_EXPIRED_CANDIDATES: OpportunityData[] = [
     sector: 'Capital Goods',
     winRate: 68.0,
     status: 'expired',
-    invalidationReason: 'Stop-loss level ₹3580.00 breached (LTP ₹3572.00) — setup invalidated automatically',
+    invalidationReason: 'Stop-loss level ₹3580.00 breached (LTP ₹3572.00) — setup invalidated to prevent buying falling knife',
     type: 'EQ',
     lotSize: 1,
     quantity: 20,
     margin: 14480,
-    createdAt: '09:20 AM',
+    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
   },
 ];
 
+// ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
 // Format Helpers
 // ─────────────────────────────────────────────
@@ -454,6 +455,126 @@ function getWinRateColor(rate: number): string {
   if (rate >= 70) return 'text-ub-profit';
   if (rate >= 55) return 'text-ub-warning';
   return 'text-ub-loss';
+}
+
+// Helper to categorize invalidation reason into clean UI tags and prevention insights
+function getInvalidationDetails(reason?: string) {
+  if (!reason) {
+    return {
+      type: 'SETUP_EXPIRED',
+      badge: '⏳ Setup TTL Expired',
+      badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+      tag: 'Momentum Expired',
+      shield: 'Execution window closed — stale execution prevented',
+    };
+  }
+  const r = reason.toLowerCase();
+  if (r.includes('target') || r.includes('reached') || r.includes('move finished')) {
+    return {
+      type: 'TARGET_HIT',
+      badge: '🎯 Target Achieved Before Entry',
+      badgeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+      tag: 'Top-Chasing Avoided',
+      shield: 'Move completed — buying at resistance/top avoided',
+    };
+  }
+  if (r.includes('stop-loss') || r.includes('stop loss') || r.includes('breached')) {
+    return {
+      type: 'STOP_LOSS_BREACHED',
+      badge: '🛑 Stop-Loss Breached',
+      badgeClass: 'border-rose-500/30 bg-rose-500/10 text-rose-300',
+      tag: 'Loss Trap Avoided',
+      shield: 'Support broken — buying falling knife avoided',
+    };
+  }
+  if (r.includes('trend') || r.includes('reversal') || r.includes('regime')) {
+    return {
+      type: 'TREND_REVERSAL',
+      badge: '🔄 Trend Shift Detected',
+      badgeClass: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
+      tag: 'Counter-Trend Avoided',
+      shield: 'Market trend flipped against direction — false entry avoided',
+    };
+  }
+  return {
+    type: 'SETUP_INVALIDATED',
+    badge: '⚠️ Risk-Reward Invalidated',
+    badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+    tag: 'Slippage / Low R:R',
+    shield: 'Execution locked to prevent sub-optimal risk/reward',
+  };
+}
+
+// ─────────────────────────────────────────────
+// CreationTimeBadge Component
+// ─────────────────────────────────────────────
+
+function CreationTimeBadge({ createdAt }: { createdAt?: string }) {
+  const [elapsed, setElapsed] = useState('');
+  const [exactTime, setExactTime] = useState('');
+
+  useEffect(() => {
+    if (!createdAt) return;
+
+    const calc = () => {
+      let createdMs: number = 0;
+      if (createdAt.includes('T') || createdAt.includes('-')) {
+        const parsed = new Date(createdAt).getTime();
+        if (!isNaN(parsed)) {
+          createdMs = parsed;
+          setExactTime(
+            new Date(createdAt).toLocaleTimeString('en-IN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })
+          );
+        }
+      } else {
+        setExactTime(createdAt);
+        setElapsed('detected');
+        return;
+      }
+
+      if (createdMs > 0) {
+        const diffSecs = Math.max(0, Math.floor((Date.now() - createdMs) / 1000));
+        if (diffSecs < 60) {
+          setElapsed(`${diffSecs}s ago`);
+        } else if (diffSecs < 3600) {
+          setElapsed(`${Math.floor(diffSecs / 60)}m ago`);
+        } else {
+          setElapsed(`${Math.floor(diffSecs / 3600)}h ago`);
+        }
+      }
+    };
+
+    calc();
+    const interval = setInterval(calc, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  if (!createdAt) return null;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            className="bg-ub-surface/90 border-cyan-500/30 text-cyan-300 text-[11px] font-medium flex items-center gap-1.5 px-2 py-0.5 shadow-sm"
+          >
+            <Clock className="h-3 w-3 text-cyan-400 shrink-0" />
+            <span className="text-ub-text-muted text-[10px]">Created:</span>
+            <span className="font-mono text-cyan-300 font-semibold text-[11px]">{exactTime || createdAt}</span>
+            <span className="text-[10px] text-cyan-400/90 font-mono bg-cyan-950/60 px-1 py-0.2 rounded">({elapsed || '0s ago'})</span>
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p className="text-xs">Signal detected & verified at {exactTime || createdAt} ({elapsed || '0s ago'})</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -606,7 +727,6 @@ function OpportunityCard({
   onQuickBacktest?: (id: string) => void;
 }) {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [remindDialogOpen, setRemindDialogOpen] = useState(false);
 
   const handleConfirm = () => {
     onConfirm(opp.id);
@@ -617,24 +737,20 @@ function OpportunityCard({
     onSkip(opp.id);
   };
 
-  const handleRemindLater = () => {
-    setRemindDialogOpen(false);
-    toast.info(`Reminder set for ${opp.symbol}`, {
-      description: "You'll be notified again in 15 minutes.",
-    });
-  };
-
   const riskPerTrade = Math.abs(opp.entry - opp.stopLoss) * opp.quantity;
   const potentialProfit = Math.abs(opp.target - opp.entry) * opp.quantity;
   const isRejected = opp.status === 'rejected';
   const isTimeExpired = opp.expiryAt ? new Date(opp.expiryAt).getTime() <= Date.now() : false;
   const isExpired = opp.status === 'expired' || Boolean(opp.invalidationReason) || isTimeExpired;
+  const invInfo = isExpired ? getInvalidationDetails(opp.invalidationReason) : null;
 
   return (
     <>
       <motion.div
+        layout
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
         transition={{ duration: 0.3 }}
       >
         <Card
@@ -642,13 +758,13 @@ function OpportunityCard({
             isRejected
               ? 'bg-ub-surface/60 border-rose-500/25 opacity-85'
               : isExpired
-              ? 'bg-ub-surface/70 border-amber-500/30'
+              ? 'bg-ub-surface/75 border-amber-500/35 shadow-sm'
               : 'bg-ub-surface border-ub-border hover:border-ub-border-hover'
           }`}
         >
           <CardContent className="p-5 space-y-4">
-            {/* Top row: Symbol, Direction, Strategy, Kronos Score, Expiry */}
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Top row: Symbol, Direction, Strategy, Creation Time, Status Badges */}
+            <div className="flex flex-wrap items-center gap-2.5">
               <h3 className="text-lg font-bold text-ub-text-primary tracking-tight">{opp.symbol}</h3>
               <Badge
                 className={`text-[11px] font-semibold px-2 py-0.5 ${
@@ -670,6 +786,9 @@ function OpportunityCard({
                 {opp.strategy}
               </Badge>
 
+              {/* Exact Creation Timestamp */}
+              <CreationTimeBadge createdAt={opp.createdAt} />
+
               {isRejected && (
                 <Badge className="bg-rose-500/15 text-rose-400 border-rose-500/30 text-[11px] font-semibold">
                   <ShieldAlert className="h-3 w-3 mr-1" />
@@ -677,10 +796,10 @@ function OpportunityCard({
                 </Badge>
               )}
 
-              {isExpired && !isRejected && (
-                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[11px] font-semibold flex items-center gap-1">
+              {isExpired && !isRejected && invInfo && (
+                <Badge className={`text-[11px] font-semibold flex items-center gap-1 ${invInfo.badgeClass}`}>
                   <AlertTriangle className="h-3 w-3" />
-                  Invalidated / Expired
+                  {invInfo.badge}
                 </Badge>
               )}
 
@@ -706,7 +825,7 @@ function OpportunityCard({
                     style={{ width: `${opp.kronosScore * 100}%` }}
                   />
                 </div>
-                {opp.expiryAt && (
+                {!isExpired && opp.expiryAt && (
                   <TimerCountdown
                     expiryAt={opp.expiryAt}
                     onExpire={() => onExpire?.(opp.id)}
@@ -718,7 +837,7 @@ function OpportunityCard({
             {/* Key Metrics Row */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 p-3 rounded-lg bg-ub-background/60 border border-ub-border/50">
               <div>
-                <span className="text-[10px] text-ub-text-muted uppercase tracking-wider block">Entry</span>
+                <span className="text-[10px] text-ub-text-muted uppercase tracking-wider block">Planned Entry</span>
                 <span className="text-sm font-mono font-bold text-ub-text-primary">{INR(opp.entry)}</span>
               </div>
               <div>
@@ -745,13 +864,26 @@ function OpportunityCard({
 
             {/* Dynamic Invalidation Banner */}
             {isExpired && !isRejected && (
-              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+              <div className="flex items-start gap-3 p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/35 text-amber-300 text-xs">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-amber-400">Opportunity Invalidation Protected:</p>
-                  <p className="text-amber-300/90 mt-0.5 leading-relaxed">
-                    {opp.invalidationReason || 'Price action reached target level or breached stop loss prior to execution. Execution is locked to prevent trading stale setups.'}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-amber-400">
+                      🛡️ Self-Loss Protection Guard Activated:
+                    </span>
+                    {invInfo && (
+                      <span className="text-[10px] bg-amber-950/60 border border-amber-500/40 text-amber-300 font-mono px-1.5 py-0.2 rounded font-semibold">
+                        {invInfo.tag}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-amber-200/95 mt-1 leading-relaxed text-[11.5px]">
+                    {opp.invalidationReason || 'Price action reached target level or breached stop loss prior to execution. Opportunity automatically invalidated to prevent trading stale setups.'}
                   </p>
+                  <div className="mt-2 pt-2 border-t border-amber-500/20 flex items-center justify-between text-[10.5px] text-amber-400/90 font-mono">
+                    <span>Protected against false entry / stop-out risk</span>
+                    <span>Status: Auto-Pruned to Invalid List</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -1151,26 +1283,30 @@ export default function OpportunitiesPage() {
 
   const handleConfirm = useCallback(async (id: string) => {
     const targetOpp = opportunities.find((o) => o.id === id);
+    if (!targetOpp) return;
+
+    if (isOppExpired(targetOpp)) {
+      toast.error('Execution Blocked: This opportunity has expired or invalidated to protect against self-loss.');
+      return;
+    }
     
     // Import and execute trade
-    if (targetOpp) {
-      try {
-        executeOpportunityTrade({
-          id: targetOpp.id,
-          symbol: targetOpp.symbol,
-          direction: targetOpp.direction,
-          entry: targetOpp.entry,
-          stopLoss: targetOpp.stopLoss,
-          target: targetOpp.target,
-          quantity: targetOpp.quantity,
-          strategy: targetOpp.strategy,
-          sector: targetOpp.sector,
-          type: targetOpp.type,
-          margin: targetOpp.margin,
-        });
-      } catch (e) {
-        console.error('Failed to store position:', e);
-      }
+    try {
+      executeOpportunityTrade({
+        id: targetOpp.id,
+        symbol: targetOpp.symbol,
+        direction: targetOpp.direction,
+        entry: targetOpp.entry,
+        stopLoss: targetOpp.stopLoss,
+        target: targetOpp.target,
+        quantity: targetOpp.quantity,
+        strategy: targetOpp.strategy,
+        sector: targetOpp.sector,
+        type: targetOpp.type,
+        margin: targetOpp.margin,
+      });
+    } catch (e) {
+      console.error('Failed to store position:', e);
     }
 
     setOpportunities((prev) =>
@@ -1182,7 +1318,7 @@ export default function OpportunitiesPage() {
     } catch {}
 
     toast.success(`${targetOpp?.symbol || 'Opportunity'} confirmed in paper execution mode! Opened in Trades tab.`);
-  }, [opportunities]);
+  }, [opportunities, isOppExpired]);
 
   const handleSkip = useCallback(async (id: string) => {
     addSkippedOppId(id);
@@ -1466,6 +1602,25 @@ export default function OpportunitiesPage() {
 
         {/* Tab Content */}
         <div className="pt-4">
+          {activeTab === 'expired' && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3"
+            >
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-amber-400">Automatic Self-Loss & Stale Trade Protection Guard</h4>
+                  <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">Active</Badge>
+                </div>
+                <p className="text-[11.5px] text-amber-200/90 mt-1 leading-relaxed">
+                  These {expiredCount} opportunities were automatically removed from the Actionable list to protect your capital. Reasons include: <strong>Target already reached before entry</strong> (preventing chasing the top/buying resistance), <strong>Stop-Loss breached</strong> (preventing buying falling knives), <strong>Market trend reversal</strong>, or <strong>Momentum TTL timeout</strong>.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {isLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
