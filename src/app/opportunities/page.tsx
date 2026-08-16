@@ -106,6 +106,13 @@ interface OpportunityData {
 }
 
 // ─────────────────────────────────────────────
+// Dynamic Time Helpers
+// ─────────────────────────────────────────────
+
+const dynamicExpiryIso = (minsFromNow = 15) => new Date(Date.now() + minsFromNow * 60 * 1000).toISOString();
+const dynamicCreatedIso = (minsAgo = 5) => new Date(Date.now() - minsAgo * 60 * 1000).toISOString();
+
+// ─────────────────────────────────────────────
 // Base Real-Time Datasets
 // ─────────────────────────────────────────────
 
@@ -121,7 +128,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 1412.00,
     riskReward: 2.03,
     capitalRequired: 69125,
-    expiryAt: '2026-08-15T15:15:00.000Z',
+    expiryAt: dynamicExpiryIso(15),
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX at 15.5 is below maximum limit of 22.0' },
       { name: 'Max Daily Loss', passed: true, detail: 'Current daily loss at 0% / 2.0% limit' },
@@ -145,7 +152,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 13825,
-    createdAt: '2026-08-15T09:15:00.000Z',
+    createdAt: dynamicCreatedIso(5),
   },
   {
     id: 'opp-2',
@@ -158,7 +165,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 1672.00,
     riskReward: 2.04,
     capitalRequired: 82140,
-    expiryAt: '2026-08-15T15:15:00.000Z',
+    expiryAt: dynamicExpiryIso(15),
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX at 15.5 is below maximum limit of 22.0' },
       { name: 'Max Daily Loss', passed: true, detail: 'Daily PnL positive' },
@@ -182,7 +189,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 50,
     margin: 16428,
-    createdAt: '2026-08-15T09:16:00.000Z',
+    createdAt: dynamicCreatedIso(6),
   },
   {
     id: 'opp-3',
@@ -195,7 +202,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 838.00,
     riskReward: 2.20,
     capitalRequired: 61380,
-    expiryAt: '2026-08-15T15:15:00.000Z',
+    expiryAt: dynamicExpiryIso(15),
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX 15.5 within range' },
       { name: 'Max Daily Loss', passed: true, detail: 'Normal risk state' },
@@ -219,7 +226,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 75,
     margin: 12276,
-    createdAt: '2026-08-15T09:17:00.000Z',
+    createdAt: dynamicCreatedIso(7),
   },
   {
     id: 'opp-4',
@@ -232,7 +239,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     target: 4205.00,
     riskReward: 2.25,
     capitalRequired: 82300,
-    expiryAt: '2026-08-15T15:15:00.000Z',
+    expiryAt: dynamicExpiryIso(15),
     riskGates: [
       { name: 'VIX Gate', passed: true, detail: 'VIX 15.5 within safe limit' },
       { name: 'Max Daily Loss', passed: true, detail: 'Daily PnL protected' },
@@ -256,7 +263,7 @@ const INITIAL_OPPORTUNITIES: OpportunityData[] = [
     lotSize: 1,
     quantity: 20,
     margin: 16460,
-    createdAt: '2026-08-15T09:18:00.000Z',
+    createdAt: dynamicCreatedIso(8),
   },
 ];
 
@@ -1138,7 +1145,9 @@ export default function OpportunitiesPage() {
   // Sync live LTP quotes for opportunities with continuous invalidation checks
   const syncLivePrices = useCallback(async () => {
     try {
-      const symbols = ['RELIANCE', 'HDFCBANK', 'SBIN', 'TCS', 'INFY', 'ICICIBANK', 'TATAMOTORS', 'LT', 'VIX'];
+      const symbols = Array.from(new Set([...opportunities.map((o) => o.symbol), 'NIFTY', 'BANKNIFTY', 'VIX'])).filter(Boolean);
+      if (symbols.length === 0) return;
+
       const res = await fetch(`/api/live-quotes?symbols=${symbols.join(',')}`);
       if (res.ok) {
         const json = await res.json();
@@ -1197,7 +1206,7 @@ export default function OpportunitiesPage() {
     } catch {
       // Fallback
     }
-  }, []);
+  }, [opportunities]);
 
   // Fetch real opportunities with persistent storage & market hours awareness
   const loadOpportunities = useCallback(async (showToast = false) => {
@@ -1215,9 +1224,9 @@ export default function OpportunitiesPage() {
       const res = await fetch('/api/opportunities');
       if (res.ok) {
         const json = await res.json();
-        const rawOpps = json?.data?.all || (Array.isArray(json?.data) ? json.data : null);
+        const rawOpps = json?.data?.all || (Array.isArray(json?.data) ? json.data : null) || (Array.isArray(json) ? json : null);
 
-        if (json.success && Array.isArray(rawOpps) && rawOpps.length > 0) {
+        if ((json.success || Array.isArray(json)) && Array.isArray(rawOpps) && rawOpps.length > 0) {
           const mapped: OpportunityData[] = rawOpps.map((opp: any) => {
             const isConfirmed = confirmedIds.includes(opp.id);
             const isSkipped = skippedIds.includes(opp.id);
@@ -1453,7 +1462,7 @@ export default function OpportunitiesPage() {
     );
 
     try {
-      await confirmOpportunity(id);
+      await confirmOpportunity(id, targetOpp?.type || 'EQ');
     } catch {}
 
     toast.success(`${targetOpp?.symbol || 'Opportunity'} confirmed in paper execution mode! Opened in Trades tab.`);

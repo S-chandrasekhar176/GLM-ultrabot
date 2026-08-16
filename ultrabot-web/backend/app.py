@@ -51,6 +51,7 @@ from api.routes import (
     settings_api,
     scanner,
     news,
+    candles,
 )
 from api.websocket import WebSocketManager, router as ws_router
 
@@ -184,7 +185,6 @@ async def lifespan(app: FastAPI):
 
     # Set dependencies for API routes
     set_engine(eng)
-    set_repository(await repo_getter())
 
     # Store on app state for route access
     app.state.engine = eng
@@ -242,6 +242,7 @@ app.include_router(errors.router)
 app.include_router(settings_api.router)
 app.include_router(scanner.router)
 app.include_router(news.router)
+app.include_router(candles.router)
 app.include_router(ws_router)
 
 

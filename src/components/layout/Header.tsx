@@ -125,13 +125,60 @@ export default function Header() {
           if (typeof vixVal === 'number' && vixVal > 0) {
             setVix(vixVal);
           }
-          setIndices([
-            { id: 'nifty', name: 'NIFTY', price: d.NIFTY?.price ?? 24361.90, change: d.NIFTY?.change ?? -33.95, changePct: d.NIFTY?.changePct ?? -0.14 },
-            { id: 'sensex', name: 'SENSEX', price: d.SENSEX?.price ?? 77903.43, change: d.SENSEX?.change ?? -176.53, changePct: d.SENSEX?.changePct ?? -0.23 },
-            { id: 'banknifty', name: 'BANKNIFTY', price: d.BANKNIFTY?.price ?? 57589.75, change: d.BANKNIFTY?.change ?? -45.50, changePct: d.BANKNIFTY?.changePct ?? -0.08 },
-            { id: 'midcpnifty', name: 'MIDCPNIFTY', price: d.MIDCPNIFTY?.price ?? 15071.85, change: d.MIDCPNIFTY?.change ?? -6.30, changePct: d.MIDCPNIFTY?.changePct ?? -0.04 },
-            { id: 'finnifty', name: 'FINNIFTY', price: d.FINNIFTY?.price ?? 26306.20, change: d.FINNIFTY?.change ?? -28.40, changePct: d.FINNIFTY?.changePct ?? -0.11 },
-          ]);
+
+          setIndices((prev) => {
+            const nextList: MarketIndexItem[] = [
+              {
+                id: 'nifty',
+                name: 'NIFTY',
+                price: d.NIFTY?.price ?? (prev.find((p) => p.id === 'nifty')?.price || 0),
+                change: d.NIFTY?.change ?? (prev.find((p) => p.id === 'nifty')?.change || 0),
+                changePct: d.NIFTY?.changePct ?? (prev.find((p) => p.id === 'nifty')?.changePct || 0),
+              },
+              {
+                id: 'sensex',
+                name: 'SENSEX',
+                price: d.SENSEX?.price ?? (prev.find((p) => p.id === 'sensex')?.price || 0),
+                change: d.SENSEX?.change ?? (prev.find((p) => p.id === 'sensex')?.change || 0),
+                changePct: d.SENSEX?.changePct ?? (prev.find((p) => p.id === 'sensex')?.changePct || 0),
+              },
+              {
+                id: 'banknifty',
+                name: 'BANKNIFTY',
+                price: d.BANKNIFTY?.price ?? (prev.find((p) => p.id === 'banknifty')?.price || 0),
+                change: d.BANKNIFTY?.change ?? (prev.find((p) => p.id === 'banknifty')?.change || 0),
+                changePct: d.BANKNIFTY?.changePct ?? (prev.find((p) => p.id === 'banknifty')?.changePct || 0),
+              },
+              {
+                id: 'midcpnifty',
+                name: 'MIDCPNIFTY',
+                price: d.MIDCPNIFTY?.price ?? (prev.find((p) => p.id === 'midcpnifty')?.price || 0),
+                change: d.MIDCPNIFTY?.change ?? (prev.find((p) => p.id === 'midcpnifty')?.change || 0),
+                changePct: d.MIDCPNIFTY?.changePct ?? (prev.find((p) => p.id === 'midcpnifty')?.changePct || 0),
+              },
+              {
+                id: 'finnifty',
+                name: 'FINNIFTY',
+                price: d.FINNIFTY?.price ?? (prev.find((p) => p.id === 'finnifty')?.price || 0),
+                change: d.FINNIFTY?.change ?? (prev.find((p) => p.id === 'finnifty')?.change || 0),
+                changePct: d.FINNIFTY?.changePct ?? (prev.find((p) => p.id === 'finnifty')?.changePct || 0),
+              },
+            ];
+
+            // Trigger flash highlight if price changed in real feed
+            nextList.forEach((nextItem) => {
+              const oldItem = prev.find((p) => p.id === nextItem.id);
+              if (oldItem && oldItem.price > 0 && nextItem.price !== oldItem.price) {
+                setFlashingIndex({
+                  id: nextItem.id,
+                  dir: nextItem.price > oldItem.price ? 'up' : 'down',
+                });
+                setTimeout(() => setFlashingIndex(null), 1200);
+              }
+            });
+
+            return nextList;
+          });
         }
       }
     } catch {
@@ -140,53 +187,11 @@ export default function Header() {
 
   useEffect(() => {
     fetchLiveQuotes();
-    const pollTime = marketInfo.isOpen ? 10000 : 30000;
-    const interval = setInterval(fetchLiveQuotes, pollTime);
+    const interval = setInterval(fetchLiveQuotes, 5000);
     return () => clearInterval(interval);
-  }, [fetchLiveQuotes, marketInfo.isOpen]);
+  }, [fetchLiveQuotes]);
 
   const isMarketOpen = marketInfo.isOpen;
-
-  useEffect(() => {
-    if (!isMarketOpen) {
-      setFlashingIndex(null);
-      return;
-    }
-
-    const tickInterval = setInterval(() => {
-      const targetIdx = Math.floor(Math.random() * indices.length);
-      const isUp = Math.random() > 0.49;
-      const delta = (Math.random() * 2.2 + 0.2) * (isUp ? 1 : -1);
-
-      setIndices((prev) => {
-        return prev.map((item, i) => {
-          if (i === targetIdx) {
-            const newPrice = +(item.price + delta).toFixed(2);
-            const newChange = +(item.change + delta).toFixed(2);
-            const newPct = +((newChange / (newPrice - newChange)) * 100).toFixed(2);
-            return {
-              ...item,
-              price: newPrice,
-              change: newChange,
-              changePct: newPct,
-            };
-          }
-          return item;
-        });
-      });
-
-      const updatedId = indices[targetIdx]?.id;
-      if (updatedId) {
-        setFlashingIndex({ id: updatedId, dir: isUp ? 'up' : 'down' });
-        setTimeout(() => {
-          setFlashingIndex((curr) => (curr?.id === updatedId ? null : curr));
-        }, 400);
-      }
-    }, 2200);
-
-    return () => clearInterval(tickInterval);
-  }, [indices, isMarketOpen]);
-
   const safeRegime = ((regime || 'sideways').toLowerCase() as MarketRegime);
   const regimeInfo = REGIME_CONFIG[safeRegime] || REGIME_CONFIG.sideways;
   const RegimeIcon = regimeInfo.Icon;

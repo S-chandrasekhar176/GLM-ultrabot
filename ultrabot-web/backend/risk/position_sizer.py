@@ -59,14 +59,46 @@ class PositionSizer:
     # Public API
     # ------------------------------------------------------------------
 
-    def calculate(self, signal: Any, context: Dict[str, Any]) -> SizingResult:
-        """Run the full sizing pipeline and return a SizingResult."""
-        confidence = float(getattr(signal, "confidence", 0.5) or 0.5)
-        entry_price = float(getattr(signal, "entry_price", 0) or 0)
-        sl_price = float(getattr(signal, "sl_price", 0) or 0)
-        vix = float(context.get("vix", 15) or 15)
-        current_drawdown_pct = float(context.get("current_drawdown_pct", 0) or 0)
-        available_capital = float(context.get("available_capital", self.total_capital))
+    def calculate(
+        self,
+        signal: Any = None,
+        context: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> SizingResult:
+        """Run the full sizing pipeline and return a SizingResult.
+        
+        Accepts signal objects/dicts, context dict, and additional kwargs.
+        """
+        ctx = context or {}
+        # Merge kwargs into context
+        merged_ctx = {**ctx, **kwargs}
+
+        # Helper to extract value checking signal (dict/attr), context, kwargs
+        def _get_val(key: str, alt_keys: list = None, default: Any = None) -> Any:
+            all_keys = [key] + (alt_keys or [])
+            # 1. Check kwargs / context
+            for k in all_keys:
+                if k in merged_ctx and merged_ctx[k] is not None:
+                    return merged_ctx[k]
+            # 2. Check signal
+            if signal is not None:
+                if isinstance(signal, dict):
+                    for k in all_keys:
+                        if k in signal and signal[k] is not None:
+                            return signal[k]
+                else:
+                    for k in all_keys:
+                        if hasattr(signal, k) and getattr(signal, k) is not None:
+                            return getattr(signal, k)
+            return default
+
+        symbol = str(_get_val("symbol", ["tradingsymbol", "ticker"], "NIFTY"))
+        confidence = float(_get_val("confidence", ["score"], 0.5) or 0.5)
+        entry_price = float(_get_val("entry_price", ["current_price", "price", "entry"], 0.0) or 0.0)
+        sl_price = float(_get_val("sl_price", ["stop_loss", "sl", "initial_sl"], 0.0) or 0.0)
+        vix = float(_get_val("vix", ["india_vix"], 15.0) or 15.0)
+        current_drawdown_pct = float(_get_val("current_drawdown_pct", ["drawdown_pct"], 0.0) or 0.0)
+        available_capital = float(_get_val("available_capital", ["capital", "margin_available"], self.total_capital) or self.total_capital)
 
         # 1. Base Kelly fraction
         raw_fraction = self._kelly_fraction(confidence)
@@ -100,8 +132,11 @@ class PositionSizer:
         # Risk amount
         risk_per_unit = abs(entry_price - sl_price) if entry_price > 0 and sl_price > 0 else 0.0
 
+        segment = str(_get_val("segment", ["instrument_type"], "EQ")).upper()
+        is_fno = is_fno_stock(symbol) and (segment in ("FNO", "FUT", "OPT", "FUTURES", "OPTIONS") or bool(_get_val("is_fno", [], False)))
+
         # 7. Convert to quantity
-        quantity, lot_size = self._to_quantity(signal.symbol, position_size, entry_price)
+        quantity, lot_size = self._to_quantity(symbol, position_size, entry_price, is_fno=is_fno)
 
         # Recalculate actual position size based on quantity
         if entry_price > 0 and quantity > 0:
@@ -118,7 +153,7 @@ class PositionSizer:
             )
             # Bump to min
             quantity, lot_size = self._to_quantity(
-                signal.symbol, self.min_position_size, entry_price
+                symbol, self.min_position_size, entry_price, is_fno=is_fno
             )
             if entry_price > 0 and quantity > 0:
                 position_size = entry_price * quantity
@@ -126,7 +161,7 @@ class PositionSizer:
                 risk_amount = risk_per_unit * quantity
                 risk_pct = (risk_amount / self.total_capital * 100.0) if self.total_capital > 0 else 0.0
 
-        is_equity = not is_fno_stock(signal.symbol)
+        is_equity = not is_fno
 
         return SizingResult(
             method="dynamic_kelly",
@@ -138,13 +173,13 @@ class PositionSizer:
             capital_available=available_capital,
             position_size=position_size,
             position_size_pct=position_size_pct,
+            quantity=quantity,
+            lot_size=lot_size,
             risk_amount=risk_amount,
             risk_pct=risk_pct,
             confidence_tier=conf_tier_name,
             volatility_tier=vol_tier_name,
             drawdown_tier=dd_tier_name,
-            quantity=quantity,
-            lot_size=lot_size if lot_size > 1 else None,
             is_equity=is_equity,
             notes="; ".join(notes_parts) if notes_parts else None,
         )
@@ -207,14 +242,14 @@ class PositionSizer:
         return best_name, best_mult
 
     def _to_quantity(
-        self, symbol: str, target_value: float, entry_price: float
+        self, symbol: str, target_value: float, entry_price: float, is_fno: bool = False
     ) -> tuple:
         """Convert a target rupee value to (quantity, lot_size)."""
         lot_size = get_lot_size(symbol)
         if entry_price <= 0:
             return 0, lot_size
 
-        if is_fno_stock(symbol):
+        if is_fno:
             # F&O: round down to whole lots
             lots = int(target_value / (entry_price * lot_size))
             return max(lots * lot_size, 0), lot_size

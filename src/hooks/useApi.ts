@@ -117,7 +117,12 @@ export function usePositions() {
   });
 
   const closeMutation = useMutation({
-    mutationFn: (id: string) => closePosition(id),
+    mutationFn: (args: string | { id: string; payload?: { exit_price?: number; exit_reason?: string; notes?: string } }) => {
+      if (typeof args === 'string') {
+        return closePosition(args);
+      }
+      return closePosition(args.id, args.payload);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['positions'] }),
   });
 

@@ -79,37 +79,5 @@ class PositionClose(BaseModel):
     notes: Optional[str] = None
 
 
-class PositionResponse(BaseModel):
-    id: str
-    session_id: Optional[str] = None
-    trade_id: Optional[str] = None
-    signal_id: Optional[str] = None
-    symbol: str
-    direction: str
-    strategy: str
-    entry_price: float
-    current_price: Optional[float] = None
-    quantity: int
-    invested_amount: float
-    stop_loss: Optional[float] = None
-    target: Optional[float] = None
-    initial_sl: Optional[float] = None
-    initial_target: Optional[float] = None
-    booked_qty: int
-    booked_pnl: float
-    remaining_qty: int
-    status: str
-    entry_time: str
-    exit_time: Optional[str] = None
-    unrealized_pnl: float
-    realized_pnl: float
-    max_favorable_excursion: float
-    max_adverse_excursion: float
-    trailing_sl_active: bool
-    current_trailing_sl: Optional[float] = None
-    partial_book_level: int
-    extra: dict = Field(default_factory=dict)
-    created_at: str
-    updated_at: str
-
-    model_config = {"from_attributes": True}
+# Re-export PositionResponse from models.position to prevent duplicate schema definitions
+from models.position import PositionResponse

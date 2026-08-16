@@ -163,7 +163,13 @@ class DhanBroker(BaseBroker):
             dhan_segment = "NSE_EQ" if exchange == "NSE" else "NSE_FNO"
             dhan_product = "INTRADAY" if product in ("MIS", "INTRADAY") else "CNC"
             dhan_order_type = "MARKET" if order_type == "MARKET" else "LIMIT"
-            security_id = _DHAN_SECURITY_MAP.get(symbol.upper(), "1333")
+            security_id = _DHAN_SECURITY_MAP.get(symbol.upper(), "")
+            if not security_id:
+                logger.error("Dhan order rejected: unmapped security ID for symbol '%s'", symbol)
+                return {
+                    "success": False,
+                    "message": f"Dhan order rejected: unmapped security ID for symbol '{symbol}'. Please configure token.",
+                }
 
             payload = {
                 "dhanClientId": self.client_id,

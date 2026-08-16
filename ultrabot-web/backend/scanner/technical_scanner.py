@@ -9,7 +9,6 @@ from utils.indicators import (
     calculate_rsi,
     calculate_bollinger_bands,
     calculate_atr,
-    calculate_supertrend,
 )
 
 logger = logging.getLogger(__name__)

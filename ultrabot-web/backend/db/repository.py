@@ -27,6 +27,8 @@ from db.migrations import (
     DailySummary,
 )
 
+from utils.market_utils import get_stock_sector
+
 IST = ZoneInfo("Asia/Kolkata")
 
 
@@ -328,7 +330,6 @@ class Repository:
 
     async def get_position_count_by_sector(self) -> Dict[str, int]:
         positions = await self.get_open_positions()
-        from utils.market_utils import get_stock_sector
         sector_counts: Dict[str, int] = {}
         for pos in positions:
             sector = get_stock_sector(pos.symbol)
@@ -615,10 +616,32 @@ class Repository:
     # BACKTEST RUNS
     # ────────────────────────────────────────
 
-    async def create_backtest_run(self, **kwargs) -> BacktestRun:
+    async def create_backtest_run(
+        self,
+        id: Optional[str] = None,
+        strategy: str = "",
+        symbol: Optional[str] = None,
+        start_date: str = "",
+        end_date: str = "",
+        timeframe: str = "5min",
+        initial_capital: float = 100000.0,
+        status: str = "PENDING",
+        parameters: Optional[Dict[str, Any]] = None,
+        results: Optional[Dict[str, Any]] = None,
+        equity_curve: Optional[List[Any]] = None,
+        extra: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> BacktestRun:
+        run_id = id or kwargs.pop("run_id", None) or str(uuid.uuid4())
         data = {
-            "id": str(uuid.uuid4()),
-            "status": "pending",
+            "id": run_id,
+            "strategy": strategy,
+            "symbol": symbol,
+            "start_date": start_date,
+            "end_date": end_date,
+            "timeframe": timeframe,
+            "initial_capital": initial_capital,
+            "status": status,
             "total_trades": 0,
             "wins": 0,
             "losses": 0,
@@ -629,29 +652,33 @@ class Repository:
             "profit_factor": 0.0,
             "avg_win": 0.0,
             "avg_loss": 0.0,
-            "parameters": "{}",
-            "results": "{}",
-            "equity_curve": "[]",
-            "extra": "{}",
+            "parameters": _to_json(parameters or {}),
+            "results": _to_json(results or {}),
+            "equity_curve": _to_json(equity_curve or []),
+            "extra": _to_json(extra or {}),
             "created_at": _ist_now(),
             "updated_at": _ist_now(),
         }
-        if "parameters" in kwargs and isinstance(kwargs["parameters"], dict):
-            kwargs["parameters"] = _to_json(kwargs["parameters"])
-        if "results" in kwargs and isinstance(kwargs["results"], dict):
-            kwargs["results"] = _to_json(kwargs["results"])
-        if "equity_curve" in kwargs and isinstance(kwargs["equity_curve"], list):
-            kwargs["equity_curve"] = _to_json(kwargs["equity_curve"])
-        if "extra" in kwargs and isinstance(kwargs["extra"], dict):
-            kwargs["extra"] = _to_json(kwargs["extra"])
-        data.update(kwargs)
-        obj = BacktestRun(**data)
-        return await self._add_and_flush(obj)
+        for k, v in kwargs.items():
+            if k in ("parameters", "results", "extra") and isinstance(v, dict):
+                v = _to_json(v)
+            elif k == "equity_curve" and isinstance(v, list):
+                v = _to_json(v)
+            data[k] = v
+
+        run = BacktestRun(**data)
+        self.session.add(run)
+        await self.session.flush()
+        return run
 
     async def get_backtest_run(self, run_id: str) -> Optional[BacktestRun]:
-        return await self._get_by_id(BacktestRun, run_id)
+        stmt = select(BacktestRun).where(BacktestRun.id == run_id)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
-    async def get_backtest_runs(self, strategy: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[BacktestRun]:
+    async def get_backtest_runs(
+        self, strategy: Optional[str] = None, limit: int = 50, offset: int = 0
+    ) -> List[BacktestRun]:
         stmt = select(BacktestRun).order_by(BacktestRun.created_at.desc())
         if strategy:
             stmt = stmt.where(BacktestRun.strategy == strategy)
@@ -659,14 +686,16 @@ class Repository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def update_backtest_run(self, run_id: str, **kwargs) -> Optional[BacktestRun]:
+    async def get_backtest_history(self, limit: int = 50) -> List[BacktestRun]:
+        """Alias for get_backtest_runs."""
+        return await self.get_backtest_runs(limit=limit)
+
+    async def update_backtest_run(self, run_id: str, **kwargs: Any) -> Optional[BacktestRun]:
         obj = await self.get_backtest_run(run_id)
         if obj is None:
             return None
         for key, value in kwargs.items():
-            if key in ("parameters", "results", "extra") and isinstance(value, dict):
-                value = _to_json(value)
-            if key == "equity_curve" and isinstance(value, list):
+            if key in ("parameters", "results", "equity_curve", "extra") and isinstance(value, (dict, list)):
                 value = _to_json(value)
             if hasattr(obj, key):
                 setattr(obj, key, value)
@@ -675,7 +704,10 @@ class Repository:
         return obj
 
     async def delete_backtest_run(self, run_id: str) -> bool:
-        return await self._delete_by_id(BacktestRun, run_id)
+        stmt = delete(BacktestRun).where(BacktestRun.id == run_id)
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return result.rowcount > 0
 
     # ────────────────────────────────────────
     # DAILY SUMMARY
@@ -729,69 +761,6 @@ class Repository:
 
     async def delete_daily_summary(self, date_str: str) -> bool:
         stmt = delete(DailySummary).where(DailySummary.date == date_str)
-        result = await self.session.execute(stmt)
-        await self.session.flush()
-        return result.rowcount > 0
-
-    # ────────────────────────────────────────
-    # 10. BACKTEST RUNS
-    # ────────────────────────────────────────
-
-    async def create_backtest_run(
-        self,
-        id: str,
-        strategy: str,
-        symbol: Optional[str] = None,
-        start_date: str = "",
-        end_date: str = "",
-        timeframe: str = "5min",
-        initial_capital: float = 100000.0,
-        parameters: Optional[Dict[str, Any]] = None,
-    ) -> BacktestRun:
-        run = BacktestRun(
-            id=id,
-            strategy=strategy,
-            symbol=symbol,
-            start_date=start_date,
-            end_date=end_date,
-            timeframe=timeframe,
-            initial_capital=initial_capital,
-            status="PENDING",
-            parameters=_to_json(parameters or {}),
-            results=_to_json({}),
-            equity_curve=_to_json([]),
-            created_at=_ist_now(),
-            updated_at=_ist_now(),
-        )
-        self.session.add(run)
-        await self.session.flush()
-        return run
-
-    async def get_backtest_run(self, run_id: str) -> Optional[BacktestRun]:
-        stmt = select(BacktestRun).where(BacktestRun.id == run_id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def get_backtest_history(self, limit: int = 50) -> List[BacktestRun]:
-        stmt = select(BacktestRun).order_by(BacktestRun.created_at.desc()).limit(limit)
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def update_backtest_run(self, run_id: str, **kwargs: Any) -> Optional[BacktestRun]:
-        obj = await self.get_backtest_run(run_id)
-        if obj is None:
-            return None
-        for key, value in kwargs.items():
-            if key in ("parameters", "results", "equity_curve", "extra") and isinstance(value, (dict, list)):
-                value = _to_json(value)
-            if hasattr(obj, key):
-                setattr(obj, key, value)
-        obj.updated_at = _ist_now()
-        await self.session.flush()
-        return obj
-
-    async def delete_backtest_run(self, run_id: str) -> bool:
-        stmt = delete(BacktestRun).where(BacktestRun.id == run_id)
         result = await self.session.execute(stmt)
         await self.session.flush()
         return result.rowcount > 0

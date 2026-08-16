@@ -753,17 +753,26 @@ class UltraBotEngine:
     async def _calculate_position_size(self, signal: dict, current_price: float) -> dict:
         """Calculate position size for a signal."""
         try:
-            sizing_result = await self.position_sizer.calculate(
+            res = self.position_sizer.calculate(
                 signal=signal,
+                context={
+                    "current_price": current_price,
+                    "regime": self.current_regime,
+                    "vix": self.vix,
+                    "session_id": self.session_id,
+                    "available_capital": getattr(self, "available_capital", self.initial_capital or 100000.0),
+                },
                 current_price=current_price,
                 regime=self.current_regime,
                 vix=self.vix,
                 session_id=self.session_id,
             )
-            if hasattr(sizing_result, "model_dump"):
-                return sizing_result.model_dump()
-            if isinstance(sizing_result, dict):
-                return sizing_result
+            if asyncio.iscoroutine(res):
+                res = await res
+            if hasattr(res, "model_dump"):
+                return res.model_dump()
+            if isinstance(res, dict):
+                return res
             return {"quantity": 0, "position_size": 0, "method": "unknown"}
         except Exception as exc:
             logger.error("Position sizing failed: %s", exc)

@@ -16,6 +16,7 @@ from datetime import datetime, date
 from typing import Any, Callable, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+import threading
 from errors.error_types import UltraBotError, BrokerError, FeedError
 from errors.error_context import capture_context
 from errors.auto_recovery import AutoRecovery
@@ -28,11 +29,14 @@ class ErrorEngine:
     """Singleton error engine for UltraBot."""
 
     _instance: Optional["ErrorEngine"] = None
+    _lock = threading.Lock()
 
     def __new__(cls) -> "ErrorEngine":
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):

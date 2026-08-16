@@ -20,6 +20,8 @@ export interface Position {
   bookedLevels: { level: number; achieved: boolean }[];
 }
 
+export type StoredPosition = Position;
+
 export interface TradeHistoryItem {
   id: string;
   symbol: string;

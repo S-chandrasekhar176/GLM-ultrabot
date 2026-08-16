@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   TrendingUp,
   TrendingDown,
@@ -37,7 +38,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDashboard } from '@/hooks/useApi';
+import { useDashboard, useStrategies } from '@/hooks/useApi';
 import { useEngine } from '@/hooks/useEngine';
 import { useEngine as useEngineStore, useStore, type MarketRegime, BROKER_LIST } from '@/lib/store';
 import StartEngineDialog from '@/components/trading/StartEngineDialog';
@@ -425,6 +426,7 @@ function SectionCard({ title, icon: Icon, children, className = '' }: {
 
 export default function DashboardPage() {
   const { data: apiData, isLoading } = useDashboard();
+  const { data: stratData } = useStrategies();
   const engine = useEngine();
   const engineStore = useEngineStore();
 
@@ -613,10 +615,19 @@ export default function DashboardPage() {
       ? raw.signalsGenerated
       : typeof raw?.signals_generated === 'number'
       ? raw.signals_generated
-      : Math.max(signalsConfirmed + signalsSkipped, 24);
+      : (signalsConfirmed + signalsSkipped);
 
     const activeStrats = (raw?.active_strategies || raw?.activeStrategies) as string[] | undefined;
-    const regConf = (raw?.regime_confidence || raw?.regimeConfidence) as number | undefined;
+    const stratNamesFromApi = Array.isArray(stratData)
+      ? stratData.filter((s: any) => s.is_active || s.active || s.enabled).map((s: any) => s.name || s.id)
+      : [];
+    const activeStrategies = (Array.isArray(activeStrats) && activeStrats.length > 0)
+      ? activeStrats
+      : stratNamesFromApi.length > 0
+      ? stratNamesFromApi
+      : (Array.isArray(stratData) ? stratData.map((s: any) => s.name || s.id).slice(0, 4) : []);
+
+    const regConf = (raw?.regime_confidence || raw?.regimeConfidence || (typeof raw?.confidence === 'number' ? Math.round(raw.confidence * 100) : 0)) as number;
 
     return {
       todayPnl,
@@ -642,13 +653,13 @@ export default function DashboardPage() {
       engineStatus: (raw?.engine_status as string) ?? (raw?.engineStatus as string) ?? engineStore.status ?? 'running',
       engineMode: (raw?.engine_mode as string) ?? (raw?.engineMode as string) ?? engineStore.mode ?? 'paper',
       regime: (raw?.regime as MarketRegime) ?? engineStore.regime ?? 'sideways',
-      regimeConfidence: regConf ?? 82,
-      activeStrategies: (Array.isArray(activeStrats) && activeStrats.length > 0 ? activeStrats : ['VWAP Breakout', 'Mean Reversion', 'Supertrend Pullback', 'ORB Volume']) as string[],
+      regimeConfidence: regConf,
+      activeStrategies: activeStrategies as string[],
       signalsGenerated,
       signalsConfirmed,
       signalsSkipped,
     };
-  }, [apiData, storedPositions, storedTrades, confirmedIds, skippedIds, engineStore.status, engineStore.mode, engineStore.regime]);
+  }, [apiData, stratData, storedPositions, storedTrades, confirmedIds, skippedIds, engineStore.status, engineStore.mode, engineStore.regime]);
 
   const pnlIsPositive = data.todayPnl >= 0;
   const pnlColor = data.todayPnl > 0 ? 'text-ub-profit' : data.todayPnl < 0 ? 'text-ub-loss' : 'text-ub-text-muted';
@@ -1222,14 +1233,16 @@ export default function DashboardPage() {
                 </div>
               )}
               <div className="mt-3 flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 h-7"
-                >
-                  View All Trades
-                  <ArrowUpRight className="h-3 w-3 ml-1" />
-                </Button>
+                <Link href="/trades">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-ub-accent hover:text-ub-accent-hover hover:bg-ub-accent/10 h-7 cursor-pointer"
+                  >
+                    View All Trades
+                    <ArrowUpRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </Link>
               </div>
             </SectionCard>
           </div>

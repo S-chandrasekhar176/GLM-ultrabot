@@ -193,12 +193,12 @@ async def get_positions(
 @router.post("/positions/{position_id}/close")
 async def close_position(
     position_id: str,
-    body: PositionClose,
+    body: Optional[PositionClose] = None,
     username: str = Depends(get_current_user),
     engine: UltraBotEngine = Depends(get_engine),
     repo: Repository = Depends(get_repository),
 ) -> Dict[str, Any]:
-    """Manually close a position at the given exit price."""
+    """Manually close a position at the given exit price or current price."""
     try:
         # Look up the position
         position = await repo.get_position(position_id)
@@ -213,14 +213,52 @@ async def close_position(
                 detail=f"Position '{position_id}' is not open (status: {position.status})",
             )
 
-        # Delegate to engine's _close_position method
-        await engine._close_position(
-            position=position,
-            exit_price=body.exit_price,
-            exit_reason=body.exit_reason,
-        )
+        exit_price = (body.exit_price if body and body.exit_price and body.exit_price > 0 else None)
+        if not exit_price:
+            exit_price = float(position.current_price or position.entry_price or 100.0)
 
-        return {"message": "Position closed successfully", "position_id": position_id}
+        exit_reason = (body.exit_reason if body and body.exit_reason else "MANUAL")
+
+        # If engine is active, delegate to engine
+        if engine and hasattr(engine, "_close_position") and engine.state.value in ("running", "paused"):
+            await engine._close_position(
+                position=position,
+                exit_price=exit_price,
+                exit_reason=exit_reason,
+            )
+        else:
+            # Standalone fallback: update position and trade in repository
+            from zoneinfo import ZoneInfo
+            from datetime import datetime
+            ist_now = datetime.now(ZoneInfo("Asia/Kolkata")).isoformat()
+
+            await repo.update_position(
+                position_id,
+                status="CLOSED",
+                current_price=exit_price,
+            )
+
+            if position.trade_id:
+                trade = await repo.get_trade(position.trade_id)
+                if trade and trade.status == "OPEN":
+                    entry = float(trade.entry_price or position.entry_price or 0.0)
+                    qty = int(trade.quantity or position.quantity or 1)
+                    direction = str(trade.direction or position.direction or "BUY").upper()
+                    pnl = (exit_price - entry) * qty if direction in ("BUY", "LONG") else (entry - exit_price) * qty
+                    fees = float(trade.fees or trade.brokerage or 40.0)
+                    net_pnl = pnl - fees
+
+                    await repo.update_trade(
+                        position.trade_id,
+                        status="CLOSED",
+                        exit_price=exit_price,
+                        exit_reason=exit_reason,
+                        exit_time=ist_now,
+                        pnl=round(pnl, 2),
+                        net_pnl=round(net_pnl, 2),
+                    )
+
+        return {"message": "Position closed successfully", "position_id": position_id, "exit_price": exit_price}
     except HTTPException:
         raise
     except Exception as exc:

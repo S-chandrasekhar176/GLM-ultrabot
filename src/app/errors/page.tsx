@@ -268,16 +268,16 @@ export default function ErrorsPage() {
   // Stats
   const stats = useMemo(() => {
     const total = ERROR_HISTORY.length;
-    const unresolved = ERROR_HISTORY.filter((e) => !e.resolved).length;
+    const unresolved = ERROR_HISTORY.filter((e) => !e.resolved).length + activeErrors.length;
     const recovered = ERROR_HISTORY.filter((e) => e.resolved).length;
-    const recoveryRate = Math.round((recovered / total) * 100);
+    const recoveryRate = total > 0 ? Math.round((recovered / total) * 100) : 100;
     const typeCounts: Record<string, number> = {};
     ERROR_HISTORY.forEach((e) => {
       typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
     });
-    const mostCommon = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
-    return { total, unresolved, recoveryRate, mostCommon };
-  }, []);
+    const mostCommon = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'System Normal';
+    return { total: total + activeErrors.length, unresolved, recoveryRate, mostCommon };
+  }, [ERROR_HISTORY, activeErrors]);
 
   // Filtered history
   const filteredHistory = useMemo(() => {
