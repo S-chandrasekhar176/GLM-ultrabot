@@ -38,12 +38,12 @@ export default function NewsPage() {
   // Compute live provider counts across all received news items
   const providerCounts = useMemo(() => {
     if (!Array.isArray(newsItems)) {
-      return { total: 0, et: 0, mc: 0, lm: 0, bs: 0, other: 0 };
+      return { total: 0, et: 0, ndtv: 0, lm: 0, hbl: 0, other: 0 };
     }
     let et = 0;
-    let mc = 0;
+    let ndtv = 0;
     let lm = 0;
-    let bs = 0;
+    let hbl = 0;
     let other = 0;
 
     for (const item of newsItems) {
@@ -51,13 +51,13 @@ export default function NewsPage() {
       const code = item.providerCode;
 
       if (code === 'ET' || src.includes('economic') || src.includes('et ')) et++;
-      else if (code === 'MC' || src.includes('moneycontrol') || src.includes('mc ')) mc++;
+      else if (code === 'NDTV' || src.includes('ndtv')) ndtv++;
       else if (code === 'LM' || src.includes('livemint') || src.includes('mint')) lm++;
-      else if (code === 'BS' || src.includes('business standard') || src.includes('bs ')) bs++;
+      else if (code === 'HBL' || src.includes('hindu') || src.includes('businessline')) hbl++;
       else other++;
     }
 
-    return { total: newsItems.length, et, mc, lm, bs, other };
+    return { total: newsItems.length, et, ndtv, lm, hbl, other };
   }, [newsItems]);
 
   const filteredAndSortedItems = useMemo(() => {
@@ -78,19 +78,20 @@ export default function NewsPage() {
 
       if (filterProvider === 'ET') {
         matchesProvider = code === 'ET' || src.includes('economic') || src.includes('et ');
-      } else if (filterProvider === 'MC') {
-        matchesProvider = code === 'MC' || src.includes('moneycontrol') || src.includes('mc ');
+      } else if (filterProvider === 'NDTV') {
+        matchesProvider = code === 'NDTV' || src.includes('ndtv');
       } else if (filterProvider === 'LM') {
         matchesProvider = code === 'LM' || src.includes('livemint') || src.includes('mint');
-      } else if (filterProvider === 'BS') {
-        matchesProvider = code === 'BS' || src.includes('business standard') || src.includes('bs ');
+      } else if (filterProvider === 'HBL') {
+        matchesProvider = code === 'HBL' || src.includes('hindu') || src.includes('businessline');
       } else if (filterProvider === 'OTHER') {
         matchesProvider =
           code === 'OTHER' ||
           (!src.includes('economic') &&
-            !src.includes('moneycontrol') &&
+            !src.includes('ndtv') &&
             !src.includes('mint') &&
-            !src.includes('business standard'));
+            !src.includes('hindu') &&
+            !src.includes('businessline'));
       }
 
       const q = searchQuery.toLowerCase().trim();
@@ -266,14 +267,14 @@ export default function NewsPage() {
             <span>📰</span> Economic Times ({providerCounts.et})
           </button>
           <button
-            onClick={() => setFilterProvider('MC')}
+            onClick={() => setFilterProvider('NDTV')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
-              filterProvider === 'MC'
+              filterProvider === 'NDTV'
                 ? 'bg-blue-500/15 border-blue-500 text-blue-400 shadow-sm'
                 : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
             }`}
           >
-            <span>📊</span> Moneycontrol ({providerCounts.mc})
+            <span>📺</span> NDTV Profit ({providerCounts.ndtv})
           </button>
           <button
             onClick={() => setFilterProvider('LM')}
@@ -286,14 +287,14 @@ export default function NewsPage() {
             <span>⚡</span> LiveMint ({providerCounts.lm})
           </button>
           <button
-            onClick={() => setFilterProvider('BS')}
+            onClick={() => setFilterProvider('HBL')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all shrink-0 ${
-              filterProvider === 'BS'
+              filterProvider === 'HBL'
                 ? 'bg-cyan-500/15 border-cyan-500 text-cyan-400 shadow-sm'
                 : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
             }`}
           >
-            <span>📈</span> Business Standard ({providerCounts.bs})
+            <span>📈</span> Hindu BusinessLine ({providerCounts.hbl})
           </button>
           <button
             onClick={() => setFilterProvider('OTHER')}
@@ -303,7 +304,7 @@ export default function NewsPage() {
                 : 'bg-ub-surface border-ub-border text-ub-text-muted hover:border-ub-border/80 hover:text-ub-text-primary'
             }`}
           >
-            <span>🔍</span> NSE / Others ({providerCounts.other})
+            <span>🔍</span> NSE Corporate / Others ({providerCounts.other})
           </button>
         </div>
 

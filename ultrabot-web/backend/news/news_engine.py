@@ -15,21 +15,24 @@ import aiohttp
 from news.news_analyzer import NewsAnalyzer
 from news.news_to_watchlist import NewsToWatchlist
 from news.sources.economic_times import EconomicTimesSource
-from news.sources.moneycontrol import MoneycontrolSource
+from news.sources.ndtv_profit import NDTVProfitSource
 from news.sources.livemint import LiveMintSource
-from news.sources.business_standard import BusinessStandardSource
+from news.sources.hindu_businessline import HinduBusinessLineSource
 from news.sources.nse_corporate import NSECorporateSource
 from news.sources.result_calendar import ResultCalendarSource
 
 logger = logging.getLogger(__name__)
 IST = ZoneInfo("Asia/Kolkata")
 
+# Max age for news items (48 hours) - reject stale RSS entries
+_MAX_AGE_SECONDS = 48 * 3600
+
 # All available source classes – instantiated lazily
 _SOURCE_CLASSES = [
     EconomicTimesSource,
-    MoneycontrolSource,
+    NDTVProfitSource,
     LiveMintSource,
-    BusinessStandardSource,
+    HinduBusinessLineSource,
     NSECorporateSource,
     ResultCalendarSource,
 ]
@@ -64,9 +67,9 @@ class NewsEngine:
         self._sources: List[Any] = []
         _source_name_map = {
             "economic_times": EconomicTimesSource,
-            "moneycontrol": MoneycontrolSource,
+            "ndtv_profit": NDTVProfitSource,
             "livemint": LiveMintSource,
-            "business_standard": BusinessStandardSource,
+            "hindu_businessline": HinduBusinessLineSource,
             "nse_corporate": NSECorporateSource,
             "result_calendar": ResultCalendarSource,
         }
@@ -108,10 +111,36 @@ class NewsEngine:
 
         logger.info("Fetched %d raw news items", len(all_items))
 
+        # Filter out stale news (older than 48 hours)
+        now = datetime.now(IST)
+        fresh_items = []
+        for item in all_items:
+            ts_str = item.get("timestamp") or item.get("published_at") or ""
+            if ts_str:
+                try:
+                    dt = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=IST)
+                    age = (now - dt.astimezone(IST)).total_seconds()
+                    if age > _MAX_AGE_SECONDS:
+                        continue  # Skip stale items
+                except Exception:
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        dt = parsedate_to_datetime(ts_str)
+                        age = (now - dt.astimezone(IST)).total_seconds()
+                        if age > _MAX_AGE_SECONDS:
+                            continue
+                    except Exception:
+                        pass  # Keep items with unparseable timestamps
+            fresh_items.append(item)
+
+        logger.info("After staleness filter: %d fresh items (from %d raw)", len(fresh_items), len(all_items))
+
         # Deduplicate by headline
         seen_headlines: set = set()
         deduped = []
-        for item in all_items:
+        for item in fresh_items:
             headline = item.get("headline", "")
             if headline in seen_headlines:
                 continue

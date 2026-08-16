@@ -82,14 +82,12 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
     src_lower = src.lower()
     if "economic" in src_lower or "et " in src_lower:
         provider_code = "ET"
-    elif "moneycontrol" in src_lower or "mc " in src_lower:
-        provider_code = "MC"
+    elif "ndtv" in src_lower:
+        provider_code = "NDTV"
     elif "livemint" in src_lower or "mint" in src_lower:
         provider_code = "LM"
-    elif "business" in src_lower or "bs " in src_lower:
-        provider_code = "BS"
-    elif "google" in src_lower:
-        provider_code = "GF"
+    elif "hindu" in src_lower or "businessline" in src_lower:
+        provider_code = "HBL"
     elif "nse" in src_lower:
         provider_code = "NSE"
     elif "result" in src_lower:
