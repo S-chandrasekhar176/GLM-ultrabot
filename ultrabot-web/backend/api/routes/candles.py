@@ -148,18 +148,28 @@ async def get_live_quotes(
     missing_symbols = []
     for sym in sym_list:
         clean = sym.replace(".NS", "").replace("^", "")
-        # Use cache if fresh (< 4 seconds)
-        if clean in _quotes_cache and (now - _quotes_cache_timestamp < 4.0):
+        # Use cache if fresh (< 30 seconds)
+        if clean in _quotes_cache and (now - _quotes_cache_timestamp < 30.0):
             results[clean] = _quotes_cache[clean]
         else:
             missing_symbols.append(clean)
 
     if missing_symbols:
-        fetched_quotes = await asyncio.to_thread(_fetch_realtime_quotes_sync, missing_symbols)
-        for clean, q in fetched_quotes.items():
-            results[clean] = q
-            _quotes_cache[clean] = q
-        _quotes_cache_timestamp = now
+        try:
+            fetched_quotes = await asyncio.wait_for(
+                asyncio.to_thread(_fetch_realtime_quotes_sync, missing_symbols),
+                timeout=6.0,
+            )
+            for clean, q in fetched_quotes.items():
+                results[clean] = q
+                _quotes_cache[clean] = q
+            _quotes_cache_timestamp = now
+        except Exception as timeout_err:
+            logger.debug("Live quotes fetch timeout: %s", timeout_err)
+            # Use existing cache or default if timeout occurs
+            for clean in missing_symbols:
+                if clean in _quotes_cache:
+                    results[clean] = _quotes_cache[clean]
 
     return {
         "success": True,

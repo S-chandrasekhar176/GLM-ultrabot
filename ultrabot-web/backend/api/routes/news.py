@@ -84,22 +84,34 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
     }
 
 
+_news_cache: List[Dict[str, Any]] = []
+_news_cache_timestamp: float = 0.0
+
 @router.get("/api/news")
 @router.get("/api/live-news")
 @router.get("/api/news/sentiment")
 async def get_latest_news() -> List[Dict[str, Any]]:
     """Fetch latest real-time analyzed market news with NLP sentiment and trade signals from live scrapers."""
+    global _news_cache, _news_cache_timestamp
+    now = time.time()
+
+    # Return cached news if fresh (< 60 seconds)
+    if _news_cache and (now - _news_cache_timestamp < 60.0):
+        return _news_cache
+
     try:
         raw_items = await _news_engine.run_full_scan()
 
         if raw_items and len(raw_items) > 0:
             formatted = [_format_news_item(item, idx) for idx, item in enumerate(raw_items)]
+            _news_cache = formatted
+            _news_cache_timestamp = now
             return formatted
 
-        return []
+        return _news_cache or []
     except Exception as exc:
         logger.error("Live news scan encountered error: %s", exc, exc_info=True)
-        return []
+        return _news_cache or []
 
 
 @router.get("/api/news-focus-stocks")

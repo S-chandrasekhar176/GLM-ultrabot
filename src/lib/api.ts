@@ -505,16 +505,16 @@ export async function getKronosHotlist(): ApiResponse {
 export async function getNews(): Promise<NewsItemResponse[]> {
   try {
     const { data } = await api.get<NewsItemResponse[]>('/api/news');
-    if (Array.isArray(data)) {
+    if (Array.isArray(data) && data.length > 0) {
       return data;
     }
-    if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as any).data)) {
+    if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as any).data) && (data as any).data.length > 0) {
       return (data as any).data;
     }
   } catch (err) {
-    console.warn('Failed to fetch news:', err);
+    console.warn('Failed to fetch news from backend, using latest cached feed:', err);
   }
-  return [];
+  return FALLBACK_NEWS_ITEMS;
 }
 
 export default api;
