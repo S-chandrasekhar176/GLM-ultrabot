@@ -26,6 +26,42 @@ router = APIRouter(tags=["news"])
 
 _news_engine = NewsEngine(config=settings._raw_config)
 
+def _compute_time_ago(timestamp_str: str) -> str:
+    """Convert an RSS/ISO timestamp string into a human-readable 'X mins ago' string."""
+    if not timestamp_str:
+        return "Just now"
+    now = datetime.now(IST)
+    try:
+        # Try ISO format first
+        dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=IST)
+    except (ValueError, TypeError):
+        try:
+            # Try RSS date format: "Sat, 16 Aug 2026 10:30:00 +0530"
+            from email.utils import parsedate_to_datetime
+            dt = parsedate_to_datetime(timestamp_str)
+        except Exception:
+            return "Just now"
+
+    diff = now - dt.astimezone(IST)
+    total_seconds = int(diff.total_seconds())
+
+    if total_seconds < 0:
+        return "Just now"
+    elif total_seconds < 60:
+        return f"{total_seconds}s ago"
+    elif total_seconds < 3600:
+        mins = total_seconds // 60
+        return f"{mins} min{'s' if mins > 1 else ''} ago"
+    elif total_seconds < 86400:
+        hrs = total_seconds // 3600
+        return f"{hrs} hr{'s' if hrs > 1 else ''} ago"
+    else:
+        days = total_seconds // 86400
+        return f"{days} day{'s' if days > 1 else ''} ago"
+
+
 def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
     symbols = item.get("relevant_symbols") or item.get("symbols", [])
     sym = symbols[0] if isinstance(symbols, list) and len(symbols) > 0 else (symbols if isinstance(symbols, str) and symbols else "NIFTY")
@@ -50,17 +86,20 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
         provider_code = "MC"
     elif "livemint" in src_lower or "mint" in src_lower:
         provider_code = "LM"
-    elif "business standard" in src_lower or "bs " in src_lower:
+    elif "business" in src_lower or "bs " in src_lower:
         provider_code = "BS"
     elif "google" in src_lower:
         provider_code = "GF"
     elif "nse" in src_lower:
         provider_code = "NSE"
+    elif "result" in src_lower:
+        provider_code = "RC"
     else:
         provider_code = "OTHER"
 
     impact = str(item.get("impact_level", "medium")).upper()
-    pub_at = item.get("timestamp") or item.get("published_at") or datetime.now(IST).strftime("%H:%M IST")
+    raw_ts = item.get("timestamp") or item.get("published_at") or ""
+    time_ago = _compute_time_ago(raw_ts)
 
     return {
         "symbol": sym.upper(),
@@ -76,8 +115,8 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
         "impactLevel": impact,
         "tradeAction": trade_action,
         "confidence": int(item.get("confidence", 80)),
-        "timeAgo": pub_at,
-        "publishedAt": pub_at,
+        "timeAgo": time_ago,
+        "publishedAt": time_ago,
         "publishedTimestamp": int(time.time() * 1000) - (idx * 60000),
         "timestamp": datetime.now(IST).strftime("%H:%M IST"),
         "url": item.get("url", ""),

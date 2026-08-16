@@ -16,7 +16,8 @@ from news.news_analyzer import NewsAnalyzer
 from news.news_to_watchlist import NewsToWatchlist
 from news.sources.economic_times import EconomicTimesSource
 from news.sources.moneycontrol import MoneycontrolSource
-from news.sources.google_finance import GoogleFinanceSource
+from news.sources.livemint import LiveMintSource
+from news.sources.business_standard import BusinessStandardSource
 from news.sources.nse_corporate import NSECorporateSource
 from news.sources.result_calendar import ResultCalendarSource
 
@@ -27,7 +28,8 @@ IST = ZoneInfo("Asia/Kolkata")
 _SOURCE_CLASSES = [
     EconomicTimesSource,
     MoneycontrolSource,
-    GoogleFinanceSource,
+    LiveMintSource,
+    BusinessStandardSource,
     NSECorporateSource,
     ResultCalendarSource,
 ]
@@ -63,7 +65,8 @@ class NewsEngine:
         _source_name_map = {
             "economic_times": EconomicTimesSource,
             "moneycontrol": MoneycontrolSource,
-            "google_finance": GoogleFinanceSource,
+            "livemint": LiveMintSource,
+            "business_standard": BusinessStandardSource,
             "nse_corporate": NSECorporateSource,
             "result_calendar": ResultCalendarSource,
         }

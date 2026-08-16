@@ -107,110 +107,6 @@ export interface NewsItemResponse {
   url?: string;
 }
 
-export const FALLBACK_NEWS_ITEMS: NewsItemResponse[] = [
-  {
-    symbol: 'RELIANCE',
-    symbols: ['RELIANCE', 'JIO'],
-    price: 2948.35,
-    changePct: 2.45,
-    headline: 'Reliance Retail announces strategic expansion in quick commerce, EBITDA expected to jump 18%',
-    summary: 'Expansion into 50+ new tier-2 cities is projected to boost FY26 margins significantly.',
-    source: 'Economic Times',
-    category: 'Corporate Action',
-    sentiment: 'BUY',
-    impactLevel: 'HIGH',
-    confidence: 88,
-    tradeAction: 'BUY',
-    publishedAt: '10 mins ago',
-    timeAgo: '10 mins ago',
-    url: 'https://economictimes.indiatimes.com/markets',
-  },
-  {
-    symbol: 'TCS',
-    symbols: ['TCS', 'INFY'],
-    price: 4125.80,
-    changePct: -1.15,
-    headline: 'TCS secures mega $1.2B European cloud transformation multi-year deal despite macro headwinds',
-    summary: 'Large deal pipeline strengthens order book, offering solid revenue visibility over 5 years.',
-    source: 'Moneycontrol',
-    category: 'Earnings',
-    sentiment: 'BUY',
-    impactLevel: 'HIGH',
-    confidence: 82,
-    tradeAction: 'BUY',
-    publishedAt: '25 mins ago',
-    timeAgo: '25 mins ago',
-    url: 'https://www.moneycontrol.com/news/business/stocks/',
-  },
-  {
-    symbol: 'HDFCBANK',
-    symbols: ['HDFCBANK', 'ICICIBANK'],
-    price: 1642.50,
-    changePct: 0.85,
-    headline: 'RBI maintains repo rate at 6.5%, liquidity support positive for private banking credit growth',
-    summary: 'Net interest margins expected to stabilize as deposit repricing cycle nears completion.',
-    source: 'Google Finance',
-    category: 'Regulatory',
-    sentiment: 'BUY',
-    impactLevel: 'MEDIUM',
-    confidence: 75,
-    tradeAction: 'BUY',
-    publishedAt: '42 mins ago',
-    timeAgo: '42 mins ago',
-    url: 'https://www.google.com/finance/quote/HDFCBANK:NSE',
-  },
-  {
-    symbol: 'TATAMOTORS',
-    symbols: ['TATAMOTORS', 'MARUTI'],
-    price: 985.20,
-    changePct: 3.12,
-    headline: 'Tata Motors EV sales surge 42% YoY; commercial vehicle demand rebounds sharply in Q3',
-    summary: 'Strong order backlog in JLR and EV passenger vehicle segment drives positive momentum.',
-    source: 'NSE Corporate',
-    category: 'Earnings',
-    sentiment: 'BUY',
-    impactLevel: 'HIGH',
-    confidence: 91,
-    tradeAction: 'BUY',
-    publishedAt: '1 hr ago',
-    timeAgo: '1 hr ago',
-    url: 'https://www.nseindia.com/companies-listing/corporate-filings-announcements',
-  },
-  {
-    symbol: 'INFY',
-    symbols: ['INFY', 'WIPRO'],
-    price: 1780.40,
-    changePct: -2.30,
-    headline: 'US IT spending forecast revised downward by Gartner amid tighter enterprise tech budgets',
-    summary: 'Discretionary IT consulting projects face deferrals, exerting short-term pressure on billing rates.',
-    source: 'Economic Times',
-    category: 'Macro',
-    sentiment: 'SELL',
-    impactLevel: 'MEDIUM',
-    confidence: 79,
-    tradeAction: 'SELL',
-    publishedAt: '2 hrs ago',
-    timeAgo: '2 hrs ago',
-    url: 'https://economictimes.indiatimes.com/markets/stocks/news',
-  },
-  {
-    symbol: 'SBIN',
-    symbols: ['SBIN', 'PNB'],
-    price: 815.60,
-    changePct: 1.70,
-    headline: 'State Bank of India gross NPA drops to multi-year low of 2.1%; asset quality outlook solid',
-    summary: 'Robust recovery trends and steady corporate credit growth support loan book expansion.',
-    source: 'Moneycontrol',
-    category: 'Earnings',
-    sentiment: 'BUY',
-    impactLevel: 'HIGH',
-    confidence: 85,
-    tradeAction: 'BUY',
-    publishedAt: '3 hrs ago',
-    timeAgo: '3 hrs ago',
-    url: 'https://www.moneycontrol.com/news/business/stocks/',
-  },
-];
 
 export async function getDashboard(): ApiResponse {
   const { data } = await api.get('/api/dashboard');
@@ -512,9 +408,9 @@ export async function getNews(): Promise<NewsItemResponse[]> {
       return (data as any).data;
     }
   } catch (err) {
-    console.warn('Failed to fetch news from backend, using latest cached feed:', err);
+    console.warn('Failed to fetch news from backend:', err);
   }
-  return FALLBACK_NEWS_ITEMS;
+  return [];
 }
 
 export default api;
