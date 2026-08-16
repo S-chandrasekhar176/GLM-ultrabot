@@ -101,6 +101,8 @@ export interface NewsItemResponse {
   tradeAction?: 'BUY' | 'SELL' | 'HOLD';
   confidence?: number;
   timeAgo?: string;
+  providerCode?: string;
+  publishedTimestamp?: number;
   publishedAt?: string;
   url?: string;
 }
@@ -229,8 +231,8 @@ export async function getOpportunities(): ApiResponse {
   return data;
 }
 
-export async function confirmOpportunity(id: string): ApiResponse {
-  const { data } = await api.post(`/api/opportunities/${id}/confirm`);
+export async function confirmOpportunity(id: string, segment: string = "EQ"): ApiResponse {
+  const { data } = await api.post(`/api/opportunities/${id}/confirm`, { segment });
   return data;
 }
 
@@ -257,8 +259,8 @@ export async function getPositions(): ApiResponse {
   return data;
 }
 
-export async function closePosition(id: string): ApiResponse {
-  const { data } = await api.post(`/api/positions/${id}/close`);
+export async function closePosition(id: string, payload?: { exit_price?: number; exit_reason?: string; notes?: string }): ApiResponse {
+  const { data } = await api.post(`/api/positions/${id}/close`, payload || {});
   return data;
 }
 

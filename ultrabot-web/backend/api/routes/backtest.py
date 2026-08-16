@@ -428,6 +428,10 @@ async def start_backtest(
     }
 
 
+# Backwards-compatibility alias
+run_backtest = start_backtest
+
+
 @router.get("/status/{run_id}", response_model=BacktestStatusResponse)
 async def get_backtest_status(
     run_id: str,

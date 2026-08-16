@@ -123,6 +123,9 @@ async def update_notification_settings(
         if secrets:
             notif_config.update(secrets)
 
+        # Persist updated settings to defaults.yaml
+        settings.save()
+
         return {
             "message": "Notification settings updated",
             "updated_keys": list(update_data.keys()),

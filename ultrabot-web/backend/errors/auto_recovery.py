@@ -4,6 +4,7 @@ Uses exponential backoff where appropriate.
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Optional
 from zoneinfo import ZoneInfo
@@ -32,6 +33,17 @@ class AutoRecovery:
     def __init__(self):
         self._reconnect_attempts: Dict[str, int] = {}
         self._last_attempt: Dict[str, str] = {}
+        self._lock = threading.Lock()
+
+    def reset_state(self, key: Optional[str] = None) -> None:
+        """Reset reconnect attempts and last attempt timestamps."""
+        with self._lock:
+            if key:
+                self._reconnect_attempts.pop(key, None)
+                self._last_attempt.pop(key, None)
+            else:
+                self._reconnect_attempts.clear()
+                self._last_attempt.clear()
 
     # ────────────────────────────────────────
     # Token expired recovery

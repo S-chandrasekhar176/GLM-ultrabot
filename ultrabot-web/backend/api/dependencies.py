@@ -33,7 +33,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 _engine_instance: Optional[UltraBotEngine] = None
 _repo_instance: Optional[Repository] = None
 
-
 def set_engine(eng: UltraBotEngine) -> None:
     """Set the global engine instance. Called once from app.py."""
     global _engine_instance
@@ -58,14 +57,11 @@ def get_engine() -> UltraBotEngine:
     return _engine_instance
 
 
-def get_repository() -> Repository:
-    """FastAPI dependency that returns the global repository instance."""
-    if _repo_instance is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Repository not initialized",
-        )
-    return _repo_instance
+async def get_repository():
+    """FastAPI dependency that yields a request-scoped repository session."""
+    from db.database import async_session_factory
+    async with async_session_factory() as session:
+        yield Repository(session)
 
 
 ALGORITHM = "HS256"

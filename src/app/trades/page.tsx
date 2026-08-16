@@ -312,11 +312,11 @@ function PositionsTab({
     [positions]
   );
 
-  const handleClosePosition = (id: string) => {
+  const handleClosePosition = async (id: string) => {
     const pos = positions.find((p) => p.id === id);
     closeStoredPosition(id);
     try {
-      closePosition(id);
+      closePosition({ id, payload: { exit_price: pos?.current, exit_reason: 'MANUAL' } });
     } catch { }
     setCloseDialogId(null);
     refreshPositions();
@@ -790,6 +790,11 @@ function HistoryTab({
     return combined.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
   }, [tradesData, storedTrades]);
 
+  const availableStrategies = useMemo(() => {
+    const fromTrades = Array.from(new Set(trades.map((t) => t.strategy).filter(Boolean)));
+    return ['All Strategies', ...fromTrades];
+  }, [trades]);
+
   // Filters
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -912,7 +917,7 @@ function HistoryTab({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-ub-surface border-ub-border">
-                  {STRATEGIES.map((s) => (
+                  {availableStrategies.map((s) => (
                     <SelectItem key={s} value={s} className="text-ub-text-primary focus:bg-ub-surface-hover focus:text-ub-text-primary">
                       {s}
                     </SelectItem>

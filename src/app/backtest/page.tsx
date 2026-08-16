@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect, useRef, Fragment } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, Fragment, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Card,
@@ -398,7 +399,8 @@ function transformBackendResult(result: any, initialCapital: number = 100000): B
 // Component
 // ─────────────────────────────────────────────
 
-export default function BacktestPage() {
+function BacktestContent() {
+  const searchParams = useSearchParams();
   const [formOpen, setFormOpen] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<BacktestResult | null>(null);
@@ -414,6 +416,18 @@ export default function BacktestPage() {
     includeFees: true,
     applyRiskGates: true,
   });
+
+  useEffect(() => {
+    const strat = searchParams.get('strategy');
+    const sym = searchParams.get('symbol');
+    if (strat || sym) {
+      setForm((prev) => ({
+        ...prev,
+        ...(strat ? { strategy: strat } : {}),
+        ...(sym ? { symbols: sym } : {}),
+      }));
+    }
+  }, [searchParams]);
 
   const activeRunIdRef = useRef<string | null>(null);
 
@@ -1166,5 +1180,20 @@ export default function BacktestPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function BacktestPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6 p-6">
+          <Skeleton className="h-10 w-48 bg-ub-surface" />
+          <Skeleton className="h-64 w-full bg-ub-surface" />
+        </div>
+      }
+    >
+      <BacktestContent />
+    </Suspense>
   );
 }

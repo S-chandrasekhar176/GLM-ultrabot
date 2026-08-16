@@ -31,12 +31,16 @@ class KiteBroker(BaseBroker):
         access_token: str = "",
         user_id: str = "",
         account_type: str = "live",
+        config: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ):
-        self.api_key = api_key.strip()
-        self.api_secret = api_secret.strip()
-        self.access_token = access_token.strip()
-        self.user_id = user_id.strip().upper()
-        self.account_type = account_type
+        super().__init__(config=config)
+        cfg = config or {}
+        self.api_key = (api_key or cfg.get("api_key") or "").strip()
+        self.api_secret = (api_secret or cfg.get("api_secret") or "").strip()
+        self.access_token = (access_token or cfg.get("access_token") or "").strip()
+        self.user_id = (user_id or cfg.get("user_id") or cfg.get("client_id") or "").strip().upper()
+        self.account_type = account_type or cfg.get("account_type", "live")
         self._client: Optional[httpx.AsyncClient] = None
         self._authenticated = False
 
@@ -148,10 +152,20 @@ class KiteBroker(BaseBroker):
                     if price > 0:
                         return float(price)
 
-            return 1000.0
         except Exception as exc:
-            logger.warning("Error fetching LTP for %s from Kite: %s", symbol, exc)
-            return 1000.0
+            logger.warning("Error fetching direct LTP for %s from Kite: %s", symbol, exc)
+
+        # Real-time fallback to market feed / Yahoo Finance
+        try:
+            from feeds.feed_manager import FeedManager
+            feed = FeedManager()
+            price = await feed.get_latest_price(symbol)
+            if price and price > 0:
+                return float(price)
+        except Exception:
+            pass
+
+        return 0.0
 
     # ─────────────────────────────────────────────
     # Margins & Funds

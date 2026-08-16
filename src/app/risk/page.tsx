@@ -284,7 +284,56 @@ export default function RiskDashboardPage() {
       }))
     : defaultGateDefs;
 
-  const RISK_EVENTS: RiskEvent[] = [];
+  const RISK_EVENTS: RiskEvent[] = useMemo(() => {
+    const events: RiskEvent[] = [];
+
+    // Check failed risk gates
+    RISK_GATES.filter((g) => g.status === 'FAIL').forEach((g) => {
+      events.push({
+        time: 'Just now',
+        type: 'Gate Invalidation',
+        gate: g.id,
+        details: g.detail,
+        severity: 'warning',
+      });
+    });
+
+    // Check consecutive losses
+    if (consecutiveLosses >= maxConsecutive) {
+      events.push({
+        time: 'Active',
+        type: 'Circuit Breaker',
+        gate: 'G-COOLOFF',
+        details: `${consecutiveLosses} consecutive losses breached max limit (${maxConsecutive})`,
+        severity: 'critical',
+      });
+    }
+
+    // Check loss drawdown
+    if (netPnl < 0 && Math.abs(netPnl) >= maxDailyLossAmount) {
+      events.push({
+        time: 'Active',
+        type: 'Daily Loss Limit',
+        gate: 'G5',
+        details: `Daily loss ${formatINR(Math.abs(netPnl))} breached limit ${formatINR(maxDailyLossAmount)}`,
+        severity: 'critical',
+      });
+    }
+
+    // Add info events for normal operation
+    if (events.length === 0) {
+      events.push({
+        time: 'Live',
+        type: 'Risk Guard Active',
+        gate: 'ALL',
+        details: 'All 13 risk gates operational with active market monitoring',
+        severity: 'info',
+      });
+    }
+
+    return events;
+  }, [RISK_GATES, consecutiveLosses, maxConsecutive, netPnl, maxDailyLossAmount]);
+
   const REJECTIONS: RejectionBreakdown[] = RISK_GATES
     .filter((g) => g.status === 'FAIL')
     .map((g, idx) => ({

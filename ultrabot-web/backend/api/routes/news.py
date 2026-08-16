@@ -26,163 +26,6 @@ router = APIRouter(tags=["news"])
 
 _news_engine = NewsEngine(config=settings._raw_config)
 
-# Institutional grade curated live news items for immediate zero-lag display
-FALLBACK_NEWS = [
-    {
-        "symbol": "RELIANCE",
-        "symbols": ["RELIANCE", "JIO"],
-        "price": 2948.35,
-        "changePct": 2.45,
-        "headline": "Reliance Retail announces aggressive expansion into quick commerce; projected EBITDA growth +18% in FY26",
-        "summary": "Expansion into 50+ new tier-2 markets with dark stores is anticipated to capture significant market share in rapid delivery retail.",
-        "source": "Economic Times",
-        "providerCode": "ET",
-        "category": "Corporate Action",
-        "sentiment": "BUY",
-        "impactLevel": "HIGH",
-        "confidence": 88,
-        "tradeAction": "BUY",
-        "publishedAt": "10 mins ago",
-        "publishedTimestamp": int(time.time() * 1000) - 600000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://economictimes.indiatimes.com",
-    },
-    {
-        "symbol": "TCS",
-        "symbols": ["TCS", "INFY"],
-        "price": 4125.80,
-        "changePct": 1.85,
-        "headline": "TCS secures mega $1.2B European cloud transformation multi-year deal despite macro headwinds",
-        "summary": "Large strategic deal pipeline provides multi-year revenue visibility, boosting high-margin digital enterprise consulting.",
-        "source": "Moneycontrol",
-        "providerCode": "MC",
-        "category": "Earnings",
-        "sentiment": "BUY",
-        "impactLevel": "HIGH",
-        "confidence": 84,
-        "tradeAction": "BUY",
-        "publishedAt": "25 mins ago",
-        "publishedTimestamp": int(time.time() * 1000) - 1500000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.moneycontrol.com",
-    },
-    {
-        "symbol": "HDFCBANK",
-        "symbols": ["HDFCBANK", "ICICIBANK"],
-        "price": 1642.50,
-        "changePct": 0.95,
-        "headline": "RBI maintains repo rate at 6.5%, liquidity support positive for private banking credit growth",
-        "summary": "Net interest margins expected to expand in Q2 as wholesale deposit repricing cycle nears completion.",
-        "source": "LiveMint",
-        "providerCode": "LM",
-        "category": "Regulatory",
-        "sentiment": "BUY",
-        "impactLevel": "MEDIUM",
-        "confidence": 78,
-        "tradeAction": "BUY",
-        "publishedAt": "45 mins ago",
-        "publishedTimestamp": int(time.time() * 1000) - 2700000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.livemint.com",
-    },
-    {
-        "symbol": "TATAMOTORS",
-        "symbols": ["TATAMOTORS", "MARUTI"],
-        "price": 985.20,
-        "changePct": 3.12,
-        "headline": "Tata Motors EV passenger vehicle sales surge 42% YoY; commercial vehicle order book rebounds sharply",
-        "summary": "Record order backlog across Jaguar Land Rover and domestic EV platform drives strong earnings upgrades.",
-        "source": "Business Standard",
-        "providerCode": "BS",
-        "category": "Earnings",
-        "sentiment": "BUY",
-        "impactLevel": "HIGH",
-        "confidence": 92,
-        "tradeAction": "BUY",
-        "publishedAt": "1 hr ago",
-        "publishedTimestamp": int(time.time() * 1000) - 3600000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.business-standard.com",
-    },
-    {
-        "symbol": "INFY",
-        "symbols": ["INFY", "WIPRO"],
-        "price": 1780.40,
-        "changePct": -2.30,
-        "headline": "US enterprise IT spending forecast revised downward by Gartner amid tighter corporate software budgets",
-        "summary": "Discretionary digital consulting projects face client deferrals, exerting short-term margin pressure on billing rates.",
-        "source": "Economic Times",
-        "providerCode": "ET",
-        "category": "Macro",
-        "sentiment": "SELL",
-        "impactLevel": "MEDIUM",
-        "confidence": 81,
-        "tradeAction": "SELL",
-        "publishedAt": "2 hrs ago",
-        "publishedTimestamp": int(time.time() * 1000) - 7200000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://economictimes.indiatimes.com",
-    },
-    {
-        "symbol": "SBIN",
-        "symbols": ["SBIN", "PNB"],
-        "price": 815.60,
-        "changePct": 1.70,
-        "headline": "State Bank of India gross NPA drops to multi-year low of 2.1%; corporate recovery outlook robust",
-        "summary": "Substantial reduction in slippages and strong loan growth across retail and infrastructure portfolios support valuations.",
-        "source": "Moneycontrol",
-        "providerCode": "MC",
-        "category": "Earnings",
-        "sentiment": "BUY",
-        "impactLevel": "HIGH",
-        "confidence": 86,
-        "tradeAction": "BUY",
-        "publishedAt": "3 hrs ago",
-        "publishedTimestamp": int(time.time() * 1000) - 10800000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.moneycontrol.com",
-    },
-    {
-        "symbol": "ITC",
-        "symbols": ["ITC"],
-        "price": 492.30,
-        "changePct": 0.65,
-        "headline": "ITC Hotels demerger achieves final shareholder and NCLT regulatory approvals, listing slated next month",
-        "summary": "Value unlocking for existing shareholders and strong hospitality average room rates provide steady long-term support.",
-        "source": "LiveMint",
-        "providerCode": "LM",
-        "category": "Corporate Action",
-        "sentiment": "BUY",
-        "impactLevel": "MEDIUM",
-        "confidence": 80,
-        "tradeAction": "BUY",
-        "publishedAt": "4 hrs ago",
-        "publishedTimestamp": int(time.time() * 1000) - 14400000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.livemint.com",
-    },
-    {
-        "symbol": "BHARTIARTL",
-        "symbols": ["BHARTIARTL"],
-        "price": 1498.70,
-        "changePct": 1.40,
-        "headline": "Bharti Airtel expands 5G FWA fixed-wireless footprint to 2,000+ towns; ARPU trends higher towards INR 220",
-        "summary": "Premium subscriber conversions and rural broadband adoption continue to drive steady average revenue per user expansion.",
-        "source": "Business Standard",
-        "providerCode": "BS",
-        "category": "Telecom",
-        "sentiment": "BUY",
-        "impactLevel": "HIGH",
-        "confidence": 87,
-        "tradeAction": "BUY",
-        "publishedAt": "5 hrs ago",
-        "publishedTimestamp": int(time.time() * 1000) - 18000000,
-        "timestamp": datetime.now(IST).strftime("%H:%M IST"),
-        "url": "https://www.business-standard.com",
-    },
-]
-
-
 def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
     symbols = item.get("relevant_symbols") or item.get("symbols", [])
     sym = symbols[0] if isinstance(symbols, list) and len(symbols) > 0 else (symbols if isinstance(symbols, str) and symbols else "NIFTY")
@@ -199,7 +42,7 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
         sentiment = "NEUTRAL"
         trade_action = "HOLD"
 
-    src = item.get("source", "Economic Times")
+    src = item.get("source", "Market News")
     src_lower = src.lower()
     if "economic" in src_lower or "et " in src_lower:
         provider_code = "ET"
@@ -209,29 +52,33 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
         provider_code = "LM"
     elif "business standard" in src_lower or "bs " in src_lower:
         provider_code = "BS"
+    elif "google" in src_lower:
+        provider_code = "GF"
+    elif "nse" in src_lower:
+        provider_code = "NSE"
     else:
         provider_code = "OTHER"
 
     impact = str(item.get("impact_level", "medium")).upper()
-    pub_at = item.get("timestamp") or item.get("published_at") or f"{idx * 15 + 5} mins ago"
+    pub_at = item.get("timestamp") or item.get("published_at") or datetime.now(IST).strftime("%H:%M IST")
 
     return {
         "symbol": sym.upper(),
         "symbols": [s.upper() for s in sym_list],
-        "price": float(item.get("price", 0.0) or 1500.0),
-        "changePct": float(item.get("changePct", 0.0) or (1.75 if sentiment == "BUY" else -1.75 if sentiment == "SELL" else 0.25)),
-        "headline": item.get("headline") or item.get("title") or "NSE Market Update",
+        "price": float(item.get("price", 0.0) or 0.0),
+        "changePct": float(item.get("changePct", 0.0) or 0.0),
+        "headline": item.get("headline") or item.get("title") or "Live NSE Market Update",
         "summary": item.get("summary", ""),
         "source": src,
         "providerCode": provider_code,
-        "category": item.get("category", "General").title(),
+        "category": item.get("category", "Market Action").title(),
         "sentiment": sentiment,
         "impactLevel": impact,
         "tradeAction": trade_action,
-        "confidence": int(item.get("confidence", 82)),
+        "confidence": int(item.get("confidence", 80)),
         "timeAgo": pub_at,
         "publishedAt": pub_at,
-        "publishedTimestamp": int(time.time() * 1000) - (idx * 900000),
+        "publishedTimestamp": int(time.time() * 1000) - (idx * 60000),
         "timestamp": datetime.now(IST).strftime("%H:%M IST"),
         "url": item.get("url", ""),
     }
@@ -241,7 +88,7 @@ def _format_news_item(item: Dict[str, Any], idx: int) -> Dict[str, Any]:
 @router.get("/api/live-news")
 @router.get("/api/news/sentiment")
 async def get_latest_news() -> List[Dict[str, Any]]:
-    """Fetch latest real-time analyzed market news with NLP sentiment and trade signals."""
+    """Fetch latest real-time analyzed market news with NLP sentiment and trade signals from live scrapers."""
     try:
         raw_items = await _news_engine.run_full_scan()
 
@@ -249,8 +96,71 @@ async def get_latest_news() -> List[Dict[str, Any]]:
             formatted = [_format_news_item(item, idx) for idx, item in enumerate(raw_items)]
             return formatted
 
-        return FALLBACK_NEWS
-
+        return []
     except Exception as exc:
-        logger.warning("Live news scan encountered error, returning institutional curated feed: %s", exc)
-        return FALLBACK_NEWS
+        logger.error("Live news scan encountered error: %s", exc, exc_info=True)
+        return []
+
+
+@router.get("/api/news-focus-stocks")
+@router.get("/news-focus-stocks")
+async def get_news_focus_stocks() -> Dict[str, Any]:
+    """Fetch news-driven catalyst focus stocks for the watchlist with sentiment analysis and real-time live prices."""
+    import asyncio
+    try:
+        news_items = await get_latest_news()
+        focus_stocks = []
+        seen_symbols = set()
+
+        symbols_to_fetch = []
+        for item in news_items:
+            sym = (item.get("symbol") or "").upper()
+            if sym and sym not in ("NIFTY", "BANKNIFTY", "MARKET") and sym not in seen_symbols:
+                symbols_to_fetch.append(sym)
+                seen_symbols.add(sym)
+
+        live_quotes = {}
+        if symbols_to_fetch:
+            from api.routes.candles import _fetch_realtime_quotes_sync
+            live_quotes = await asyncio.to_thread(_fetch_realtime_quotes_sync, symbols_to_fetch)
+
+        seen_symbols.clear()
+        for item in news_items:
+            sym = (item.get("symbol") or "").upper()
+            if not sym or sym in ("NIFTY", "BANKNIFTY", "MARKET") or sym in seen_symbols:
+                continue
+            seen_symbols.add(sym)
+
+            raw_sent = item.get("sentiment", "BUY")
+            sent = "BUY" if raw_sent in ("BUY", "POSITIVE", "BULLISH") else "SELL" if raw_sent in ("SELL", "NEGATIVE", "BEARISH") else "WATCH"
+
+            q = live_quotes.get(sym, {})
+            live_price = float(q.get("price") or 0.0)
+            live_change_pct = float(q.get("changePct") or 0.0)
+
+            focus_stocks.append({
+                "symbol": sym,
+                "name": f"{sym} (NSE)",
+                "price": live_price,
+                "changePct": live_change_pct,
+                "headline": item.get("headline", "Major catalyst reported in market news"),
+                "source": item.get("source", "Live News"),
+                "sentiment": sent,
+                "catalyst": item.get("summary") or item.get("headline") or "Live high-impact news catalyst",
+                "url": item.get("url", ""),
+                "publishedAt": item.get("publishedAt") or item.get("timeAgo") or "Live",
+            })
+
+        return {
+            "success": True,
+            "count": len(focus_stocks),
+            "data": focus_stocks,
+        }
+    except Exception as exc:
+        logger.error("Failed to build news focus stocks: %s", exc, exc_info=True)
+        return {
+            "success": True,
+            "count": 0,
+            "data": [],
+        }
+

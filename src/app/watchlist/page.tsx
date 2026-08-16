@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useKronosHotlist, useWatchlist } from '@/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -116,15 +116,48 @@ export default function WatchlistPage() {
   const { data: apiWatchlist } = useWatchlist();
 
   const [kronosStocks, setKronosStocks] = useState<HotStock[]>(DEFAULT_KRONOS_STOCKS);
+  const [customStocks, setCustomStocks] = useState<CustomStock[]>(INITIAL_CUSTOM);
   const [newsFocusStocks, setNewsFocusStocks] = useState<NewsFocusStock[]>([]);
   const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
-  // 1. Sync Live Quotes for Kronos Hot List from Live Market Quotes API
+  const kronosSymbolsRef = useRef<string[]>(DEFAULT_KRONOS_STOCKS.map((s) => s.symbol));
+  const customSymbolsRef = useRef<string[]>(INITIAL_CUSTOM.map((s) => s.symbol));
+
+  useEffect(() => {
+    kronosSymbolsRef.current = kronosStocks.map((s) => s.symbol);
+  }, [kronosStocks]);
+
+  useEffect(() => {
+    customSymbolsRef.current = customStocks.map((s) => s.symbol);
+  }, [customStocks]);
+
+  // Hydrate from API if available
+  useEffect(() => {
+    if (hotData && Array.isArray(hotData) && hotData.length > 0) {
+      setKronosStocks(hotData);
+    }
+  }, [hotData]);
+
+  useEffect(() => {
+    if (apiWatchlist && Array.isArray(apiWatchlist) && apiWatchlist.length > 0) {
+      setCustomStocks(apiWatchlist);
+    }
+  }, [apiWatchlist]);
+
+  // 1. Sync Live Quotes for all stocks from Live Market Quotes API
   const syncLivePrices = useCallback(async () => {
     try {
-      const symbols = DEFAULT_KRONOS_STOCKS.map((s) => s.symbol).join(',');
-      const res = await fetch(`/api/live-quotes?symbols=${symbols}`, { cache: 'no-store' });
+      const allSymbols = Array.from(
+        new Set([
+          ...kronosSymbolsRef.current,
+          ...customSymbolsRef.current,
+        ])
+      ).filter(Boolean);
+
+      if (allSymbols.length === 0) return;
+
+      const res = await fetch(`/api/live-quotes?symbols=${allSymbols.join(',')}`, { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -142,11 +175,26 @@ export default function WatchlistPage() {
               return item;
             }),
           );
+
+          setCustomStocks((prev) =>
+            prev.map((item) => {
+              const q = quotes[item.symbol];
+              if (q && q.price > 0) {
+                return {
+                  ...item,
+                  price: q.price,
+                  changePct: q.changePct,
+                };
+              }
+              return item;
+            }),
+          );
+
           setLastSyncTime(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         }
       }
     } catch {
-      // Fallback
+      // Live sync error handling
     }
   }, []);
 
@@ -173,22 +221,10 @@ export default function WatchlistPage() {
     fetchNewsFocusStocks();
     const interval = setInterval(() => {
       syncLivePrices();
-    }, 8000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [syncLivePrices, fetchNewsFocusStocks]);
 
-  const dbCustom: CustomStock[] = useMemo(() => {
-    if (Array.isArray(apiWatchlist) && apiWatchlist.length > 0) {
-      return apiWatchlist.map((item: any) => ({
-        symbol: item.symbol,
-        price: item.price || 1380.0,
-        changePct: item.changePct || 1.2,
-      }));
-    }
-    return INITIAL_CUSTOM;
-  }, [apiWatchlist]);
-
-  const [customStocks, setCustomStocks] = useState<CustomStock[]>(INITIAL_CUSTOM);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
 
@@ -201,13 +237,27 @@ export default function WatchlistPage() {
     ).slice(0, 8);
   }, [searchQuery, customStocks]);
 
-  const addStock = (symbol: string) => {
+  const addStock = async (symbol: string) => {
     if (customStocks.find((s) => s.symbol === symbol)) return;
-    const mockPrice = 500 + Math.round(Math.random() * 3000);
-    const mockChange = parseFloat((Math.random() * 4 - 2).toFixed(2));
-    setCustomStocks((prev) => [...prev, { symbol, price: mockPrice, changePct: mockChange }]);
     setSearchQuery('');
     setSearchFocused(false);
+
+    // Fetch real live price directly from live market quote feed
+    try {
+      const res = await fetch(`/api/live-quotes?symbols=${symbol}`, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        const q = json.data?.[symbol];
+        if (q && q.price > 0) {
+          setCustomStocks((prev) => [...prev, { symbol, price: q.price, changePct: q.changePct }]);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed fetching live quote for stock:', err);
+    }
+
+    setCustomStocks((prev) => [...prev, { symbol, price: 0, changePct: 0 }]);
   };
 
   const removeStock = (symbol: string) => {
